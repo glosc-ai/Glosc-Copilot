@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+    <!-- Transparent background -->
+    <!-- Central metallic silver orb -->
+    <circle cx="256" cy="256" r="200" fill="#A9A9A9" stroke="#003366" stroke-width="10" />
+    <!-- Glowing electric cyan 'G' stylized as neural waves -->
+    <path
+        d="M180 150 Q 256 100, 332 150 Q 256 200, 180 150 M332 150 L332 362 M332 362 Q 256 412, 180 362 L180 362 L180 262"
+        fill="none" stroke="#00FFFF" stroke-width="40" stroke-linecap="round"
+        stroke-linejoin="round">
+        <animate attributeName="stroke-dashoffset" from="0" to="-100" dur="5s"
+            repeatCount="indefinite" />
+    </path>
+    <!-- Faint abstract arcs for cross-platform support -->
+    <circle cx="256" cy="256" r="240" fill="none" stroke="#003366" stroke-width="5"
+        stroke-dasharray="10 10" />
+    <circle cx="256" cy="256" r="260" fill="none" stroke="#003366" stroke-width="5"
+        stroke-dasharray="10 10" />
+    <!-- Subtle holographic effects in deep blue tones -->
+    <defs>
+        <radialGradient id="glow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+            <stop offset="0%" style="stop-color:#00FFFF;stop-opacity:0.5" />
+            <stop offset="100%" style="stop-color:#003366;stop-opacity:0" />
+        </radialGradient>
+    </defs>
+    <circle cx="256" cy="256" r="220" fill="url(#glow)" />
+</svg>
