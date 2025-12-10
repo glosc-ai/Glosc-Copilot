@@ -1,21 +1,8 @@
 import { defineStore } from "pinia";
-import { h } from "vue";
-import {
-    FireOutlined,
-    ReadOutlined,
-    HeartOutlined,
-    SmileOutlined,
-    CommentOutlined,
-} from "@ant-design/icons-vue";
-import { Space } from "ant-design-vue";
-import type { AttachmentsProps, PromptsProps } from "ant-design-x-vue";
+
 import { fetchAvailableModels } from "../utils/ModelApi";
 import { storeUtils } from "../utils/StoreUtils";
-import { message } from "ant-design-vue";
-
-function renderTitle(icon: any, title: string) {
-    return h(Space, { align: "start" }, () => [icon, h("span", title)]);
-}
+import type { AttachmentFile } from "@/components/ai-elements/prompt-input";
 
 export const useChatStore = defineStore("chat", {
     state: () => ({
@@ -26,7 +13,7 @@ export const useChatStore = defineStore("chat", {
         conversations: {} as Record<string, Conversation>,
         conversationsItems: [] as ConversationItem[],
         activeKey: "",
-        attachedFiles: [] as AttachmentsProps["items"],
+        attachedFiles: [] as AttachmentFile[],
         // 模型相关
         availableModels: [] as ModelInfo[],
         selectedModel: null as ModelInfo | null,
@@ -38,90 +25,7 @@ export const useChatStore = defineStore("chat", {
         hasPendingChanges: false,
         saveTimer: null as any,
     }),
-    getters: {
-        placeholderPromptsItems(): PromptsProps["items"] {
-            return [
-                {
-                    key: "1",
-                    label: renderTitle(
-                        h(FireOutlined, { style: { color: "#FF4D4F" } }),
-                        "热门话题"
-                    ),
-                    description: "你对什么感兴趣？",
-                    children: [
-                        {
-                            key: "1-1",
-                            description: `Gloss Copilot 有什么新功能？`,
-                        },
-                        {
-                            key: "1-2",
-                            description: `什么是 AGI？`,
-                        },
-                        {
-                            key: "1-3",
-                            description: `文档在哪里？`,
-                        },
-                    ],
-                },
-                {
-                    key: "2",
-                    label: renderTitle(
-                        h(ReadOutlined, { style: { color: "#1890FF" } }),
-                        "设计指南"
-                    ),
-                    description: "如何设计一个好产品？",
-                    children: [
-                        {
-                            key: "2-1",
-                            icon: h(HeartOutlined),
-                            description: `深入了解`,
-                        },
-                        {
-                            key: "2-2",
-                            icon: h(SmileOutlined),
-                            description: `设定 AI 角色`,
-                        },
-                        {
-                            key: "2-3",
-                            icon: h(CommentOutlined),
-                            description: `表达感受`,
-                        },
-                    ],
-                },
-            ];
-        },
-        senderPromptsItems(): PromptsProps["items"] {
-            return [
-                {
-                    key: "1",
-                    description: "热门话题",
-                    icon: h(FireOutlined, { style: { color: "#FF4D4F" } }),
-                },
-                {
-                    key: "2",
-                    description: "设计指南",
-                    icon: h(ReadOutlined, { style: { color: "#1890FF" } }),
-                },
-            ];
-        },
-        roles() {
-            return {
-                assistant: {
-                    placement: "start",
-                    typing: { step: 5, interval: 20 },
-                    styles: {
-                        content: {
-                            borderRadius: "16px",
-                        },
-                    },
-                },
-                user: {
-                    placement: "end",
-                    variant: "shadow",
-                },
-            };
-        },
-    },
+    getters: {},
     actions: {
         // ============ 初始化 ============
         async init() {
@@ -142,7 +46,6 @@ export const useChatStore = defineStore("chat", {
                 this.isInitialized = true;
             } catch (error) {
                 console.error("初始化失败:", error);
-                message.error("初始化失败");
             }
         },
 
@@ -174,7 +77,6 @@ export const useChatStore = defineStore("chat", {
                 }
             } catch (error) {
                 console.error("加载会话失败:", error);
-                message.error("加载会话失败");
             }
         },
 
@@ -188,7 +90,6 @@ export const useChatStore = defineStore("chat", {
                 this.hasPendingChanges = false;
             } catch (error) {
                 console.error("保存会话失败:", error);
-                message.error("保存会话失败");
             }
         },
 
@@ -270,10 +171,8 @@ export const useChatStore = defineStore("chat", {
                 }
 
                 await this.saveConversations();
-                message.success("会话已删除");
             } catch (error) {
                 console.error("删除会话失败:", error);
-                message.error("删除会话失败");
             }
         },
 
@@ -294,7 +193,6 @@ export const useChatStore = defineStore("chat", {
                 }
             } catch (error) {
                 console.error("重命名会话失败:", error);
-                message.error("重命名会话失败");
             }
         },
 
@@ -366,10 +264,6 @@ export const useChatStore = defineStore("chat", {
                 return newMessage;
             } catch (error) {
                 console.error("添加消息失败:", error);
-                // 使用 ant-design-vue 的 message 组件
-                import("ant-design-vue").then(({ message: antMessage }) => {
-                    antMessage.error("添加消息失败");
-                });
             }
         },
 
@@ -411,8 +305,8 @@ export const useChatStore = defineStore("chat", {
             this.activeKey = key;
         },
 
-        handleFileChange(info: any) {
-            this.attachedFiles = info.fileList;
+        handleFileChange(files: AttachmentFile[]) {
+            this.attachedFiles = files;
         },
 
         // ============ 模型管理 ============

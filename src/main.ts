@@ -4,7 +4,7 @@ import App from "./App.vue";
 import router from "./router";
 
 // import "element-plus/dist/index.css";
-// import "ant-design-vue/dist/reset.css";
+
 import "element-plus/theme-chalk/dark/css-vars.css";
 
 const app = createApp(App);

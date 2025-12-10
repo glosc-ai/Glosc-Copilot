@@ -26,4 +26,3 @@ dist-ssr
 
 # 自动引入
 /*.d.ts
-/ant-design-x-vue-docs

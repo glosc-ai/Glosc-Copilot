@@ -1,9 +1,9 @@
+import path from "node:path";
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import VueRouter from "unplugin-vue-router/vite";
 import AutoImport from "unplugin-auto-import/vite";
 import tailwindcss from "@tailwindcss/vite";
-import { AntDesignXVueResolver } from "ant-design-x-vue/resolver";
 import components from "unplugin-vue-components/vite";
 import Layouts from "vite-plugin-vue-layouts";
 import { ElementPlusResolver } from "unplugin-vue-components/resolvers";
@@ -17,15 +17,25 @@ export default defineConfig(async () => ({
         VueRouter(),
         AutoImport({
             imports: ["vue", "vue-router", "pinia"],
-            dirs: ["./src/stores", "./src/utils"],
+            dirs: [
+                "./src/stores",
+                "./src/utils",
+                "./src/components/ai-elements/**",
+                "./src/components/ui/**",
+            ],
             resolvers: [ElementPlusResolver()],
         }),
         tailwindcss(),
         components({
-            resolvers: [AntDesignXVueResolver(), ElementPlusResolver()],
+            resolvers: [ElementPlusResolver()],
         }),
         Layouts(),
     ],
+    resolve: {
+        alias: {
+            "@": path.resolve(__dirname, "./src"),
+        },
+    },
 
     // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
     //

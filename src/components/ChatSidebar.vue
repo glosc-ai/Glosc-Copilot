@@ -1,192 +1,69 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { Button, Dropdown, Menu, Avatar, Modal, Input } from "ant-design-vue";
-import {
-    PlusOutlined,
-    UserOutlined,
-    SettingOutlined,
-    LogoutOutlined,
-    LoginOutlined,
-    DeleteOutlined,
-    EditOutlined,
-} from "@ant-design/icons-vue";
-import { Conversations } from "ant-design-x-vue";
-import { useChatStore } from "../stores/chat";
+import { Button } from "@/components/ui/button";
+import { Plus, MessageSquare, Trash2 } from "lucide-vue-next";
+import { useChatStore } from "@/stores/chat";
+import { storeToRefs } from "pinia";
+import { cn } from "@/lib/utils";
 
-const store = useChatStore();
+const chatStore = useChatStore();
+const { conversationsItems, activeKey } = storeToRefs(chatStore);
 
-// 模拟用户状态
-const user = ref({
-    isLoggedIn: false,
-    name: "Guest",
-    avatar: "",
-});
-
-const handleMenuClick = (e: any) => {
-    if (e.key === "login") {
-        user.value = {
-            isLoggedIn: true,
-            name: "User",
-            avatar: "https://api.dicebear.com/7.x/miniavs/svg?seed=1",
-        };
-    } else if (e.key === "logout") {
-        user.value = { isLoggedIn: false, name: "Guest", avatar: "" };
-    } else if (e.key === "settings") {
-        store.settingsOpen = true;
-    }
+const createNewChat = async () => {
+    await chatStore.createNewConversation();
 };
 
-// 重命名会话
-const renameModalVisible = ref(false);
-const renamingConversationId = ref("");
-const newConversationTitle = ref("");
-
-const showRenameModal = (conversationId: string) => {
-    renamingConversationId.value = conversationId;
-    const conversation = store.conversations[conversationId];
-    newConversationTitle.value = conversation?.title || "";
-    renameModalVisible.value = true;
+const selectChat = (key: string) => {
+    activeKey.value = key;
 };
 
-const handleRename = async () => {
-    if (newConversationTitle.value.trim()) {
-        await store.renameConversation(
-            renamingConversationId.value,
-            newConversationTitle.value.trim()
-        );
-        renameModalVisible.value = false;
-    }
-};
-
-// 删除会话
-const handleDelete = (conversationId: string) => {
-    Modal.confirm({
-        title: "确认删除",
-        content: "确定要删除这个会话吗？此操作无法撤销。",
-        okText: "删除",
-        okType: "danger",
-        cancelText: "取消",
-        onOk: async () => {
-            await store.deleteConversation(conversationId);
-        },
-    });
-};
-
-// 会话菜单配置
-const conversationMenuConfig = (conversation: any) => {
-    return {
-        items: [
-            {
-                key: "rename",
-                label: "重命名",
-                icon: h(EditOutlined),
-                onClick: () => showRenameModal(conversation.key),
-            },
-            {
-                key: "delete",
-                label: "删除",
-                icon: h(DeleteOutlined),
-                danger: true,
-                onClick: () => handleDelete(conversation.key),
-            },
-        ],
-        onClick: (e: any) => {
-            const menuItem = e.item;
-            if (menuItem?.onClick) {
-                menuItem.onClick();
-            }
-        },
-    };
+const deleteChat = async (key: string, event: Event) => {
+    event.stopPropagation();
+    await chatStore.deleteConversation(key);
 };
 </script>
 
 <template>
-    <div
-        class="w-[280px] h-full flex flex-col bg-gray-50/50 dark:bg-gray-900/50"
-    >
-        <!-- 🌟 Logo -->
-        <div class="flex h-[72px] items-center justify-start px-6 box-border">
-            <img
-                src="/logo.png"
-                draggable="false"
-                alt="logo"
-                class="w-6 h-6 inline-block"
-            />
-            <span
-                class="inline-block mx-2 font-bold text-base text-gray-900 dark:text-gray-100"
-                >Gloss Copilot</span
+    <div class="flex flex-col h-full border-r bg-muted/10 w-64">
+        <div class="p-4">
+            <Button
+                @click="createNewChat"
+                class="w-full justify-start gap-2"
+                variant="default"
             >
+                <Plus class="w-4 h-4" />
+                New Chat
+            </Button>
         </div>
 
-        <!-- 🌟 添加会话 -->
-        <Button
-            type="link"
-            class="w-[calc(100%-24px)] mx-3 mb-6 bg-blue-50/10 border border-blue-200/20"
-            @click="store.onAddConversation"
-        >
-            <PlusOutlined />
-            新会话
-        </Button>
-
-        <!-- 🌟 会话管理 -->
-        <Conversations
-            :items="store.conversationsItems"
-            class="px-3 flex-1 overflow-y-auto"
-            :active-key="store.activeKey"
-            :menu="conversationMenuConfig"
-            @active-change="store.onConversationClick"
-        />
-
-        <!-- 🌟 重命名对话框 -->
-        <Modal
-            v-model:open="renameModalVisible"
-            title="重命名会话"
-            @ok="handleRename"
-            ok-text="确定"
-            cancel-text="取消"
-        >
-            <Input
-                v-model:value="newConversationTitle"
-                placeholder="请输入新的会话名称"
-                @press-enter="handleRename"
-            />
-        </Modal>
-
-        <!-- 🌟 底部账号管理 -->
-        <div class="p-3 border-t border-gray-200 dark:border-gray-700">
-            <Dropdown :trigger="['click']">
+        <div class="flex-1 overflow-y-auto px-2">
+            <div class="space-y-1">
                 <div
-                    class="flex items-center gap-2 cursor-pointer p-2 rounded-lg transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+                    v-for="item in conversationsItems"
+                    :key="item.key"
+                    @click="selectChat(item.key)"
+                    :class="
+                        cn(
+                            'flex items-center justify-between p-2 rounded-md cursor-pointer text-sm transition-colors group',
+                            activeKey === item.key
+                                ? 'bg-accent text-accent-foreground'
+                                : 'hover:bg-accent/50 text-muted-foreground'
+                        )
+                    "
                 >
-                    <Avatar :size="32" :src="user.avatar">
-                        <template #icon><UserOutlined /></template>
-                    </Avatar>
-                    <span class="font-medium text-gray-900 dark:text-gray-100">
-                        {{ user.name }}
-                    </span>
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <MessageSquare class="w-4 h-4 shrink-0" />
+                        <span class="truncate">{{ item.label }}</span>
+                    </div>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        class="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        @click="(e: any) => deleteChat(item.key, e)"
+                    >
+                        <Trash2 class="w-3 h-3" />
+                    </Button>
                 </div>
-                <template #overlay>
-                    <Menu @click="handleMenuClick">
-                        <Menu.Item key="account" v-if="user.isLoggedIn">
-                            <template #icon><UserOutlined /></template>
-                            账号
-                        </Menu.Item>
-                        <Menu.Item key="settings">
-                            <template #icon><SettingOutlined /></template>
-                            设置
-                        </Menu.Item>
-                        <Menu.Divider />
-                        <Menu.Item key="login" v-if="!user.isLoggedIn">
-                            <template #icon><LoginOutlined /></template>
-                            登录
-                        </Menu.Item>
-                        <Menu.Item key="logout" v-if="user.isLoggedIn" danger>
-                            <template #icon><LogoutOutlined /></template>
-                            登出
-                        </Menu.Item>
-                    </Menu>
-                </template>
-            </Dropdown>
+            </div>
         </div>
     </div>
 </template>

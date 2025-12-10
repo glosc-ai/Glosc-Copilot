@@ -1,17 +1,28 @@
 <script setup lang="ts">
-import ChatSidebar from "../components/ChatSidebar.vue";
-import ChatArea from "../components/ChatArea.vue";
-import SettingsModal from "../components/SettingsModal.vue";
+import TitleBar from "@/components/TitleBar.vue";
+import ChatSidebar from "@/components/ChatSidebar.vue";
+import ChatArea from "@/components/ChatArea.vue";
+import ChatWelcome from "@/components/ChatWelcome.vue";
+import SettingsModal from "@/components/SettingsModal.vue";
+import { useChatStore } from "@/stores/chat";
+import { storeToRefs } from "pinia";
 
-defineOptions({ name: "PlaygroundIndependentSetup" });
+const chatStore = useChatStore();
+const { activeKey } = storeToRefs(chatStore);
 </script>
 
 <template>
     <div
-        class="w-full min-w-[970px] h-screen rounded-lg flex bg-amber-50 dark:bg-[#141414] font-['AlibabaPuHuiTi',sans-serif]"
+        class="flex flex-col h-screen overflow-hidden bg-background text-foreground"
     >
-        <ChatSidebar />
-        <ChatArea />
+        <TitleBar />
+        <div class="flex flex-1 pt-10 overflow-hidden">
+            <ChatSidebar />
+            <main class="flex-1 relative min-w-0">
+                <ChatArea v-if="activeKey" />
+                <ChatWelcome v-else />
+            </main>
+        </div>
         <SettingsModal />
     </div>
 </template>
