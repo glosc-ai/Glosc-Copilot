@@ -1,15 +1,23 @@
 import { createGateway } from "@ai-sdk/gateway";
-import { streamText } from "ai";
+import { ModelMessage, streamText, DefaultChatTransport } from "ai";
+import { Chat } from "@ai-sdk/vue";
 
 export class ChatUtils {
+    private static host =
+        import.meta.env.VITE_API_HOST || "http://localhost:3000";
+
     private static gateway = createGateway({
-        baseURL:
-            (import.meta.env.VITE_API_HOST || "http://localhost:3000") +
-            "/api/v2",
+        baseURL: `${this.host}/api/v2`,
         apiKey: import.meta.env.AI_GATEWAY_API_KEY || "",
     });
 
-    static streamResponse(modelId: string, messages: StoredChatMessage[]) {
+    static chat = new Chat({
+        transport: new DefaultChatTransport({
+            api: `${this.host}/api/chat`,
+        }),
+    });
+
+    static streamResponse(modelId: string, messages: ModelMessage[]) {
         return streamText({
             model: this.gateway(modelId),
             messages: messages,

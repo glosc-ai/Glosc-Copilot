@@ -1,0 +1,21 @@
+<script lang="ts" setup>
+import type { HTMLAttributes } from "vue";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
+
+const props = defineProps<{
+    class?: HTMLAttributes["class"];
+}>();
+</script>
+
+<template>
+    <div
+        :class="
+            cn('flex items-center gap-0.5 text-muted-foreground', props.class)
+        "
+        v-bind="$attrs"
+    >
+        <slot />
+        <Separator />
+    </div>
+</template>

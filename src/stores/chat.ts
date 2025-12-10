@@ -315,9 +315,14 @@ export const useChatStore = defineStore("chat", {
             this.modelsError = null;
             try {
                 this.availableModels = await fetchAvailableModels();
-                // 如果还没有选中模型，选择第一个
+                // 如果还没有选中模型，选择默认模型或第一个
                 if (!this.selectedModel && this.availableModels.length > 0) {
-                    this.selectedModel = this.availableModels[0];
+                    const defaultModelId = "xai/grok-code-fast-1";
+                    const defaultModel = this.availableModels.find(
+                        (m) => m.id === defaultModelId
+                    );
+                    this.selectedModel =
+                        defaultModel || this.availableModels[0];
                 }
             } catch (error) {
                 this.modelsError =

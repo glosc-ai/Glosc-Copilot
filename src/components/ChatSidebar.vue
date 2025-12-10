@@ -31,7 +31,7 @@ const deleteChat = async (key: string, event: Event) => {
                 variant="default"
             >
                 <Plus class="w-4 h-4" />
-                New Chat
+                新建对话
             </Button>
         </div>
 

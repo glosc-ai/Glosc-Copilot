@@ -1,5 +1,11 @@
 <script setup lang="ts">
 import { Bot } from "lucide-vue-next";
+
+const chatStore = useChatStore();
+
+const createNewChat = async () => {
+    await chatStore.createNewConversation();
+};
 </script>
 
 <template>
@@ -10,11 +16,11 @@ import { Bot } from "lucide-vue-next";
             <Bot class="w-12 h-12 text-primary" />
         </div>
         <h1 class="text-2xl font-bold tracking-tight">
-            Welcome to Gloss Copilot
+            欢迎使用 Gloss Copilot
         </h1>
         <p class="text-muted-foreground max-w-md">
-            Your AI-powered assistant. Select a conversation from the sidebar or
-            start a new one to begin.
+            您的 AI 智能助手。从侧边栏选择一个对话或直接
+            <Button @click="createNewChat">开始一个新的对话</Button>
         </p>
     </div>
 </template>
