@@ -6,6 +6,6 @@ import { routes } from "vue-router/auto-routes";
 
 const router = createRouter({
     history: createMemoryHistory(),
-    routes: setupLayouts(routes),
+    routes: setupLayouts(routes as any),
 });
 export default router;

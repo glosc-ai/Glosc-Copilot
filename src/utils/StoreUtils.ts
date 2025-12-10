@@ -1,4 +1,5 @@
 import { Store } from "@tauri-apps/plugin-store";
+import { Cryption } from "./Cryption";
 
 export class StoreUtils {
     private store: Store | null = null;
@@ -44,7 +45,7 @@ export class StoreUtils {
         if (!data) return null;
         try {
             const decrypted = Cryption.decryptData(data, this.key);
-            return decrypted as T;
+            return JSON.parse(decrypted) as T;
         } catch (error) {
             console.warn(
                 `Failed to decrypt or parse data for key: ${key}`,
@@ -61,7 +62,9 @@ export class StoreUtils {
      */
     async set(key: string, value: any) {
         const store = await this.ensureStore();
-        const encryptedValue = Cryption.encryptData(value, this.key);
+        const jsonString =
+            typeof value === "string" ? value : JSON.stringify(value);
+        const encryptedValue = Cryption.encryptData(jsonString, this.key);
         await store.set(key, encryptedValue);
         await store.save();
     }

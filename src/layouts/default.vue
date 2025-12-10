@@ -1,8 +1,15 @@
 <script lang="ts" setup>
 import { ConfigProvider, theme } from "ant-design-vue";
+
+const themeConfig = {
+    algorithm: theme.darkAlgorithm,
+    token: {
+        colorPrimary: "#1677ff",
+    },
+};
 </script>
 <template>
-    <ConfigProvider :theme="{ algorithm: theme.darkAlgorithm }">
+    <ConfigProvider :theme="themeConfig">
         <router-view />
     </ConfigProvider>
 </template>

@@ -6,8 +6,8 @@ import tailwindcss from "@tailwindcss/vite";
 import { AntDesignXVueResolver } from "ant-design-x-vue/resolver";
 import components from "unplugin-vue-components/vite";
 import Layouts from "vite-plugin-vue-layouts";
+import { ElementPlusResolver } from "unplugin-vue-components/resolvers";
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
@@ -18,10 +18,11 @@ export default defineConfig(async () => ({
         AutoImport({
             imports: ["vue", "vue-router", "pinia"],
             dirs: ["./src/stores", "./src/utils"],
+            resolvers: [ElementPlusResolver()],
         }),
         tailwindcss(),
         components({
-            resolvers: [AntDesignXVueResolver()],
+            resolvers: [AntDesignXVueResolver(), ElementPlusResolver()],
         }),
         Layouts(),
     ],

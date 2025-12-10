@@ -6,6 +6,13 @@ import { Welcome, Prompts } from "ant-design-x-vue";
 import { useChatStore } from "../stores/chat";
 
 const store = useChatStore();
+
+// 定义 props 接收处理函数
+interface Props {
+    onPromptsItemClick?: (info: any) => void;
+}
+
+const props = defineProps<Props>();
 </script>
 
 <template>
@@ -33,15 +40,7 @@ const store = useChatStore();
             <Prompts
                 title="你想要什么？"
                 :items="store.placeholderPromptsItems"
-                :styles="{
-                    list: {
-                        width: '100%',
-                    },
-                    item: {
-                        flex: 1,
-                    },
-                }"
-                @item-click="store.onPromptsItemClick"
+                @item-click="props.onPromptsItemClick"
             />
         </Space>
     </div>
