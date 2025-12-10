@@ -43,6 +43,23 @@ export class StoreUtils {
         const store = await this.ensureStore();
         const data = await store.get<string>(key);
         if (!data) return null;
+
+        if (data.startsWith("PLAIN:")) {
+            try {
+                return JSON.parse(data.substring(6)) as T;
+            } catch (e) {
+                // If it's not JSON, return as string (though we always stringify in set)
+                // But for safety, if JSON.parse fails, maybe it was a raw string?
+                // In set(), we do JSON.stringify(value) unless it's a string.
+                // If value was "foo", jsonString is "foo".
+                // If value was {a:1}, jsonString is "{\"a\":1}".
+                // So JSON.parse should work if it was an object.
+                // If it was a simple string "foo", JSON.parse("foo") -> "foo".
+                // So JSON.parse is correct.
+                return data.substring(6) as unknown as T;
+            }
+        }
+
         try {
             const decrypted = Cryption.decryptData(data, this.key);
             return JSON.parse(decrypted) as T;
@@ -59,13 +76,21 @@ export class StoreUtils {
      * 设置值并保存
      * @param key 键
      * @param value 值
+     * @param encrypt 是否加密，默认为 true
      */
-    async set(key: string, value: any) {
+    async set(key: string, value: any, encrypt: boolean = true) {
         const store = await this.ensureStore();
         const jsonString =
             typeof value === "string" ? value : JSON.stringify(value);
-        const encryptedValue = Cryption.encryptData(jsonString, this.key);
-        await store.set(key, encryptedValue);
+
+        let valueToStore: string;
+        if (encrypt) {
+            valueToStore = Cryption.encryptData(jsonString, this.key);
+        } else {
+            valueToStore = "PLAIN:" + jsonString;
+        }
+
+        await store.set(key, valueToStore);
         await store.save();
     }
 

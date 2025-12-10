@@ -15,7 +15,6 @@ const { activeKey } = storeToRefs(chatStore);
     <div
         class="flex flex-col h-screen overflow-hidden bg-background text-foreground"
     >
-        <TitleBar />
         <div class="flex flex-1 pt-10 overflow-hidden">
             <ChatSidebar />
             <main class="flex-1 relative min-w-0">

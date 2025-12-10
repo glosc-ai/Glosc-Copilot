@@ -1,6 +1,9 @@
 <script lang="ts" setup></script>
 <template>
-    <router-view />
+    <div class="">
+        <TitleBar />
+        <router-view />
+    </div>
 </template>
 <script lang="ts">
 export default {

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { Button } from "@/components/ui/button";
-import { Plus, MessageSquare, Trash2 } from "lucide-vue-next";
+import { Plus, MessageSquare, Trash2, Server } from "lucide-vue-next";
 import { useChatStore } from "@/stores/chat";
 import { storeToRefs } from "pinia";
 import { cn } from "@/lib/utils";
+import { useRouter } from "vue-router";
 
+const router = useRouter();
 const chatStore = useChatStore();
 const { conversationsItems, activeKey } = storeToRefs(chatStore);
 
@@ -19,6 +21,10 @@ const selectChat = (key: string) => {
 const deleteChat = async (key: string, event: Event) => {
     event.stopPropagation();
     await chatStore.deleteConversation(key);
+};
+
+const goToMcp = () => {
+    router.push("/mcp");
 };
 </script>
 
@@ -64,6 +70,17 @@ const deleteChat = async (key: string, event: Event) => {
                     </Button>
                 </div>
             </div>
+        </div>
+
+        <div class="p-4 border-t">
+            <Button
+                @click="goToMcp"
+                class="w-full justify-start gap-2"
+                variant="ghost"
+            >
+                <Server class="w-4 h-4" />
+                MCP 配置
+            </Button>
         </div>
     </div>
 </template>

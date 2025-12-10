@@ -6,6 +6,7 @@ import ToolInvocation from "@/components/ai-elements/tool/ToolInvocation.vue";
 import {
     CopyIcon,
     GlobeIcon,
+    Server,
     RefreshCcwIcon,
     Check,
     ChevronsUpDown,
@@ -30,9 +31,14 @@ import { TokenizerLoader, tokenizers } from "@lenml/tokenizers";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat";
 import { storeToRefs } from "pinia";
+import { useMcpStore } from "@/stores/mcp";
+import { useRouter } from "vue-router";
 
 const chatStore = useChatStore();
 const { activeKey, conversations } = storeToRefs(chatStore);
+const mcpStore = useMcpStore();
+const { mcpEnabled } = storeToRefs(mcpStore);
+const router = useRouter();
 
 const availableModels = ref<ModelInfo[]>([]);
 const groupedModels = computed(() =>
@@ -40,7 +46,6 @@ const groupedModels = computed(() =>
 );
 const model = ref<ModelInfo | null>(null);
 const selectedModelData = computed(() => model.value);
-const webSearch = ref(false);
 const openModelSelector = ref(false);
 
 const checkpoints = ref<CheckpointType[]>([]);
@@ -61,7 +66,7 @@ onMounted(async () => {
     }
 });
 
-const chat = ChatUtils.chat;
+const chat = ChatUtils.getCht();
 
 const status = computed<ChatStatus>(() => chat.status);
 const messages = computed<UIMessage[]>(() => chat.messages);
@@ -159,7 +164,7 @@ async function handleSubmit(message: PromptInputMessage) {
             {
                 body: {
                     model: model.value?.id,
-                    webSearch: webSearch.value,
+                    mcpEnabled: mcpEnabled.value,
                 },
             }
         );
@@ -209,8 +214,12 @@ function isLastTextPart(message: UIMessage, partIndex: number) {
     return true;
 }
 
-function toggleWebSearch() {
-    webSearch.value = !webSearch.value;
+function toggleMcp() {
+    mcpStore.toggleMcp();
+}
+
+function openMcpManager() {
+    router.push("/mcp");
 }
 
 async function copyToClipboard(text: string) {
@@ -229,7 +238,7 @@ function handleRegenerate() {
     chat.regenerate({
         body: {
             model: model.value?.id,
-            webSearch: webSearch.value,
+            mcpEnabled: mcpEnabled.value,
         },
     });
 }
@@ -478,11 +487,12 @@ const contextProps: any = computed(() => ({
                         <PromptInputSpeechButton />
 
                         <PromptInputButton
-                            :variant="webSearch ? 'default' : 'ghost'"
-                            @click="toggleWebSearch"
+                            :variant="mcpEnabled ? 'default' : 'ghost'"
+                            @click="toggleMcp"
+                            @contextmenu.prevent="openMcpManager"
                         >
-                            <GlobeIcon class="size-4" />
-                            <span>联网搜索</span>
+                            <Server class="size-4" />
+                            <span>MCP</span>
                         </PromptInputButton>
 
                         <ModelSelector v-model:open="openModelSelector">
