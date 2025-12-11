@@ -18,8 +18,37 @@
     "store:allow-save",
     "store:allow-load",
     "shell:allow-execute",
-    "shell:allow-spawn",
     "shell:allow-open",
-    "cors-fetch:default"
+    "cors-fetch:default",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "npx",
+          "cmd": "npx",
+          "args": true
+        },
+        {
+          "name": "node",
+          "cmd": "node",
+          "args": true
+        },
+        {
+          "name": "python",
+          "cmd": "python",
+          "args": true
+        },
+        {
+          "name": "python3",
+          "cmd": "python3",
+          "args": true
+        },
+        {
+          "name": "uv",
+          "cmd": "uv",
+          "args": true
+        }
+      ]
+    }
   ]
 }

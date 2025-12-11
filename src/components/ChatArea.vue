@@ -59,6 +59,7 @@ const checkpoints = ref<CheckpointType[]>([]);
 
 onMounted(async () => {
     await mcpStore.init();
+    mcpStore.checkConnections();
     try {
         const fetchedModels = await fetchAvailableModels();
         availableModels.value = fetchedModels;
@@ -512,17 +513,157 @@ const contextProps: any = computed(() => ({
                                     >MCP 服务器</DropdownMenuLabel
                                 >
                                 <DropdownMenuSeparator />
-                                <DropdownMenuCheckboxItem
+                                <DropdownMenuSub
                                     v-for="server in servers"
                                     :key="server.id"
-                                    :checked="server.enabled"
-                                    @update:checked="
-                                        (checked: any) =>
-                                            toggleServer(server.id, checked)
-                                    "
                                 >
-                                    {{ server.name }}
-                                </DropdownMenuCheckboxItem>
+                                    <DropdownMenuSubTrigger>
+                                        <div class="flex items-center gap-2">
+                                            <div
+                                                :class="
+                                                    cn(
+                                                        'w-2 h-2 rounded-full',
+                                                        server.enabled
+                                                            ? 'bg-green-500'
+                                                            : 'bg-gray-300'
+                                                    )
+                                                "
+                                            />
+                                            <span>{{ server.name }}</span>
+                                        </div>
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent class="w-64">
+                                        <DropdownMenuItem
+                                            @click="
+                                                toggleServer(
+                                                    server.id,
+                                                    !server.enabled
+                                                )
+                                            "
+                                        >
+                                            <Check
+                                                v-if="server.enabled"
+                                                class="mr-2 h-4 w-4"
+                                            />
+                                            <span v-else class="mr-6"></span>
+                                            {{
+                                                server.enabled
+                                                    ? "已启用"
+                                                    : "启用"
+                                            }}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <div
+                                            class="p-2 text-xs text-muted-foreground max-h-[300px] overflow-y-auto"
+                                        >
+                                            <div
+                                                v-if="
+                                                    mcpStore.serverCapabilities[
+                                                        server.id
+                                                    ]?.tools
+                                                "
+                                            >
+                                                <div class="font-semibold mb-1">
+                                                    工具 ({{
+                                                        Object.keys(
+                                                            mcpStore
+                                                                .serverCapabilities[
+                                                                server.id
+                                                            ].tools
+                                                        ).length
+                                                    }})
+                                                </div>
+                                                <div class="pl-2 mb-2">
+                                                    <div
+                                                        v-for="(
+                                                            tool, name
+                                                        ) in mcpStore
+                                                            .serverCapabilities[
+                                                            server.id
+                                                        ].tools"
+                                                        :key="name"
+                                                        class="truncate"
+                                                        :title="String(name)"
+                                                    >
+                                                        - {{ name }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div
+                                                v-if="
+                                                    mcpStore.serverCapabilities[
+                                                        server.id
+                                                    ]?.resources?.resources
+                                                        ?.length
+                                                "
+                                            >
+                                                <div class="font-semibold mb-1">
+                                                    资源 ({{
+                                                        mcpStore
+                                                            .serverCapabilities[
+                                                            server.id
+                                                        ].resources.resources
+                                                            .length
+                                                    }})
+                                                </div>
+                                                <div class="pl-2 mb-2">
+                                                    <div
+                                                        v-for="resource in mcpStore
+                                                            .serverCapabilities[
+                                                            server.id
+                                                        ].resources.resources"
+                                                        :key="resource.uri"
+                                                        class="truncate"
+                                                        :title="resource.name"
+                                                    >
+                                                        - {{ resource.name }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div
+                                                v-if="
+                                                    mcpStore.serverCapabilities[
+                                                        server.id
+                                                    ]?.prompts?.prompts?.length
+                                                "
+                                            >
+                                                <div class="font-semibold mb-1">
+                                                    提示词 ({{
+                                                        mcpStore
+                                                            .serverCapabilities[
+                                                            server.id
+                                                        ].prompts.prompts
+                                                            .length
+                                                    }})
+                                                </div>
+                                                <div class="pl-2 mb-2">
+                                                    <div
+                                                        v-for="prompt in mcpStore
+                                                            .serverCapabilities[
+                                                            server.id
+                                                        ].prompts.prompts"
+                                                        :key="prompt.name"
+                                                        class="truncate"
+                                                        :title="prompt.name"
+                                                    >
+                                                        - {{ prompt.name }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div
+                                                v-if="
+                                                    !mcpStore
+                                                        .serverCapabilities[
+                                                        server.id
+                                                    ]
+                                                "
+                                                class="text-center py-2"
+                                            >
+                                                无可用信息
+                                            </div>
+                                        </div>
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuSub>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem @click="openMcpManager">
                                     <Settings2 class="mr-2 h-4 w-4" />
