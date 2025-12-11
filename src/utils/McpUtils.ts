@@ -102,6 +102,36 @@ export class McpUtils {
         return tools;
     }
 
+    private static async listResources(mcpClient: any) {
+        try {
+            return await mcpClient.listResources();
+        } catch (error) {
+            console.warn("Error fetching resources from MCP client:", error);
+            return [];
+        }
+    }
+
+    private static async listResourceTemplates(mcpClient: any) {
+        try {
+            return await mcpClient.listResourceTemplates();
+        } catch (error) {
+            console.error(
+                "Error fetching resource templates from MCP client:",
+                error
+            );
+            return [];
+        }
+    }
+
+    private static async listPrompts(mcpClient: any) {
+        try {
+            return await mcpClient.listPrompts();
+        } catch (error) {
+            console.error("Error fetching prompts from MCP client:", error);
+            return [];
+        }
+    }
+
     public static async testConnection(server: McpServer) {
         let transport;
         try {
@@ -110,9 +140,9 @@ export class McpUtils {
             transport = result.transport;
 
             const tools = await mcpClient.tools();
-            const resources = await mcpClient.listResources();
-            const templates = await mcpClient.listResourceTemplates();
-            const prompts = await mcpClient.listPrompts();
+            const resources = await McpUtils.listResources(mcpClient);
+            const templates = await McpUtils.listResourceTemplates(mcpClient);
+            const prompts = await McpUtils.listPrompts(mcpClient);
             console.log(tools);
 
             // Close transport after test

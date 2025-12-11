@@ -20,9 +20,16 @@
     "shell:allow-execute",
     "shell:allow-open",
     "cors-fetch:default",
+    "shell:allow-kill",
+    "shell:allow-stdin-write",
     {
       "identifier": "shell:allow-spawn",
       "allow": [
+        {
+          "name": "binaries/node",
+          "sidecar": true,
+          "args": true
+        },
         {
           "name": "npx",
           "cmd": "npx",
@@ -31,16 +38,6 @@
         {
           "name": "node",
           "cmd": "node",
-          "args": true
-        },
-        {
-          "name": "python",
-          "cmd": "python",
-          "args": true
-        },
-        {
-          "name": "python3",
-          "cmd": "python3",
           "args": true
         },
         {

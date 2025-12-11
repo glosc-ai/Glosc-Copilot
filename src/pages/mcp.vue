@@ -553,7 +553,7 @@ onMounted(async () => {
 </script>
 
 <template>
-    <div class="container mx-auto p-6 max-w-4xl">
+    <div class="container p-6">
         <div class="flex items-center justify-between mb-6">
             <div class="flex items-center gap-4">
                 <Button variant="ghost" size="icon" @click="router.back()">

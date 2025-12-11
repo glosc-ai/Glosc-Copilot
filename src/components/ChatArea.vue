@@ -16,12 +16,8 @@ import {
     Settings2,
 } from "lucide-vue-next";
 
-import {
-    fetchAvailableModels,
-    formatModelName,
-    groupModelsByProvider,
-} from "@/utils/ModelApi";
-// import { countTokens } from "tokenlens";
+import { formatModelName, groupModelsByProvider } from "@/utils/ModelApi";
+
 import {
     tokenizerJSON,
     tokenizerConfig,
@@ -36,7 +32,8 @@ import { useMcpStore } from "@/stores/mcp";
 import { useRouter } from "vue-router";
 
 const chatStore = useChatStore();
-const { activeKey, conversations } = storeToRefs(chatStore);
+const { activeKey, conversations, selectedModel, availableModels } =
+    storeToRefs(chatStore);
 const mcpStore = useMcpStore();
 const { servers } = storeToRefs(mcpStore);
 const router = useRouter();
@@ -47,12 +44,10 @@ function toggleServer(id: string, checked: boolean) {
     mcpStore.updateServer(id, { enabled: checked });
 }
 
-const availableModels = ref<ModelInfo[]>([]);
 const groupedModels = computed(() =>
     groupModelsByProvider(availableModels.value)
 );
-const model = ref<ModelInfo | null>(null);
-const selectedModelData = computed(() => model.value);
+const selectedModelData = computed(() => selectedModel.value);
 const openModelSelector = ref(false);
 
 const checkpoints = ref<CheckpointType[]>([]);
@@ -60,18 +55,8 @@ const checkpoints = ref<CheckpointType[]>([]);
 onMounted(async () => {
     await mcpStore.init();
     mcpStore.checkConnections();
-    try {
-        const fetchedModels = await fetchAvailableModels();
-        availableModels.value = fetchedModels;
-        if (fetchedModels.length > 0) {
-            const defaultModelId = "xai/grok-code-fast-1";
-            const defaultModel = fetchedModels.find(
-                (m) => m.id === defaultModelId
-            );
-            model.value = defaultModel || fetchedModels[0] || null;
-        }
-    } catch (e) {
-        console.error("Failed to fetch models", e);
+    if (availableModels.value.length === 0) {
+        await chatStore.loadAvailableModels();
     }
 });
 
@@ -166,17 +151,21 @@ async function handleSubmit(message: PromptInputMessage) {
     if (!hasText && !hasAttachments) return;
 
     try {
-        await chat.sendMessage(
+        const tools = await McpUtils.getTools();
+
+        chat.sendMessage(
             {
                 text: hasText ? message.text : "Sent with attachments",
             },
             {
                 body: {
-                    model: model.value?.id,
+                    model: selectedModel.value?.id,
                     mcpEnabled: hasEnabledServers.value,
+                    tools,
                 },
             }
         );
+        message.text = "";
     } catch (error) {
         console.error("Failed to send message", error);
     }
@@ -241,14 +230,10 @@ async function copyToClipboard(text: string) {
 }
 
 async function handleRegenerate() {
-    const tools = await McpUtils.getTools();
-    console.log(tools);
-
     chat.regenerate({
         body: {
-            model: model.value?.id,
+            model: selectedModel.value?.id,
             mcpEnabled: hasEnabledServers.value,
-            tools: tools,
         },
     });
 }
@@ -335,8 +320,8 @@ const calculatedUsage = computed(() => {
 
 const contextProps: any = computed(() => ({
     usedTokens: calculatedUsage.value.totalTokens,
-    maxTokens: model.value?.context_window || 128000,
-    modelId: model.value?.id || "openai:gpt-5",
+    maxTokens: selectedModel.value?.context_window || 128000,
+    modelId: selectedModel.value?.id || "openai:gpt-5",
     usage: calculatedUsage.value,
 }));
 </script>
@@ -418,10 +403,27 @@ const contextProps: any = computed(() => ({
                                             :content="part.text"
                                         />
                                     </Reasoning>
-                                    <ToolInvocation
+                                    <!-- <ToolInvocation
                                         v-if="part.type === 'tool-invocation'"
                                         :tool-invocation="part"
-                                    />
+                                    /> -->
+                                    <Tool v-if="part.type.includes('tool')">
+                                        <pre>{{ part }}</pre>
+                                        <ToolHeader
+                                            :state="part.state"
+                                            :title="part.type"
+                                            :type="part.type"
+                                        ></ToolHeader>
+                                        <ToolContent>
+                                            <ToolInput
+                                                :input="part.input"
+                                            ></ToolInput>
+                                            <ToolOutput
+                                                :output="part.output"
+                                                :errorText="part.errorText"
+                                            ></ToolOutput>
+                                        </ToolContent>
+                                    </Tool>
 
                                     <MessageActions
                                         v-if="
@@ -724,7 +726,7 @@ const contextProps: any = computed(() => ({
                                             class="flex items-start gap-2 py-3"
                                             @select="
                                                 () => {
-                                                    model = item;
+                                                    chatStore.selectModel(item);
                                                     openModelSelector = false;
                                                 }
                                             "
@@ -733,7 +735,8 @@ const contextProps: any = computed(() => ({
                                                 :class="
                                                     cn(
                                                         'mt-1 h-4 w-4 shrink-0',
-                                                        model?.id === item.id
+                                                        selectedModel?.id ===
+                                                            item.id
                                                             ? 'opacity-100'
                                                             : 'opacity-0'
                                                     )

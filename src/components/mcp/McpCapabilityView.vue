@@ -64,7 +64,7 @@ const toggleToolSchema = (toolName: string) => {
                 >
                     {{
                         tab === "tools"
-                            ? capabilities?.tools?.tools?.length
+                            ? Object.keys(capabilities.tools || {}).length
                             : tab === "resources"
                               ? capabilities?.resources?.resources?.length
                               : tab === "templates"
@@ -81,14 +81,14 @@ const toggleToolSchema = (toolName: string) => {
         <div class="max-h-[400px] overflow-y-auto pr-2">
             <div v-if="activeTab === 'tools'" class="grid gap-4">
                 <div
-                    v-if="!capabilities.tools?.tools?.length"
+                    v-if="!capabilities.tools"
                     class="text-center py-8 text-muted-foreground"
                 >
                     未发现工具
                 </div>
                 <div
-                    v-for="tool in capabilities.tools?.tools"
-                    :key="tool.name"
+                    v-for="(tool, key) in capabilities.tools"
+                    :key="key"
                     class="border rounded-lg p-4 bg-card"
                 >
                     <div class="flex items-center justify-between mb-2">
@@ -97,7 +97,7 @@ const toggleToolSchema = (toolName: string) => {
                                 <Box class="w-4 h-4 text-primary" />
                             </div>
                             <h3 class="font-semibold">
-                                {{ tool.name }}
+                                {{ key }}
                             </h3>
                         </div>
                         <Button
@@ -125,7 +125,7 @@ const toggleToolSchema = (toolName: string) => {
                         v-if="
                             expandedToolSchemas.has(`${serverId}-${tool.name}`)
                         "
-                        class="bg-muted/50 rounded-md p-3 text-xs font-mono overflow-x-auto"
+                        class="bg-muted/50 rounded-md p-3 text-xs font-mono overflow-x-auto max-w-full"
                     >
                         <pre>{{
                             JSON.stringify(tool.inputSchema, null, 2)

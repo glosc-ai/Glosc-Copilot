@@ -1,6 +1,6 @@
 <script lang="ts" setup></script>
 <template>
-    <div class="pt-[40px]">
+    <div class="pt-10">
         <TitleBar />
         <router-view />
     </div>
