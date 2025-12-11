@@ -5,7 +5,6 @@ import { ChatUtils } from "@/utils/ChatUtils";
 import ToolInvocation from "@/components/ai-elements/tool/ToolInvocation.vue";
 import {
     CopyIcon,
-    GlobeIcon,
     Server,
     RefreshCcwIcon,
     Check,
@@ -14,7 +13,9 @@ import {
     Maximize2,
     MessageSquare,
     Coins,
+    Settings2,
 } from "lucide-vue-next";
+
 import {
     fetchAvailableModels,
     formatModelName,
@@ -26,7 +27,7 @@ import {
     tokenizerConfig,
 } from "@lenml/tokenizer-claude/src/data.ts";
 
-import { TokenizerLoader, tokenizers } from "@lenml/tokenizers";
+import { TokenizerLoader } from "@lenml/tokenizers";
 
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat";
@@ -37,8 +38,14 @@ import { useRouter } from "vue-router";
 const chatStore = useChatStore();
 const { activeKey, conversations } = storeToRefs(chatStore);
 const mcpStore = useMcpStore();
-const { mcpEnabled } = storeToRefs(mcpStore);
+const { servers } = storeToRefs(mcpStore);
 const router = useRouter();
+
+const hasEnabledServers = computed(() => servers.value.some((s) => s.enabled));
+
+function toggleServer(id: string, checked: boolean) {
+    mcpStore.updateServer(id, { enabled: checked });
+}
 
 const availableModels = ref<ModelInfo[]>([]);
 const groupedModels = computed(() =>
@@ -51,6 +58,7 @@ const openModelSelector = ref(false);
 const checkpoints = ref<CheckpointType[]>([]);
 
 onMounted(async () => {
+    await mcpStore.init();
     try {
         const fetchedModels = await fetchAvailableModels();
         availableModels.value = fetchedModels;
@@ -164,7 +172,7 @@ async function handleSubmit(message: PromptInputMessage) {
             {
                 body: {
                     model: model.value?.id,
-                    mcpEnabled: mcpEnabled.value,
+                    mcpEnabled: hasEnabledServers.value,
                 },
             }
         );
@@ -214,10 +222,6 @@ function isLastTextPart(message: UIMessage, partIndex: number) {
     return true;
 }
 
-function toggleMcp() {
-    mcpStore.toggleMcp();
-}
-
 function openMcpManager() {
     router.push("/mcp");
 }
@@ -229,16 +233,21 @@ async function copyToClipboard(text: string) {
 
     try {
         await navigator.clipboard.writeText(text);
+        ElMessage.success("内容已复制到剪贴板");
     } catch (error) {
         console.error("Failed to copy to clipboard", error);
     }
 }
 
-function handleRegenerate() {
+async function handleRegenerate() {
+    const tools = await McpUtils.getTools();
+    console.log(tools);
+
     chat.regenerate({
         body: {
             model: model.value?.id,
-            mcpEnabled: mcpEnabled.value,
+            mcpEnabled: hasEnabledServers.value,
+            tools: tools,
         },
     });
 }
@@ -486,14 +495,41 @@ const contextProps: any = computed(() => ({
 
                         <PromptInputSpeechButton />
 
-                        <PromptInputButton
-                            :variant="mcpEnabled ? 'default' : 'ghost'"
-                            @click="toggleMcp"
-                            @contextmenu.prevent="openMcpManager"
-                        >
-                            <Server class="size-4" />
-                            <span>MCP</span>
-                        </PromptInputButton>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <PromptInputButton
+                                    :variant="
+                                        hasEnabledServers ? 'default' : 'ghost'
+                                    "
+                                    @contextmenu.prevent="openMcpManager"
+                                >
+                                    <Server class="size-4" />
+                                    <span>MCP</span>
+                                </PromptInputButton>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent class="w-56">
+                                <DropdownMenuLabel
+                                    >MCP 服务器</DropdownMenuLabel
+                                >
+                                <DropdownMenuSeparator />
+                                <DropdownMenuCheckboxItem
+                                    v-for="server in servers"
+                                    :key="server.id"
+                                    :checked="server.enabled"
+                                    @update:checked="
+                                        (checked: any) =>
+                                            toggleServer(server.id, checked)
+                                    "
+                                >
+                                    {{ server.name }}
+                                </DropdownMenuCheckboxItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem @click="openMcpManager">
+                                    <Settings2 class="mr-2 h-4 w-4" />
+                                    <span>管理服务器...</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
 
                         <ModelSelector v-model:open="openModelSelector">
                             <ModelSelectorTrigger as-child>

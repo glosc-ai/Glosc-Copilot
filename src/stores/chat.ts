@@ -3,6 +3,11 @@ import { defineStore } from "pinia";
 import { fetchAvailableModels } from "../utils/ModelApi";
 import { storeUtils } from "../utils/StoreUtils";
 import type { AttachmentFile } from "@/components/ai-elements/prompt-input";
+import type {
+    Conversation,
+    ConversationItem,
+    StoredChatMessage,
+} from "../utils/interface";
 
 export const useChatStore = defineStore("chat", {
     state: () => ({

@@ -8,7 +8,7 @@ import {
     CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 
-const props = defineProps<{
+defineProps<{
     toolInvocation: any;
 }>();
 

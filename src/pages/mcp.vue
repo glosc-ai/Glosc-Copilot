@@ -1,42 +1,215 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
-import { useMcpStore, type McpServer } from "@/stores/mcp";
+import { ref, onMounted, watch } from "vue";
+import { useMcpStore } from "@/stores/mcp";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
-import { Plus, Trash2, Edit, Play, Activity, ArrowLeft } from "lucide-vue-next";
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+
+import {
+    Plus,
+    Trash2,
+    Edit,
+    Play,
+    Activity,
+    ArrowLeft,
+    Code,
+    FileText,
+    Box,
+    FileJson,
+    LayoutTemplate,
+    MessageSquare,
+    ChevronDown,
+    ChevronUp,
+} from "lucide-vue-next";
 import { useRouter } from "vue-router";
+
+import { McpUtils } from "@/utils/McpUtils";
+import { Codemirror } from "vue-codemirror";
+import { json, jsonLanguage } from "@codemirror/lang-json";
+import { oneDark } from "@codemirror/theme-one-dark";
+import {
+    autocompletion,
+    completionKeymap,
+    closeBrackets,
+    closeBracketsKeymap,
+    type CompletionContext,
+    acceptCompletion,
+} from "@codemirror/autocomplete";
+import { defaultKeymap, indentWithTab } from "@codemirror/commands";
+import { highlightActiveLineGutter, lineNumbers } from "@codemirror/view";
+import {
+    syntaxHighlighting,
+    defaultHighlightStyle,
+    bracketMatching,
+    indentOnInput,
+} from "@codemirror/language";
+import { lintKeymap } from "@codemirror/lint";
+import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import {
+    keymap,
+    highlightSpecialChars,
+    drawSelection,
+    dropCursor,
+    highlightActiveLine,
+} from "@codemirror/view";
 
 const router = useRouter();
 const mcpStore = useMcpStore();
 
 const isDialogOpen = ref(false);
 const editingServer = ref<McpServer | null>(null);
+const inputMode = ref<"form" | "json">("form");
+const jsonContent = ref("");
+
+// Test Results State
+const serverCapabilities = ref<Record<string, any>>({});
+const expandedServers = ref<Set<string>>(new Set());
+const activeTab = ref<"tools" | "resources" | "templates" | "prompts">("tools");
+
+const expandedToolSchemas = ref<Set<string>>(new Set());
+
+const toggleToolSchema = (serverId: string, toolName: string) => {
+    const key = `${serverId}-${toolName}`;
+    const newSet = new Set(expandedToolSchemas.value);
+    if (newSet.has(key)) {
+        newSet.delete(key);
+    } else {
+        newSet.add(key);
+    }
+    expandedToolSchemas.value = newSet;
+};
+
+const mcpCompletion = (context: CompletionContext) => {
+    const word = context.matchBefore(/\w*/) || {
+        from: context.pos,
+        to: context.pos,
+        text: "",
+    };
+
+    // Check if we are inside quotes
+    const charBefore = context.state.sliceDoc(word.from - 1, word.from);
+    const isQuoted = charBefore === '"';
+
+    const charAfter = context.state.sliceDoc(context.pos, context.pos + 1);
+    const hasClosingQuote = charAfter === '"';
+
+    if (word.from === word.to && !context.explicit && !isQuoted) {
+        return null;
+    }
+
+    const properties = [
+        {
+            label: "servers",
+            template: 'servers": {\n\t\n}',
+            detail: "Server configurations",
+        },
+        { label: "type", template: 'type": "stdio"', detail: "Transport type" },
+        { label: "command", template: 'command": ""', detail: "Executable" },
+        { label: "args", template: 'args": []', detail: "Arguments" },
+        { label: "env", template: 'env": {}', detail: "Environment variables" },
+        { label: "url", template: 'url": ""', detail: "Server URL" },
+        { label: "headers", template: 'headers": {}', detail: "HTTP headers" },
+    ];
+
+    const values = [
+        { label: "stdio", type: "text" },
+        { label: "http", type: "text" },
+    ];
+
+    const shouldConsumeQuote = isQuoted && hasClosingQuote;
+
+    return {
+        from: word.from,
+        to: shouldConsumeQuote ? context.pos + 1 : context.pos,
+        options: [
+            ...properties.map((p) => ({
+                label: p.label,
+                type: "property",
+                apply: isQuoted ? p.template : `"${p.template}`,
+                detail: p.detail,
+            })),
+            ...values.map((v) => ({
+                label: v.label,
+                type: "text",
+                apply: shouldConsumeQuote ? v.label + '"' : v.label,
+                detail: v.type,
+            })),
+        ],
+    };
+};
+
+const extensions = [
+    json(),
+    jsonLanguage.data.of({
+        autocomplete: mcpCompletion,
+    }),
+    oneDark,
+    lineNumbers(),
+    highlightActiveLineGutter(),
+    highlightSpecialChars(),
+    drawSelection(),
+    dropCursor(),
+    indentOnInput(),
+    syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+    bracketMatching(),
+    closeBrackets(),
+    autocompletion(),
+    highlightActiveLine(),
+    highlightSelectionMatches(),
+    keymap.of([
+        ...closeBracketsKeymap,
+        ...defaultKeymap,
+        ...searchKeymap,
+        ...completionKeymap,
+        ...lintKeymap,
+        { key: "Tab", run: acceptCompletion },
+        indentWithTab,
+    ]),
+];
 
 const form = ref({
+    type: "stdio" as "stdio" | "http",
     name: "",
     command: "",
     args: "",
     env: "",
+    url: "",
+    headers: "",
 });
 
 const resetForm = () => {
     form.value = {
+        type: "stdio",
         name: "",
         command: "",
         args: "",
         env: "",
+        url: "",
+        headers: "",
     };
+    jsonContent.value = JSON.stringify(
+        {
+            servers: {
+                "example-server": {
+                    type: "stdio",
+                    command: "",
+                    args: [],
+                    env: {},
+                },
+            },
+        },
+        null,
+        2
+    );
     editingServer.value = null;
+    inputMode.value = "form";
 };
 
 const openAddDialog = () => {
@@ -46,48 +219,286 @@ const openAddDialog = () => {
 
 const openEditDialog = (server: McpServer) => {
     editingServer.value = server;
-    form.value = {
-        name: server.name,
-        command: server.command,
-        args: server.args.join(" "),
-        env: JSON.stringify(server.env, null, 2),
-    };
+    if (server.type === "stdio") {
+        form.value = {
+            type: "stdio",
+            name: server.name,
+            command: server.command,
+            args: server.args.join(" "),
+            env: JSON.stringify(server.env, null, 2),
+            url: "",
+            headers: "",
+        };
+        jsonContent.value = JSON.stringify(
+            {
+                servers: {
+                    [server.name]: {
+                        type: "stdio",
+                        command: server.command,
+                        args: server.args,
+                        env: server.env,
+                    },
+                },
+            },
+            null,
+            2
+        );
+    } else {
+        form.value = {
+            type: "http",
+            name: server.name,
+            command: "",
+            args: "",
+            env: "",
+            url: server.url,
+            headers: JSON.stringify(server.headers, null, 2),
+        };
+        jsonContent.value = JSON.stringify(
+            {
+                servers: {
+                    [server.name]: {
+                        type: "http",
+                        url: server.url,
+                        headers: server.headers,
+                    },
+                },
+            },
+            null,
+            2
+        );
+    }
     isDialogOpen.value = true;
 };
 
-const saveServer = async () => {
-    const args = form.value.args.split(" ").filter(Boolean);
-    let env = {};
+const syncToJson = () => {
+    if (form.value.type === "stdio") {
+        const args = form.value.args.split(" ").filter(Boolean);
+        let env = {};
+        try {
+            env = form.value.env ? JSON.parse(form.value.env) : {};
+        } catch (e) {
+            // ignore
+        }
+        jsonContent.value = JSON.stringify(
+            {
+                servers: {
+                    [form.value.name || "example-server"]: {
+                        type: "stdio",
+                        command: form.value.command,
+                        args,
+                        env,
+                    },
+                },
+            },
+            null,
+            2
+        );
+    } else {
+        let headers = {};
+        try {
+            headers = form.value.headers ? JSON.parse(form.value.headers) : {};
+        } catch (e) {
+            // ignore
+        }
+        jsonContent.value = JSON.stringify(
+            {
+                servers: {
+                    [form.value.name || "example-server"]: {
+                        type: "http",
+                        url: form.value.url,
+                        headers,
+                    },
+                },
+            },
+            null,
+            2
+        );
+    }
+};
+
+const stripJsonComments = (json: string) => {
+    return json.replace(
+        /\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g,
+        (m, g) => (g ? "" : m)
+    );
+};
+
+const parseServerConfig = (jsonStr: string) => {
     try {
-        env = form.value.env ? JSON.parse(form.value.env) : {};
+        const data = JSON.parse(stripJsonComments(jsonStr));
+        const configs: any[] = [];
+
+        // Handle "mcpServers" wrapper (VSCode/Claude format)
+        if (data.mcpServers && typeof data.mcpServers === "object") {
+            const keys = Object.keys(data.mcpServers);
+            for (const name of keys) {
+                const config = data.mcpServers[name];
+                configs.push({
+                    type: config.type || "stdio",
+                    name: name,
+                    command: config.command,
+                    args: config.args || [],
+                    env: config.env || {},
+                    url: config.url,
+                    headers: config.headers,
+                });
+            }
+            if (configs.length > 0) return configs;
+        }
+
+        // Handle "servers" wrapper (Standard format)
+        if (data.servers && typeof data.servers === "object") {
+            const keys = Object.keys(data.servers);
+            for (const name of keys) {
+                const config = data.servers[name];
+                configs.push({
+                    type: config.type || "stdio",
+                    name: name,
+                    command: config.command,
+                    args: config.args || [],
+                    env: config.env || {},
+                    url: config.url,
+                    headers: config.headers,
+                });
+            }
+            if (configs.length > 0) return configs;
+        }
+
+        // Handle direct server config
+        return [
+            {
+                type: data.type || (data.url ? "http" : "stdio"),
+                name: data.name,
+                command: data.command,
+                args: data.args || [],
+                env: data.env || {},
+                url: data.url,
+                headers: data.headers || {},
+            },
+        ];
     } catch (e) {
-        alert("Environment variables must be valid JSON");
-        return;
+        return null;
+    }
+};
+
+const syncToForm = () => {
+    const parsed = parseServerConfig(jsonContent.value);
+    if (parsed && parsed.length > 0) {
+        const config = parsed[0];
+        form.value = {
+            type: config.type as "stdio" | "http",
+            name: config.name || form.value.name || "",
+            command: config.command || "",
+            args: Array.isArray(config.args) ? config.args.join(" ") : "",
+            env: JSON.stringify(config.env || {}, null, 2),
+            url: config.url || "",
+            headers: JSON.stringify(config.headers || {}, null, 2),
+        };
+    }
+};
+
+watch(inputMode, (newMode) => {
+    if (newMode === "json") {
+        syncToJson();
+    } else {
+        syncToForm();
+    }
+});
+
+const saveServer = async () => {
+    let serverDataList: any[] = [];
+
+    if (inputMode.value === "json") {
+        const parsed = parseServerConfig(jsonContent.value);
+        if (!parsed || parsed.length === 0) {
+            ElMessage.error("无效的 JSON 配置");
+            return;
+        }
+        serverDataList = parsed;
+    } else {
+        let serverData: any = {};
+        serverData.type = form.value.type;
+        serverData.name = form.value.name;
+        if (serverData.type === "stdio") {
+            serverData.command = form.value.command;
+            serverData.args = form.value.args.split(" ").filter(Boolean);
+            try {
+                serverData.env = form.value.env
+                    ? JSON.parse(form.value.env)
+                    : {};
+            } catch (e) {
+                ElMessage.error("环境变量必须是有效的 JSON");
+                return;
+            }
+        } else {
+            serverData.url = form.value.url;
+            try {
+                serverData.headers = form.value.headers
+                    ? JSON.parse(form.value.headers)
+                    : {};
+            } catch (e) {
+                ElMessage.error("Headers 必须是有效的 JSON");
+                return;
+            }
+        }
+        serverDataList = [serverData];
     }
 
     if (editingServer.value) {
-        await mcpStore.updateServer(editingServer.value.id, {
-            name: form.value.name,
-            command: form.value.command,
-            args,
-            env,
-        });
+        // Update existing server
+        const serverData = serverDataList[0];
+        if (!serverData.name) serverData.name = form.value.name;
+
+        if (!serverData.name) {
+            ElMessage.error("名称是必填项");
+            return;
+        }
+        if (serverData.type === "stdio" && !serverData.command) {
+            ElMessage.error("stdio 服务器必须指定命令");
+            return;
+        }
+        if (serverData.type === "http" && !serverData.url) {
+            ElMessage.error("http 服务器必须指定 URL");
+            return;
+        }
+
+        await mcpStore.updateServer(editingServer.value.id, serverData);
     } else {
-        await mcpStore.addServer({
-            name: form.value.name,
-            command: form.value.command,
-            args,
-            env,
-            enabled: true,
-        });
+        // Add new server(s)
+        let addedCount = 0;
+        for (const serverData of serverDataList) {
+            if (!serverData.name && serverDataList.length === 1)
+                serverData.name = form.value.name;
+
+            if (!serverData.name) continue; // Skip if no name
+            if (serverData.type === "stdio" && !serverData.command) continue;
+            if (serverData.type === "http" && !serverData.url) continue;
+
+            await mcpStore.addServer({
+                ...serverData,
+                enabled: true,
+            });
+            addedCount++;
+        }
+        if (addedCount === 0) {
+            ElMessage.error("未找到可添加的有效服务器");
+            return;
+        }
     }
     isDialogOpen.value = false;
     resetForm();
 };
 
 const deleteServer = async (id: string) => {
-    if (confirm("Are you sure you want to delete this server?")) {
+    try {
+        await ElMessageBox.confirm("确定要删除此服务器吗？", "警告", {
+            confirmButtonText: "删除",
+            cancelButtonText: "取消",
+            type: "warning",
+        });
         await mcpStore.removeServer(id);
+    } catch {
+        // Cancelled
     }
 };
 
@@ -95,18 +506,67 @@ const toggleServer = async (server: McpServer) => {
     await mcpStore.updateServer(server.id, { enabled: !server.enabled });
 };
 
-const testServer = (server: McpServer) => {
+const toggleServerExpansion = (serverId: string) => {
+    const newSet = new Set(expandedServers.value);
+    if (newSet.has(serverId)) {
+        newSet.delete(serverId);
+    } else {
+        newSet.add(serverId);
+    }
+    expandedServers.value = newSet;
+};
+
+const testServer = async (server: McpServer) => {
     console.log("Testing server:", server);
-    alert(`Testing ${server.name}... (Not implemented)`);
+    try {
+        const result = await McpUtils.testConnection(server);
+        if (result.success) {
+            ElMessage.success(`连接 ${server.name} 成功`);
+            serverCapabilities.value[server.id] = result;
+            // Auto expand on success
+            const newSet = new Set(expandedServers.value);
+            newSet.add(server.id);
+            expandedServers.value = newSet;
+        } else {
+            ElMessage.error(`连接 ${server.name} 失败: ${result.error}`);
+        }
+    } catch (e) {
+        ElMessage.error(`测试 ${server.name} 时出错: ${e}`);
+    }
 };
 
 const startServer = (server: McpServer) => {
     console.log("Starting server:", server);
-    alert(`Starting ${server.name}... (Not implemented)`);
+    ElMessage.info(`正在启动 ${server.name}... (尚未实现)`);
+};
+
+const checkAllServers = async () => {
+    const promises = mcpStore.servers.map(async (server) => {
+        try {
+            const result = await McpUtils.testConnection(server);
+            if (result.success) {
+                serverCapabilities.value[server.id] = result;
+                if (!server.enabled) {
+                    await mcpStore.updateServer(server.id, { enabled: true });
+                }
+            } else {
+                if (server.enabled) {
+                    await mcpStore.updateServer(server.id, { enabled: false });
+                }
+            }
+        } catch (e) {
+            console.error(`Auto-check failed for ${server.name}:`, e);
+            if (server.enabled) {
+                await mcpStore.updateServer(server.id, { enabled: false });
+            }
+        }
+    });
+    await Promise.all(promises);
 };
 
 onMounted(async () => {
     await mcpStore.init();
+    await checkAllServers();
 });
 </script>
 
@@ -117,11 +577,11 @@ onMounted(async () => {
                 <Button variant="ghost" size="icon" @click="router.back()">
                     <ArrowLeft class="w-4 h-4" />
                 </Button>
-                <h1 class="text-2xl font-bold">MCP Server Management</h1>
+                <h1 class="text-2xl font-bold">MCP 服务器管理</h1>
             </div>
             <Button @click="openAddDialog">
                 <Plus class="w-4 h-4 mr-2" />
-                Add Server
+                添加服务器
             </Button>
         </div>
 
@@ -129,65 +589,393 @@ onMounted(async () => {
             <div
                 v-for="server in mcpStore.servers"
                 :key="server.id"
-                class="border rounded-lg p-4 flex items-center justify-between bg-card text-card-foreground shadow-sm"
+                class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden"
             >
-                <div>
-                    <div class="flex items-center gap-2">
-                        <h3 class="font-semibold text-lg">{{ server.name }}</h3>
-                        <span
-                            :class="[
-                                'px-2 py-0.5 rounded text-xs',
-                                server.enabled
-                                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100'
-                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100',
-                            ]"
-                        >
-                            {{ server.enabled ? "Enabled" : "Disabled" }}
-                        </span>
+                <div class="p-4 flex items-center justify-between">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-semibold text-lg">
+                                {{ server.name }}
+                            </h3>
+                            <span
+                                :class="[
+                                    'px-2 py-0.5 rounded text-xs',
+                                    server.enabled
+                                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100'
+                                        : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100',
+                                ]"
+                            >
+                                {{ server.enabled ? "已启用" : "已禁用" }}
+                            </span>
+                        </div>
+                        <p class="text-sm text-muted-foreground mt-1">
+                            <span v-if="server.type === 'stdio'">
+                                {{ server.command }} {{ server.args.join(" ") }}
+                            </span>
+                            <span v-else-if="server.type === 'http'">
+                                {{ server.url }}
+                            </span>
+                        </p>
                     </div>
-                    <p class="text-sm text-muted-foreground mt-1">
-                        {{ server.command }} {{ server.args.join(" ") }}
-                    </p>
+                    <div class="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            @click="toggleServer(server)"
+                        >
+                            {{ server.enabled ? "禁用" : "启用" }}
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            @click="testServer(server)"
+                        >
+                            <Activity class="w-4 h-4 mr-1" />
+                            测试
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            @click="startServer(server)"
+                        >
+                            <Play class="w-4 h-4 mr-1" />
+                            启动
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            @click="openEditDialog(server)"
+                        >
+                            <Edit class="w-4 h-4" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            class="text-destructive hover:text-destructive"
+                            @click="deleteServer(server.id)"
+                        >
+                            <Trash2 class="w-4 h-4" />
+                        </Button>
+                        <Button
+                            v-if="serverCapabilities[server.id]"
+                            variant="ghost"
+                            size="icon"
+                            @click="toggleServerExpansion(server.id)"
+                        >
+                            <component
+                                :is="
+                                    expandedServers.has(server.id)
+                                        ? ChevronUp
+                                        : ChevronDown
+                                "
+                                class="w-4 h-4"
+                            />
+                        </Button>
+                    </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        @click="toggleServer(server)"
-                    >
-                        {{ server.enabled ? "Disable" : "Enable" }}
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        @click="testServer(server)"
-                    >
-                        <Activity class="w-4 h-4 mr-1" />
-                        Test
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        @click="startServer(server)"
-                    >
-                        <Play class="w-4 h-4 mr-1" />
-                        Start
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        @click="openEditDialog(server)"
-                    >
-                        <Edit class="w-4 h-4" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        class="text-destructive hover:text-destructive"
-                        @click="deleteServer(server.id)"
-                    >
-                        <Trash2 class="w-4 h-4" />
-                    </Button>
+
+                <!-- Expanded Details -->
+                <div
+                    v-if="
+                        expandedServers.has(server.id) &&
+                        serverCapabilities[server.id]
+                    "
+                    class="border-t bg-muted/30 p-4"
+                >
+                    <div class="flex items-center gap-2 border-b pb-2 mb-4">
+                        <Button
+                            v-for="tab in [
+                                'tools',
+                                'resources',
+                                'templates',
+                                'prompts',
+                            ]"
+                            :key="tab"
+                            variant="ghost"
+                            size="sm"
+                            :class="[
+                                'capitalize',
+                                activeTab === tab
+                                    ? 'bg-background shadow-sm font-medium text-foreground'
+                                    : 'text-muted-foreground',
+                            ]"
+                            @click="activeTab = tab as any"
+                        >
+                            <component
+                                :is="
+                                    tab === 'tools'
+                                        ? Box
+                                        : tab === 'resources'
+                                          ? FileJson
+                                          : tab === 'templates'
+                                            ? LayoutTemplate
+                                            : MessageSquare
+                                "
+                                class="w-4 h-4 mr-2"
+                            />
+                            {{ tab }}
+                            <span
+                                class="ml-2 text-xs bg-muted-foreground/20 px-1.5 rounded-full"
+                            >
+                                {{
+                                    tab === "tools"
+                                        ? Object.keys(
+                                              serverCapabilities[server.id]
+                                                  ?.tools
+                                          ).length
+                                        : tab === "resources"
+                                          ? serverCapabilities[server.id]
+                                                ?.resources?.resources?.length
+                                          : tab === "templates"
+                                            ? serverCapabilities[server.id]
+                                                  ?.templates?.resourceTemplates
+                                                  ?.length
+                                            : tab === "prompts"
+                                              ? serverCapabilities[server.id]
+                                                    ?.prompts?.prompts?.length
+                                              : 0
+                                }}
+                            </span>
+                        </Button>
+                    </div>
+
+                    <div class="max-h-[400px] overflow-y-auto pr-2">
+                        <div v-if="activeTab === 'tools'" class="grid gap-4">
+                            <div
+                                v-if="!serverCapabilities[server.id].tools"
+                                class="text-center py-8 text-muted-foreground"
+                            >
+                                未发现工具
+                            </div>
+                            <div
+                                v-for="(tool, key) in serverCapabilities[
+                                    server.id
+                                ].tools"
+                                :key="tool.name"
+                                class="border rounded-lg p-4 bg-card"
+                            >
+                                <div
+                                    class="flex items-center justify-between mb-2"
+                                >
+                                    <div class="flex items-center gap-2">
+                                        <div
+                                            class="p-2 bg-primary/10 rounded-md"
+                                        >
+                                            <Box class="w-4 h-4 text-primary" />
+                                        </div>
+                                        <h3 class="font-semibold">
+                                            {{ key }}
+                                        </h3>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        class="h-6 w-6 p-0"
+                                        @click="
+                                            toggleToolSchema(
+                                                server.id,
+                                                String(key)
+                                            )
+                                        "
+                                    >
+                                        <component
+                                            :is="
+                                                expandedToolSchemas.has(
+                                                    `${server.id}-${key}`
+                                                )
+                                                    ? ChevronUp
+                                                    : ChevronDown
+                                            "
+                                            class="w-4 h-4"
+                                        />
+                                    </Button>
+                                </div>
+                                <p class="text-sm text-muted-foreground mb-3">
+                                    {{ tool.description || "无描述" }}
+                                </p>
+                                <div
+                                    v-if="
+                                        expandedToolSchemas.has(
+                                            `${server.id}-${key}`
+                                        )
+                                    "
+                                    class="bg-muted/50 rounded-md p-3 text-xs font-mono overflow-x-auto"
+                                >
+                                    <pre>{{
+                                        JSON.stringify(
+                                            tool.inputSchema,
+                                            null,
+                                            2
+                                        )
+                                    }}</pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div
+                            v-else-if="activeTab === 'resources'"
+                            class="grid gap-4"
+                        >
+                            <div
+                                v-if="
+                                    !serverCapabilities[server.id].resources
+                                        ?.resources?.length
+                                "
+                                class="text-center py-8 text-muted-foreground"
+                            >
+                                未发现资源
+                            </div>
+                            <div
+                                v-for="resource in serverCapabilities[server.id]
+                                    .resources.resources"
+                                :key="resource.uri"
+                                class="border rounded-lg p-4 bg-card"
+                            >
+                                <div class="flex items-center gap-2 mb-2">
+                                    <div class="p-2 bg-blue-500/10 rounded-md">
+                                        <FileJson
+                                            class="w-4 h-4 text-blue-500"
+                                        />
+                                    </div>
+                                    <h3 class="font-semibold">
+                                        {{ resource.name }}
+                                    </h3>
+                                </div>
+                                <div class="grid gap-1 text-sm">
+                                    <div class="flex gap-2">
+                                        <span class="text-muted-foreground w-16"
+                                            >URI:</span
+                                        >
+                                        <code class="bg-muted px-1 rounded">{{
+                                            resource.uri
+                                        }}</code>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <span class="text-muted-foreground w-16"
+                                            >MIME:</span
+                                        >
+                                        <span>{{
+                                            resource.mimeType || "Unknown"
+                                        }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div
+                            v-else-if="activeTab === 'templates'"
+                            class="grid gap-4"
+                        >
+                            <div
+                                v-if="
+                                    !serverCapabilities[server.id].templates
+                                        ?.resourceTemplates?.length
+                                "
+                                class="text-center py-8 text-muted-foreground"
+                            >
+                                未发现模板
+                            </div>
+                            <div
+                                v-for="template in serverCapabilities[server.id]
+                                    .templates.resourceTemplates"
+                                :key="template.uriTemplate"
+                                class="border rounded-lg p-4 bg-card"
+                            >
+                                <div class="flex items-center gap-2 mb-2">
+                                    <div
+                                        class="p-2 bg-orange-500/10 rounded-md"
+                                    >
+                                        <LayoutTemplate
+                                            class="w-4 h-4 text-orange-500"
+                                        />
+                                    </div>
+                                    <h3 class="font-semibold">
+                                        {{ template.name }}
+                                    </h3>
+                                </div>
+                                <div class="grid gap-1 text-sm">
+                                    <div class="flex gap-2">
+                                        <span class="text-muted-foreground w-24"
+                                            >URI Template:</span
+                                        >
+                                        <code class="bg-muted px-1 rounded">{{
+                                            template.uriTemplate
+                                        }}</code>
+                                    </div>
+                                    <div
+                                        v-if="template.description"
+                                        class="text-muted-foreground mt-1"
+                                    >
+                                        {{ template.description }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div
+                            v-else-if="activeTab === 'prompts'"
+                            class="grid gap-4"
+                        >
+                            <div
+                                v-if="
+                                    !serverCapabilities[server.id].prompts
+                                        ?.prompts?.length
+                                "
+                                class="text-center py-8 text-muted-foreground"
+                            >
+                                未发现提示词
+                            </div>
+                            <div
+                                v-for="prompt in serverCapabilities[server.id]
+                                    .prompts.prompts"
+                                :key="prompt.name"
+                                class="border rounded-lg p-4 bg-card"
+                            >
+                                <div class="flex items-center gap-2 mb-2">
+                                    <div class="p-2 bg-green-500/10 rounded-md">
+                                        <MessageSquare
+                                            class="w-4 h-4 text-green-500"
+                                        />
+                                    </div>
+                                    <h3 class="font-semibold">
+                                        {{ prompt.name }}
+                                    </h3>
+                                </div>
+                                <p class="text-sm text-muted-foreground mb-3">
+                                    {{ prompt.description || "无描述" }}
+                                </p>
+                                <div
+                                    v-if="prompt.arguments?.length"
+                                    class="mt-2"
+                                >
+                                    <h4 class="text-xs font-semibold mb-1">
+                                        参数:
+                                    </h4>
+                                    <div class="grid gap-2">
+                                        <div
+                                            v-for="arg in prompt.arguments"
+                                            :key="arg.name"
+                                            class="text-xs bg-muted/50 p-2 rounded flex items-center justify-between"
+                                        >
+                                            <span
+                                                class="font-mono text-primary"
+                                                >{{ arg.name }}</span
+                                            >
+                                            <span
+                                                class="text-muted-foreground"
+                                                >{{ arg.description }}</span
+                                            >
+                                            <span
+                                                v-if="arg.required"
+                                                class="text-[10px] bg-destructive/10 text-destructive px-1 rounded"
+                                                >Required</span
+                                            >
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -195,58 +983,144 @@ onMounted(async () => {
                 v-if="mcpStore.servers.length === 0"
                 class="text-center py-12 text-muted-foreground"
             >
-                No MCP servers configured. Click "Add Server" to get started.
+                未配置 MCP 服务器。点击“添加服务器”开始使用。
             </div>
         </div>
 
         <Dialog v-model:open="isDialogOpen">
-            <DialogContent>
+            <DialogContent class="max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>{{
-                        editingServer ? "Edit Server" : "Add Server"
-                    }}</DialogTitle>
+                    <div class="flex items-center justify-between">
+                        <DialogTitle>{{
+                            editingServer ? "编辑服务器" : "添加服务器"
+                        }}</DialogTitle>
+                        <div
+                            class="flex items-center gap-2 bg-muted p-1 rounded-md"
+                        >
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                :class="[
+                                    'h-7 px-3',
+                                    inputMode === 'form'
+                                        ? 'bg-background shadow-sm'
+                                        : 'text-muted-foreground',
+                                ]"
+                                @click="inputMode = 'form'"
+                            >
+                                <FileText class="w-4 h-4 mr-1" />
+                                表单
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                :class="[
+                                    'h-7 px-3',
+                                    inputMode === 'json'
+                                        ? 'bg-background shadow-sm'
+                                        : 'text-muted-foreground',
+                                ]"
+                                @click="inputMode = 'json'"
+                            >
+                                <Code class="w-4 h-4 mr-1" />
+                                JSON
+                            </Button>
+                        </div>
+                    </div>
                     <DialogDescription>
-                        Configure your Model Context Protocol server.
+                        配置您的模型上下文协议 (MCP) 服务器。
                     </DialogDescription>
                 </DialogHeader>
-                <div class="grid gap-4 py-4">
+
+                <div v-if="inputMode === 'form'" class="grid gap-4 py-4">
                     <div class="grid gap-2">
-                        <label class="text-sm font-medium">Name</label>
+                        <label class="text-sm font-medium">类型</label>
+                        <Select v-model="form.type">
+                            <SelectTrigger>
+                                <SelectValue placeholder="选择类型" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="stdio">Stdio</SelectItem>
+                                <SelectItem value="http">HTTP (SSE)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div class="grid gap-2">
+                        <label class="text-sm font-medium">名称</label>
                         <Input
                             v-model="form.name"
-                            placeholder="My MCP Server"
+                            placeholder="我的 MCP 服务器"
                         />
                     </div>
-                    <div class="grid gap-2">
-                        <label class="text-sm font-medium">Command</label>
-                        <Input
-                            v-model="form.command"
-                            placeholder="node, python, etc."
-                        />
-                    </div>
-                    <div class="grid gap-2">
-                        <label class="text-sm font-medium">Arguments</label>
-                        <Input
-                            v-model="form.args"
-                            placeholder="path/to/server.js --arg"
-                        />
-                    </div>
-                    <div class="grid gap-2">
-                        <label class="text-sm font-medium"
-                            >Environment Variables (JSON)</label
-                        >
-                        <Textarea
-                            v-model="form.env"
-                            placeholder='{"KEY": "VALUE"}'
-                            rows="4"
-                        />
-                    </div>
+
+                    <template v-if="form.type === 'stdio'">
+                        <div class="grid gap-2">
+                            <label class="text-sm font-medium">命令</label>
+                            <Input
+                                v-model="form.command"
+                                placeholder="node, python, etc."
+                            />
+                        </div>
+                        <div class="grid gap-2">
+                            <label class="text-sm font-medium">参数</label>
+                            <Input
+                                v-model="form.args"
+                                placeholder="path/to/server.js --arg"
+                            />
+                        </div>
+                        <div class="grid gap-2">
+                            <label class="text-sm font-medium"
+                                >环境变量 (JSON)</label
+                            >
+                            <Textarea
+                                v-model="form.env"
+                                placeholder='{"KEY": "VALUE"}'
+                                rows="4"
+                            />
+                        </div>
+                    </template>
+
+                    <template v-else>
+                        <div class="grid gap-2">
+                            <label class="text-sm font-medium">URL</label>
+                            <Input
+                                v-model="form.url"
+                                placeholder="http://localhost:3000/sse"
+                            />
+                        </div>
+                        <div class="grid gap-2">
+                            <label class="text-sm font-medium"
+                                >Headers (JSON)</label
+                            >
+                            <Textarea
+                                v-model="form.headers"
+                                placeholder='{"Authorization": "Bearer ..."}'
+                                rows="4"
+                            />
+                        </div>
+                    </template>
                 </div>
+
+                <div
+                    v-else
+                    class="py-4 h-[400px] border rounded-md overflow-hidden"
+                >
+                    <Codemirror
+                        v-model="jsonContent"
+                        placeholder="输入服务器配置 JSON..."
+                        :style="{ height: '100%' }"
+                        :autofocus="true"
+                        :indent-with-tab="true"
+                        :tab-size="2"
+                        :extensions="extensions"
+                    />
+                </div>
+
                 <DialogFooter>
                     <Button variant="outline" @click="isDialogOpen = false"
-                        >Cancel</Button
+                        >取消</Button
                     >
-                    <Button @click="saveServer">Save</Button>
+                    <Button @click="saveServer">保存</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

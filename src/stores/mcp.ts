@@ -1,15 +1,6 @@
 import { defineStore } from "pinia";
 import { storeUtils } from "@/utils/StoreUtils";
 
-export interface McpServer {
-    id: string;
-    name: string;
-    command: string;
-    args: string[];
-    env: Record<string, string>;
-    enabled: boolean;
-}
-
 export const useMcpStore = defineStore("mcp", {
     state: () => ({
         servers: [] as McpServer[],
@@ -39,14 +30,20 @@ export const useMcpStore = defineStore("mcp", {
             await storeUtils.set("mcp_enabled", this.mcpEnabled, false);
         },
         async addServer(server: Omit<McpServer, "id">) {
-            const newServer = { ...server, id: crypto.randomUUID() };
+            const newServer = {
+                ...server,
+                id: crypto.randomUUID(),
+            } as McpServer;
             this.servers.push(newServer);
             await this.saveServers();
         },
         async updateServer(id: string, updates: Partial<McpServer>) {
             const index = this.servers.findIndex((s) => s.id === id);
             if (index !== -1) {
-                this.servers[index] = { ...this.servers[index], ...updates };
+                this.servers[index] = {
+                    ...this.servers[index],
+                    ...updates,
+                } as McpServer;
                 await this.saveServers();
             }
         },
