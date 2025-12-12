@@ -37,6 +37,12 @@ const deleteChat = async (key: string, event: Event) => {
                 <Plus class="w-4 h-4" />
                 新建对话
             </Button>
+            <!-- <Button
+                class="w-full justify-start gap-2"
+                @click="$router.push('/test')"
+                variant="default"
+                >测试</Button
+            > -->
         </div>
 
         <div class="flex-1 overflow-y-auto px-2">

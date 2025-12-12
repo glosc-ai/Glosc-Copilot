@@ -28,3 +28,4 @@ dist-ssr
 /*.d.ts
 
 /src-tauri/resources/npm
+/docs

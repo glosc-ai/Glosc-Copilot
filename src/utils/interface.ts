@@ -99,3 +99,16 @@ export const McpServerSchema = z.discriminatedUnion("type", [
 ]);
 
 export type McpServer = z.infer<typeof McpServerSchema>;
+
+export type ClientToolRegistry = Record<string, any>;
+export type CreateChatClientOptions = {
+    /**
+     * 客户端可执行工具表（通常来自 MCP）。
+     * onToolCall 会在这里查找 toolName 并执行其 execute。
+     */
+    toolsRef?: ShallowRef<ClientToolRegistry | undefined>;
+    /**
+     * 可选：把工具调用/执行过程打到控制台，便于排查为何停在 tool-calls。
+     */
+    debugTools?: boolean;
+};

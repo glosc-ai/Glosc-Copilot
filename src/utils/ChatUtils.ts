@@ -1,5 +1,5 @@
 import { createGateway } from "@ai-sdk/gateway";
-import { ref, type Ref, reactive } from "vue";
+import { ref, type ShallowRef } from "vue";
 import {
     ModelMessage,
     streamText,
@@ -23,7 +23,7 @@ export class ChatUtils {
         messages: ModelMessage[],
         tools?: ToolSet
     ) {
-        const result = streamText({
+        return streamText({
             model: this.gateway(modelId),
             messages: messages,
             tools,
@@ -110,12 +110,69 @@ export class ChatUtils {
         };
     }
 
-    public static getCht() {
+    public static getCht(options: CreateChatClientOptions = {}) {
         const chat = new Chat({
             transport: new DefaultChatTransport({
                 api: `${this.host}/api/chat`,
             }),
             sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+            onToolCall: async ({ toolCall }) => {
+                // 文档建议先判断 dynamic 做类型收窄
+                if (toolCall?.dynamic) return;
+
+                const toolName: string | undefined = toolCall?.toolName;
+                const toolCallId: string | undefined = toolCall?.toolCallId;
+                const input = toolCall?.input ?? {};
+
+                if (!toolName || !toolCallId) return;
+
+                const registry = options.toolsRef?.value;
+                const tool = registry ? registry[toolName] : undefined;
+
+                if (options.debugTools) {
+                    // eslint-disable-next-line no-console
+                    console.log("[onToolCall]", {
+                        toolName,
+                        toolCallId,
+                        input,
+                        hasTool: Boolean(tool),
+                    });
+                }
+
+                if (!tool || typeof tool.execute !== "function") {
+                    void chat.addToolOutput({
+                        tool: toolName as any,
+                        toolCallId,
+                        state: "output-error" as any,
+                        errorText: `Client tool '${toolName}' not found or not executable.`,
+                    });
+                    return;
+                }
+
+                try {
+                    const output = await tool.execute(input, {});
+                    // 不 await，避免潜在死锁（与官方示例一致）
+                    void chat.addToolOutput({
+                        tool: toolName as any,
+                        toolCallId,
+                        output,
+                    });
+                } catch (err: any) {
+                    const errorText =
+                        err instanceof Error
+                            ? err.message
+                            : typeof err === "string"
+                              ? err
+                              : "Unable to execute client tool";
+
+                    void chat.addToolOutput({
+                        tool: toolName as any,
+                        toolCallId,
+                        state: "output-error" as any,
+                        errorText,
+                    });
+                }
+            },
         });
         return chat;
     }

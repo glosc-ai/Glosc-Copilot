@@ -2,7 +2,7 @@
 import { type ChatStatus, type SourceUrlUIPart, type UIMessage } from "ai";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { ChatUtils } from "@/utils/ChatUtils";
-import ToolInvocation from "@/components/ai-elements/tool/ToolInvocation.vue";
+
 import {
     CopyIcon,
     Server,
@@ -22,6 +22,7 @@ import {
     tokenizerJSON,
     tokenizerConfig,
 } from "@lenml/tokenizer-claude/src/data.ts";
+import { XIcon } from "lucide-vue-next";
 
 import { TokenizerLoader } from "@lenml/tokenizers";
 
@@ -30,6 +31,7 @@ import { useChatStore } from "@/stores/chat";
 import { storeToRefs } from "pinia";
 import { useMcpStore } from "@/stores/mcp";
 import { useRouter } from "vue-router";
+// import { nanoid } from "nanoid";
 
 const chatStore = useChatStore();
 const { activeKey, conversations, selectedModel, availableModels } =
@@ -60,7 +62,12 @@ onMounted(async () => {
     }
 });
 
-const chat = ChatUtils.getCht();
+// 客户端可执行工具表（用于 onToolCall 执行并 addToolOutput 回填）
+const clientToolsRef = shallowRef<Record<string, any> | undefined>(undefined);
+const chat = ChatUtils.getCht({
+    toolsRef: clientToolsRef,
+    debugTools: false,
+});
 
 const status = computed<ChatStatus>(() => chat.status);
 const messages = computed<UIMessage[]>(() => chat.messages);
@@ -152,6 +159,9 @@ async function handleSubmit(message: PromptInputMessage) {
 
     try {
         const tools = await McpUtils.getTools();
+
+        // 供客户端 onToolCall 使用：真正执行工具并回填 output
+        clientToolsRef.value = tools;
 
         chat.sendMessage(
             {
@@ -403,15 +413,16 @@ const contextProps: any = computed(() => ({
                                             :content="part.text"
                                         />
                                     </Reasoning>
-                                    <!-- <ToolInvocation
-                                        v-if="part.type === 'tool-invocation'"
-                                        :tool-invocation="part"
-                                    /> -->
-                                    <Tool v-if="part.type.includes('tool')">
+                                    <Tool
+                                        v-if="
+                                            part.type === 'dynamic-tool' ||
+                                            part.type.startsWith('tool-')
+                                        "
+                                    >
                                         <ToolHeader
                                             :state="part.state"
                                             :title="part.type"
-                                            :type="part.type"
+                                            :type="part.type as any"
                                         ></ToolHeader>
                                         <ToolContent>
                                             <ToolInput
@@ -576,13 +587,13 @@ const contextProps: any = computed(() => ({
                                                 </div>
                                                 <div class="pl-2 mb-2">
                                                     <div
-                                                        v-for="(
-                                                            tool, name
-                                                        ) in mcpStore
-                                                            .serverCapabilities[
-                                                            server.id
-                                                        ].tools"
-                                                        :key="name"
+                                                        v-for="name in Object.keys(
+                                                            mcpStore
+                                                                .serverCapabilities[
+                                                                server.id
+                                                            ].tools
+                                                        )"
+                                                        :key="String(name)"
                                                         class="truncate"
                                                         :title="String(name)"
                                                     >
