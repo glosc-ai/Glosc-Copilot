@@ -47,7 +47,7 @@ const scheduleHighlight = (
     showLineNumbers: boolean
 ) => {
     // Cancel any pending idle callback
-    if (idleCallbackId !== null) {
+    if (idleCallbackId !== null && typeof cancelIdleCallback !== 'undefined') {
         cancelIdleCallback(idleCallbackId);
     }
 

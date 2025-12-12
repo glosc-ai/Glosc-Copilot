@@ -27,20 +27,20 @@ const lineNumberTransformer: ShikiTransformer = {
 const highlightCache = new Map<string, [string, string]>();
 const MAX_CACHE_SIZE = 100;
 
-// Simple hash function for cache keys to avoid collisions
-function simpleHash(str: string): string {
-  let hash = 0;
+// FNV-1a hash function for cache keys - better distribution and collision resistance
+function fnv1aHash(str: string): string {
+  let hash = 2166136261; // FNV offset basis
   for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 16777619); // FNV prime
   }
-  return hash.toString(36);
+  // Convert to unsigned 32-bit and then to base-36 string
+  return (hash >>> 0).toString(36);
 }
 
 function getCacheKey(code: string, language: BundledLanguage, showLineNumbers: boolean): string {
-  // Use hash to avoid collisions from prefix-only comparison
-  const codeHash = simpleHash(code);
+  // Use FNV-1a hash to avoid collisions
+  const codeHash = fnv1aHash(code);
   return `${language}:${showLineNumbers}:${codeHash}:${code.length}`;
 }
 
