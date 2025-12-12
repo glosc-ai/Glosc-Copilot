@@ -120,8 +120,9 @@ export const useMcpStore = defineStore("mcp", {
         },
         async getCachedTools(forceRefresh = false) {
             // Cache tools for 5 seconds to avoid reloading on each message
+            const CACHE_DURATION_MS = 5000;
             const now = Date.now();
-            const cacheValid = this.cachedTools && (now - this.toolsLastUpdated) < 5000;
+            const cacheValid = this.cachedTools && (now - this.toolsLastUpdated) < CACHE_DURATION_MS;
             
             if (!forceRefresh && cacheValid) {
                 return this.cachedTools;

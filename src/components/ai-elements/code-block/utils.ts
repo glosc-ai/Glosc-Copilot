@@ -26,9 +26,10 @@ const lineNumberTransformer: ShikiTransformer = {
 // Cache for highlighted code to avoid re-highlighting the same content
 const highlightCache = new Map<string, [string, string]>();
 const MAX_CACHE_SIZE = 100;
+const CACHE_KEY_PREFIX_LENGTH = 100; // Length of code snippet used in cache key
 
 function getCacheKey(code: string, language: BundledLanguage, showLineNumbers: boolean): string {
-  return `${language}:${showLineNumbers}:${code.substring(0, 100)}:${code.length}`;
+  return `${language}:${showLineNumbers}:${code.substring(0, CACHE_KEY_PREFIX_LENGTH)}:${code.length}`;
 }
 
 export async function highlightCode(

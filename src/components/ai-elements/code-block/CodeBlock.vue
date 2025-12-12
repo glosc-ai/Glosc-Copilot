@@ -38,6 +38,9 @@ let requestId = 0;
 let isUnmounted = false;
 let idleCallbackId: number | null = null;
 
+// Timeout for requestIdleCallback - ensures highlighting completes within reasonable time
+const HIGHLIGHT_TIMEOUT_MS = 200;
+
 const scheduleHighlight = (
     code: string,
     language: BundledLanguage,
@@ -73,7 +76,7 @@ const scheduleHighlight = (
     if (typeof requestIdleCallback !== 'undefined') {
         idleCallbackId = requestIdleCallback(() => {
             performHighlight();
-        }, { timeout: 200 }); // Fallback to execute within 200ms
+        }, { timeout: HIGHLIGHT_TIMEOUT_MS });
     } else {
         setTimeout(performHighlight, 0);
     }
