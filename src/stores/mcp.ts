@@ -13,6 +13,7 @@ export const useMcpStore = defineStore("mcp", {
         serverCapabilities: {} as Record<string, any>,
         cachedTools: null as Record<string, any> | null,
         toolsLastUpdated: 0,
+        toolsLoadingPromise: null as Promise<Record<string, any>> | null,
     }),
     getters: {
         hasEnabledServers(state) {
@@ -130,16 +131,29 @@ export const useMcpStore = defineStore("mcp", {
                 return this.cachedTools;
             }
 
-            try {
-                const tools = await McpUtils.getTools();
-                this.cachedTools = tools;
-                this.toolsLastUpdated = now;
-                return tools;
-            } catch (error) {
-                // On error, invalidate cache and re-throw
-                this.invalidateToolsCache();
-                throw error;
+            // If already loading, return the existing promise to avoid concurrent fetches
+            if (this.toolsLoadingPromise) {
+                return this.toolsLoadingPromise;
             }
+
+            // Create and store the loading promise
+            this.toolsLoadingPromise = (async () => {
+                try {
+                    const tools = await McpUtils.getTools();
+                    this.cachedTools = tools;
+                    this.toolsLastUpdated = Date.now();
+                    return tools;
+                } catch (error) {
+                    // On error, invalidate cache and re-throw
+                    this.invalidateToolsCache();
+                    throw error;
+                } finally {
+                    // Clear the loading promise
+                    this.toolsLoadingPromise = null;
+                }
+            })();
+
+            return this.toolsLoadingPromise;
         },
         invalidateToolsCache() {
             this.cachedTools = null;

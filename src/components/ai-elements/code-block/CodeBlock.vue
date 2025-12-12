@@ -79,8 +79,8 @@ const scheduleHighlight = (
         }, { timeout: HIGHLIGHT_TIMEOUT_MS });
     } else {
         // Fallback for browsers without requestIdleCallback
-        // Use timeout of 0 to maintain responsiveness
-        setTimeout(performHighlight, 0);
+        // Use 16ms (~1 frame at 60fps) to allow browser to complete other work
+        setTimeout(performHighlight, 16);
     }
 };
 
