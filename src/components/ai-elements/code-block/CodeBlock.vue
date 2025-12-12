@@ -74,17 +74,13 @@ const scheduleHighlight = (
 
     // Use requestIdleCallback if available, otherwise setTimeout
     if (typeof requestIdleCallback !== 'undefined') {
-        try {
-            idleCallbackId = requestIdleCallback(() => {
-                performHighlight();
-            }, { timeout: HIGHLIGHT_TIMEOUT_MS });
-        } catch (error) {
-            // Fallback to setTimeout if requestIdleCallback fails
-            console.warn('[CodeBlock] requestIdleCallback failed, using setTimeout', error);
-            setTimeout(performHighlight, HIGHLIGHT_TIMEOUT_MS);
-        }
+        idleCallbackId = requestIdleCallback(() => {
+            performHighlight();
+        }, { timeout: HIGHLIGHT_TIMEOUT_MS });
     } else {
-        setTimeout(performHighlight, HIGHLIGHT_TIMEOUT_MS);
+        // Fallback for browsers without requestIdleCallback
+        // Use timeout of 0 to maintain responsiveness
+        setTimeout(performHighlight, 0);
     }
 };
 

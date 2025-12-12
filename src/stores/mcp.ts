@@ -130,10 +130,16 @@ export const useMcpStore = defineStore("mcp", {
                 return this.cachedTools;
             }
 
-            const tools = await McpUtils.getTools();
-            this.cachedTools = tools;
-            this.toolsLastUpdated = now;
-            return tools;
+            try {
+                const tools = await McpUtils.getTools();
+                this.cachedTools = tools;
+                this.toolsLastUpdated = now;
+                return tools;
+            } catch (error) {
+                // On error, invalidate cache and re-throw
+                this.invalidateToolsCache();
+                throw error;
+            }
         },
         invalidateToolsCache() {
             this.cachedTools = null;
