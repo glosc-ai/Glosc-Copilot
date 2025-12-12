@@ -23,16 +23,31 @@ const lineNumberTransformer: ShikiTransformer = {
   },
 }
 
+// Cache for highlighted code to avoid re-highlighting the same content
+const highlightCache = new Map<string, [string, string]>();
+const MAX_CACHE_SIZE = 100;
+
+function getCacheKey(code: string, language: BundledLanguage, showLineNumbers: boolean): string {
+  return `${language}:${showLineNumbers}:${code.substring(0, 100)}:${code.length}`;
+}
+
 export async function highlightCode(
   code: string,
   language: BundledLanguage,
   showLineNumbers = false,
 ) {
+  const cacheKey = getCacheKey(code, language, showLineNumbers);
+  
+  // Check cache first
+  if (highlightCache.has(cacheKey)) {
+    return highlightCache.get(cacheKey)!;
+  }
+
   const transformers: ShikiTransformer[] = showLineNumbers
     ? [lineNumberTransformer]
     : []
 
-  return await Promise.all([
+  const result = await Promise.all([
     codeToHtml(code, {
       lang: language,
       theme: 'one-light',
@@ -44,4 +59,16 @@ export async function highlightCode(
       transformers,
     }),
   ])
+
+  // Store in cache with size limit
+  if (highlightCache.size >= MAX_CACHE_SIZE) {
+    // Remove oldest entry (first key)
+    const firstKey = highlightCache.keys().next().value;
+    if (firstKey !== undefined) {
+      highlightCache.delete(firstKey);
+    }
+  }
+  highlightCache.set(cacheKey, result);
+
+  return result;
 }

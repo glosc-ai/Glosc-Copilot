@@ -157,7 +157,8 @@ async function handleSubmit(message: PromptInputMessage) {
     if (!hasText && !hasAttachments) return;
 
     try {
-        const tools = await McpUtils.getTools();
+        // Use cached tools to avoid reloading on each message
+        const tools = await mcpStore.getCachedTools();
 
         // 供客户端 onToolCall 使用：真正执行工具并回填 output
         clientToolsRef.value = tools;

@@ -8,8 +8,14 @@ export const useMcpStore = defineStore("mcp", {
         mcpEnabled: false,
         initialized: false,
         serverCapabilities: {} as Record<string, any>,
+        cachedTools: null as Record<string, any> | null,
+        toolsLastUpdated: 0,
     }),
-    getters: {},
+    getters: {
+        hasEnabledServers(state) {
+            return state.servers.some((s) => s.enabled);
+        },
+    },
     actions: {
         setServerCapability(id: string, capability: any) {
             this.serverCapabilities[id] = capability;
@@ -80,6 +86,9 @@ export const useMcpStore = defineStore("mcp", {
 
                 // Handle start/stop if enabled status changed
                 if (updates.enabled !== undefined) {
+                    // Invalidate tools cache when server state changes
+                    this.invalidateToolsCache();
+                    
                     if (updates.enabled) {
                         try {
                             await McpUtils.startServer(newServer);
@@ -108,6 +117,24 @@ export const useMcpStore = defineStore("mcp", {
         async toggleMcp() {
             this.mcpEnabled = !this.mcpEnabled;
             await this.saveEnabled();
+        },
+        async getCachedTools(forceRefresh = false) {
+            // Cache tools for 5 seconds to avoid reloading on each message
+            const now = Date.now();
+            const cacheValid = this.cachedTools && (now - this.toolsLastUpdated) < 5000;
+            
+            if (!forceRefresh && cacheValid) {
+                return this.cachedTools;
+            }
+
+            const tools = await McpUtils.getTools();
+            this.cachedTools = tools;
+            this.toolsLastUpdated = now;
+            return tools;
+        },
+        invalidateToolsCache() {
+            this.cachedTools = null;
+            this.toolsLastUpdated = 0;
         },
     },
 });
