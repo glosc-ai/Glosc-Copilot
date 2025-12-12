@@ -48,4 +48,32 @@ Gloss Copilot 是一款跨平台的 AI 智能助手，灵感来源于钢铁侠�
 
 Gloss Copilot 支持第三方插件扩展功能。
 
+## 🧩 MCP（Stdio）里的 Python / uvx
+
+当前 Stdio MCP 服务器由前端通过 `TauriStdioTransport` 启动；已支持以下命令策略：
+
+- `node` / `npx`：优先使用内置 node sidecar（已内置）。
+- `python` / `python3` / `py`：优先尝试 `binaries/python` sidecar；找不到则回退系统 Python。并会自动注入 `-u`（避免 stdio 缓冲导致 MCP 卡住）。
+- `uv`：优先尝试 `binaries/uv` sidecar；找不到则回退系统 `uv`。
+- `uvx`：优先尝试用 `binaries/uv x ...`；找不到则回退系统 `uvx`。
+
+### 例子
+
+- 直接用系统 Python：
+	- `command`: `python`
+	- `args`: `-m your_mcp_server`
+
+- 用 uvx 运行（推荐，便于隔离依赖）：
+	- `command`: `uvx`
+	- `args`: `your-mcp-package --stdio`
+
+### 如何“内置” uv / python（可选）
+
+如果你希望在没有系统 Python/uv 的机器上也能跑：
+
+- 把可执行文件放入 `src-tauri/binaries/`（例如 `uv-<target>.exe`、`python-<target>.exe`）。
+- 然后在 `src-tauri/tauri.conf.json` 的 `bundle.externalBin` 增加对应条目（例如 `binaries/uv`、`binaries/python`）。
+
+注意：一旦写进 `externalBin`，构建时就要求该二进制真实存在；因此建议你在准备好二进制之后再改配置。
+
 

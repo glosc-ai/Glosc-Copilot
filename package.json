@@ -8,8 +8,9 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "prepare:uv": "node scripts/prepare-uv.mjs",
+    "tauri:dev": "yarn -s prepare:uv && tauri dev",
+    "tauri:build": "yarn -s prepare:uv && tauri build"
   },
   "dependencies": {
     "@ai-sdk/gateway": "^2.0.0-beta.74",
@@ -53,12 +54,14 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
+    "adm-zip": "^0.5.16",
     "@lenml/tokenizer-claude": "^3.7.2",
     "@tauri-apps/cli": "^2",
     "@types/crypto-js": "^4.2.2",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^24.10.1",
     "@vitejs/plugin-vue": "^5.2.1",
+    "tar": "^7.5.0",
     "less": "^4.4.2",
     "shadcn-vue": "^2.4.2",
     "typescript": "~5.6.2",

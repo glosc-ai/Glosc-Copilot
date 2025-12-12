@@ -1,6 +1,29 @@
 import { Command, Child } from "@tauri-apps/plugin-shell";
 import { resolveResource } from "@tauri-apps/api/path";
 
+function toText(chunk: unknown): string {
+    if (typeof chunk === "string") return chunk;
+    if (chunk instanceof Uint8Array) {
+        return new TextDecoder("utf-8").decode(chunk);
+    }
+    if (Array.isArray(chunk) && chunk.every((c) => c instanceof Uint8Array)) {
+        return chunk
+            .map((c) => new TextDecoder("utf-8").decode(c as Uint8Array))
+            .join("");
+    }
+    return String(chunk);
+}
+
+function normalizeCommand(command: string): string {
+    return command.trim().toLowerCase();
+}
+
+function ensurePythonUnbuffered(args: string[]): string[] {
+    // MCP over stdio relies on timely line delivery; Python buffering can break that.
+    if (args.some((a) => a === "-u" || a.startsWith("-u"))) return args;
+    return ["-u", ...args];
+}
+
 class ReadBuffer {
     private buffer: string = "";
 
@@ -68,10 +91,11 @@ export class TauriStdioTransport {
         try {
             let cmd: any;
             const { command, args = [], env, cwd } = this._serverParams;
+            const normalized = normalizeCommand(command);
             // If env is empty, pass undefined to inherit from parent process
             const cmdEnv = env && Object.keys(env).length > 0 ? env : undefined;
 
-            if (command === "npx") {
+            if (normalized === "npx") {
                 // Use sidecar node to run npx-cli.js
                 const npxPath = await resolveResource(
                     "resources/npm/bin/npx-cli.js"
@@ -81,11 +105,59 @@ export class TauriStdioTransport {
                     cwd,
                     env: cmdEnv,
                 });
-            } else if (command === "node") {
+            } else if (normalized === "node") {
                 cmd = Command.sidecar("binaries/node", args, {
                     cwd,
                     env: cmdEnv,
                 });
+            } else if (
+                normalized === "python" ||
+                normalized === "python3" ||
+                normalized === "py"
+            ) {
+                // Prefer an embedded Python sidecar when available.
+                // If your bundle does not include it, fallback to system python.
+                const pythonArgs = ensurePythonUnbuffered(args);
+                try {
+                    cmd = Command.sidecar("binaries/python", pythonArgs, {
+                        cwd,
+                        env: cmdEnv,
+                    });
+                } catch {
+                    cmd = Command.create(command, pythonArgs, {
+                        cwd,
+                        env: cmdEnv,
+                    });
+                }
+            } else if (normalized === "uvx") {
+                // uvx is an alias for: uv tool run ...
+                try {
+                    cmd = Command.sidecar(
+                        "binaries/uv",
+                        ["tool", "run", ...args],
+                        {
+                            cwd,
+                            env: cmdEnv,
+                        }
+                    );
+                } catch {
+                    cmd = Command.create("uvx", args, {
+                        cwd,
+                        env: cmdEnv,
+                    });
+                }
+            } else if (normalized === "uv") {
+                try {
+                    cmd = Command.sidecar("binaries/uv", args, {
+                        cwd,
+                        env: cmdEnv,
+                    });
+                } catch {
+                    cmd = Command.create("uv", args, {
+                        cwd,
+                        env: cmdEnv,
+                    });
+                }
             } else {
                 cmd = Command.create(command, args, {
                     cwd,
@@ -107,12 +179,12 @@ export class TauriStdioTransport {
             });
 
             cmd.stdout.on("data", (line: any) => {
-                this._readBuffer.append(line);
+                this._readBuffer.append(toText(line));
                 this.processReadBuffer();
             });
 
             cmd.stderr.on("data", (line: any) => {
-                console.error(`[${command} stderr]: ${line}`);
+                console.error(`[${command} stderr]: ${toText(line)}`);
             });
 
             this._process = await cmd.spawn();

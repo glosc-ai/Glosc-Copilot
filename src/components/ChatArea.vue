@@ -22,7 +22,6 @@ import {
     tokenizerJSON,
     tokenizerConfig,
 } from "@lenml/tokenizer-claude/src/data.ts";
-import { XIcon } from "lucide-vue-next";
 
 import { TokenizerLoader } from "@lenml/tokenizers";
 
@@ -420,17 +419,19 @@ const contextProps: any = computed(() => ({
                                         "
                                     >
                                         <ToolHeader
-                                            :state="part.state"
+                                            :state="(part as any).state"
                                             :title="part.type"
                                             :type="part.type as any"
                                         ></ToolHeader>
                                         <ToolContent>
                                             <ToolInput
-                                                :input="part.input"
+                                                :input="(part as any).input"
                                             ></ToolInput>
                                             <ToolOutput
-                                                :output="part.output"
-                                                :errorText="part.errorText"
+                                                :output="(part as any).output"
+                                                :errorText="
+                                                    (part as any).errorText
+                                                "
                                             ></ToolOutput>
                                         </ToolContent>
                                     </Tool>

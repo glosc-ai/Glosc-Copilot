@@ -1,5 +1,5 @@
 import { createGateway } from "@ai-sdk/gateway";
-import { ref, type ShallowRef } from "vue";
+import { ref } from "vue";
 import {
     ModelMessage,
     streamText,
