@@ -408,7 +408,6 @@ const contextProps: any = computed(() => ({
                                         :tool-invocation="part"
                                     /> -->
                                     <Tool v-if="part.type.includes('tool')">
-                                        <pre>{{ part }}</pre>
                                         <ToolHeader
                                             :state="part.state"
                                             :title="part.type"
