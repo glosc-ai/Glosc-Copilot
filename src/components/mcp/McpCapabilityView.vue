@@ -18,8 +18,8 @@ const props = defineProps<{
 const activeTab = ref<"tools" | "resources" | "templates" | "prompts">("tools");
 const expandedToolSchemas = ref<Set<string>>(new Set());
 
-const toggleToolSchema = (toolName: string) => {
-    const key = `${props.serverId}-${toolName}`;
+const toggleToolSchema = (toolKey: string) => {
+    const key = `${props.serverId}-${toolKey}`;
     const newSet = new Set(expandedToolSchemas.value);
     if (newSet.has(key)) {
         newSet.delete(key);
@@ -104,12 +104,12 @@ const toggleToolSchema = (toolName: string) => {
                             variant="ghost"
                             size="sm"
                             class="h-6 w-6 p-0"
-                            @click="toggleToolSchema(tool.name)"
+                            @click="toggleToolSchema(String(key))"
                         >
                             <component
                                 :is="
                                     expandedToolSchemas.has(
-                                        `${serverId}-${tool.name}`
+                                        `${serverId}-${String(key)}`
                                     )
                                         ? ChevronUp
                                         : ChevronDown
@@ -123,7 +123,9 @@ const toggleToolSchema = (toolName: string) => {
                     </p>
                     <div
                         v-if="
-                            expandedToolSchemas.has(`${serverId}-${tool.name}`)
+                            expandedToolSchemas.has(
+                                `${serverId}-${String(key)}`
+                            )
                         "
                         class="bg-muted/50 rounded-md p-3 text-xs font-mono overflow-x-auto max-w-full"
                     >

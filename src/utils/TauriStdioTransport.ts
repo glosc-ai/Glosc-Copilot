@@ -1,14 +1,17 @@
 import { Command, Child } from "@tauri-apps/plugin-shell";
 import { resolveResource } from "@tauri-apps/api/path";
 
+const utf8Decoder = new TextDecoder("utf-8");
+
 function toText(chunk: unknown): string {
     if (typeof chunk === "string") return chunk;
     if (chunk instanceof Uint8Array) {
-        return new TextDecoder("utf-8").decode(chunk);
+        // stream=true to avoid breaking multi-byte chars across chunks
+        return utf8Decoder.decode(chunk, { stream: true });
     }
     if (Array.isArray(chunk) && chunk.every((c) => c instanceof Uint8Array)) {
         return chunk
-            .map((c) => new TextDecoder("utf-8").decode(c as Uint8Array))
+            .map((c) => utf8Decoder.decode(c as Uint8Array, { stream: true }))
             .join("");
     }
     return String(chunk);
@@ -32,16 +35,25 @@ class ReadBuffer {
     }
 
     readMessage(): any | null {
-        const index = this.buffer.indexOf("\n");
-        if (index === -1) {
-            return null;
-        }
-        const line = this.buffer.slice(0, index);
-        this.buffer = this.buffer.slice(index + 1);
-        if (line.trim()) {
+        while (true) {
+            const index = this.buffer.indexOf("\n");
+            if (index === -1) {
+                return null;
+            }
+
+            let line = this.buffer.slice(0, index);
+            this.buffer = this.buffer.slice(index + 1);
+
+            // Handle CRLF
+            if (line.endsWith("\r")) line = line.slice(0, -1);
+
+            if (!line.trim()) {
+                // Skip empty lines
+                continue;
+            }
+
             return JSON.parse(line);
         }
-        return this.readMessage();
     }
 
     clear() {

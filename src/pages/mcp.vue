@@ -28,6 +28,7 @@ import { useRouter } from "vue-router";
 
 import { McpUtils } from "@/utils/McpUtils";
 import McpCapabilityView from "@/components/mcp/McpCapabilityView.vue";
+import type { McpServer } from "@/utils/interface";
 import { Codemirror } from "vue-codemirror";
 import { json, jsonLanguage } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -67,6 +68,29 @@ const jsonContent = ref("");
 
 // Test Results State
 const expandedServers = ref<Set<string>>(new Set());
+
+const getServerState = (server: McpServer) => {
+    const cap = mcpStore.serverCapabilities[server.id];
+    if (cap && cap.success === false) return "error" as const;
+    return server.enabled ? ("enabled" as const) : ("disabled" as const);
+};
+
+const getServerStateLabel = (server: McpServer) => {
+    const state = getServerState(server);
+    if (state === "error") return "异常";
+    return state === "enabled" ? "已启用" : "已禁用";
+};
+
+const getServerStateClass = (server: McpServer) => {
+    const state = getServerState(server);
+    if (state === "enabled") {
+        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100";
+    }
+    if (state === "error") {
+        return "bg-destructive/10 text-destructive";
+    }
+    return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100";
+};
 
 const mcpCompletion = (context: CompletionContext) => {
     const word = context.matchBefore(/\w*/) || {
@@ -511,44 +535,52 @@ const testServer = async (server: McpServer) => {
             expandedServers.value = newSet;
         } else {
             ElMessage.error(`连接 ${server.name} 失败: ${result.error}`);
+            mcpStore.setServerCapability(server.id, {
+                success: false,
+                error: result.error,
+            });
         }
     } catch (e) {
         ElMessage.error(`测试 ${server.name} 时出错: ${e}`);
+        mcpStore.setServerCapability(server.id, {
+            success: false,
+            error: String(e),
+        });
     }
 };
 
-const startServer = (server: McpServer) => {
-    console.log("Starting server:", server);
-    ElMessage.info(`正在启动 ${server.name}... (尚未实现)`);
-};
-
-const checkAllServers = async () => {
-    const promises = mcpStore.servers.map(async (server) => {
-        try {
-            const result = await McpUtils.testConnection(server);
-            if (result.success) {
-                mcpStore.setServerCapability(server.id, result);
-                if (!server.enabled) {
-                    await mcpStore.updateServer(server.id, { enabled: true });
-                }
-            } else {
-                if (server.enabled) {
-                    await mcpStore.updateServer(server.id, { enabled: false });
-                }
-            }
-        } catch (e) {
-            console.error(`Auto-check failed for ${server.name}:`, e);
-            if (server.enabled) {
-                await mcpStore.updateServer(server.id, { enabled: false });
-            }
+const startServer = async (server: McpServer) => {
+    try {
+        if (server.enabled) {
+            await mcpStore.updateServer(server.id, { enabled: false });
+            ElMessage.success(`已停止 ${server.name}`);
+            return;
         }
-    });
-    await Promise.all(promises);
+
+        await mcpStore.updateServer(server.id, { enabled: true });
+        const caps = await McpUtils.getActiveCapabilities({
+            ...server,
+            enabled: true,
+        } as McpServer);
+        mcpStore.setServerCapability(server.id, caps);
+        ElMessage.success(`已启动 ${server.name}`);
+
+        const newSet = new Set(expandedServers.value);
+        newSet.add(server.id);
+        expandedServers.value = newSet;
+    } catch (e: any) {
+        ElMessage.error(`启动 ${server.name} 失败: ${e?.message || String(e)}`);
+        mcpStore.setServerCapability(server.id, {
+            success: false,
+            error: e?.message || String(e),
+        });
+    }
 };
 
 onMounted(async () => {
     await mcpStore.init();
-    await checkAllServers();
+    // 只做能力刷新，不自动修改启用/禁用状态
+    await mcpStore.checkConnections();
 });
 </script>
 
@@ -582,12 +614,10 @@ onMounted(async () => {
                             <span
                                 :class="[
                                     'px-2 py-0.5 rounded text-xs',
-                                    server.enabled
-                                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100'
-                                        : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100',
+                                    getServerStateClass(server),
                                 ]"
                             >
-                                {{ server.enabled ? "已启用" : "已禁用" }}
+                                {{ getServerStateLabel(server) }}
                             </span>
                         </div>
                         <p class="text-sm text-muted-foreground mt-1">
@@ -621,7 +651,7 @@ onMounted(async () => {
                             @click="startServer(server)"
                         >
                             <Play class="w-4 h-4 mr-1" />
-                            启动
+                            {{ server.enabled ? "停止" : "启动" }}
                         </Button>
                         <Button
                             variant="ghost"

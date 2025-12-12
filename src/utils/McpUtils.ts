@@ -1,12 +1,14 @@
 import { experimental_createMCPClient as createMCPClient } from "@ai-sdk/mcp";
-import { useMcpStore } from "@/stores/mcp";
-import { ElMessage } from "element-plus";
+import type { McpServer } from "@/utils/interface";
+import { TauriStdioTransport } from "@/utils/TauriStdioTransport";
 
 // import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 export class McpUtils {
     private static activeServers: Map<string, { client: any; transport: any }> =
         new Map();
+
+    private static startingServers: Map<string, Promise<any>> = new Map();
 
     private static async createClientAndTransport(server: McpServer) {
         let transport;
@@ -17,6 +19,7 @@ export class McpUtils {
                 command: server.command,
                 args: server.args,
                 env: server.env,
+                cwd: server.cwd,
             });
             mcpClient = await createMCPClient({
                 transport: transport,
@@ -33,6 +36,14 @@ export class McpUtils {
         return { client: mcpClient, transport };
     }
 
+    private static async fetchCapabilities(mcpClient: any) {
+        const tools = await mcpClient.tools();
+        const resources = await McpUtils.listResources(mcpClient);
+        const templates = await McpUtils.listResourceTemplates(mcpClient);
+        const prompts = await McpUtils.listPrompts(mcpClient);
+        return { tools, resources, templates, prompts };
+    }
+
     /**
      * 启动 MCP 服务器
      */
@@ -41,26 +52,43 @@ export class McpUtils {
             return this.activeServers.get(server.id)!.client;
         }
 
+        const inflight = this.startingServers.get(server.id);
+        if (inflight) return inflight;
+
         console.log(`Starting MCP server: ${server.name}`);
-        try {
+
+        const startPromise = (async () => {
             const { client, transport } =
                 await this.createClientAndTransport(server);
             this.activeServers.set(server.id, { client, transport });
             return client;
-        } catch (error) {
-            ElMessage.error(`Failed to start server ${server.name}: ${error}`);
-            throw error;
-        }
+        })().finally(() => {
+            this.startingServers.delete(server.id);
+        });
+
+        this.startingServers.set(server.id, startPromise);
+        return startPromise;
     }
 
     /**
      * 停止 MCP 服务器
      */
     public static async stopServer(serverId: string) {
+        const inflight = this.startingServers.get(serverId);
+        if (inflight) {
+            try {
+                await inflight;
+            } catch {
+                // ignore start error; proceed to cleanup
+            }
+        }
+
         const session = this.activeServers.get(serverId);
         if (session) {
             console.log(`Stopping MCP server: ${serverId}`);
-            if (
+            if (session.client && typeof session.client.close === "function") {
+                await session.client.close();
+            } else if (
                 session.transport &&
                 typeof session.transport.close === "function"
             ) {
@@ -70,15 +98,10 @@ export class McpUtils {
         }
     }
 
-    public static async getTools() {
-        const mcpStore = useMcpStore();
-        if (!mcpStore.initialized) {
-            await mcpStore.init();
-        }
-
+    public static async getTools(servers: McpServer[]) {
         const tools: any = {};
 
-        for (const server of mcpStore.servers) {
+        for (const server of servers) {
             if (!server.enabled) {
                 // Ensure it's stopped if disabled
                 if (this.activeServers.has(server.id)) {
@@ -100,6 +123,12 @@ export class McpUtils {
         }
 
         return tools;
+    }
+
+    public static async getActiveCapabilities(server: McpServer) {
+        const client = await McpUtils.startServer(server);
+        const caps = await McpUtils.fetchCapabilities(client);
+        return { success: true, ...caps };
     }
 
     private static async listResources(mcpClient: any) {
@@ -134,33 +163,35 @@ export class McpUtils {
 
     public static async testConnection(server: McpServer) {
         let transport;
+        let mcpClient: any;
         try {
             const result = await this.createClientAndTransport(server);
-            const mcpClient = result.client;
+            mcpClient = result.client;
             transport = result.transport;
 
-            const tools = await mcpClient.tools();
-            const resources = await McpUtils.listResources(mcpClient);
-            const templates = await McpUtils.listResourceTemplates(mcpClient);
-            const prompts = await McpUtils.listPrompts(mcpClient);
-            console.log(tools);
+            const caps = await McpUtils.fetchCapabilities(mcpClient);
 
             // Close transport after test
-            if (transport && typeof transport.close === "function") {
+            if (mcpClient && typeof mcpClient.close === "function") {
+                await mcpClient.close();
+            } else if (transport && typeof transport.close === "function") {
                 await transport.close();
             }
 
             return {
                 success: true,
-                tools,
-                resources,
-                templates,
-                prompts,
+                ...caps,
             };
         } catch (error: any) {
             console.error("MCP Test Error:", error);
-            if (transport && typeof transport.close === "function") {
-                await transport.close();
+            try {
+                if (mcpClient && typeof mcpClient.close === "function") {
+                    await mcpClient.close();
+                } else if (transport && typeof transport.close === "function") {
+                    await transport.close();
+                }
+            } catch {
+                // ignore
             }
             return { success: false, error: error.message || String(error) };
         }

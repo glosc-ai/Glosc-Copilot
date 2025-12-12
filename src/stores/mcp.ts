@@ -43,9 +43,9 @@ export const useMcpStore = defineStore("mcp", {
                 try {
                     const client = await McpUtils.startServer(server);
                     const tools = await client.tools();
-                    const resources = await client.listResources();
-                    const templates = await client.listResourceTemplates();
-                    const prompts = await client.listPrompts();
+                    const resources = await client.listResources().catch(() => ({ resources: [] }));
+                    const templates = await client.listResourceTemplates().catch(() => ({ resourceTemplates: [] }));
+                    const prompts = await client.listPrompts().catch(() => ({ prompts: [] }));
 
                     this.setServerCapability(server.id, {
                         success: true,
@@ -56,7 +56,16 @@ export const useMcpStore = defineStore("mcp", {
                     });
                 } catch (e) {
                     console.error(`Check failed for ${server.name}:`, e);
-                    await this.updateServer(server.id, { enabled: false });
+                        const errorText =
+                            e instanceof Error
+                                ? e.message
+                                : (e as any)?.message
+                                  ? String((e as any).message)
+                                  : String(e);
+                    this.setServerCapability(server.id, {
+                        success: false,
+                            error: errorText,
+                    });
                 }
             });
             await Promise.all(promises);
@@ -88,24 +97,25 @@ export const useMcpStore = defineStore("mcp", {
                 this.servers[index] = newServer;
                 await this.saveServers();
 
+                // Invalidate tools cache when server config changes
+                if (Object.keys(updates).length > 0) {
+                    this.invalidateToolsCache();
+                }
+
                 // Handle start/stop if enabled status changed
                 if (updates.enabled !== undefined) {
-                    // Invalidate tools cache when server state changes
-                    this.invalidateToolsCache();
-                    
                     if (updates.enabled) {
                         try {
                             await McpUtils.startServer(newServer);
                         } catch (e) {
                             console.error(
-                                `Failed to start server ${newServer.name}, disabling...`,
+                                `Failed to start server ${newServer.name}`,
                                 e
                             );
-                            this.servers[index] = {
-                                ...newServer,
-                                enabled: false,
-                            };
-                            await this.saveServers();
+                            this.setServerCapability(id, {
+                                success: false,
+                                error: (e as any)?.message || String(e),
+                            });
                             await McpUtils.stopServer(id);
                         }
                     } else {
@@ -139,7 +149,7 @@ export const useMcpStore = defineStore("mcp", {
             // Create and store the loading promise
             this.toolsLoadingPromise = (async () => {
                 try {
-                    const tools = await McpUtils.getTools();
+                    const tools = await McpUtils.getTools(this.servers);
                     this.cachedTools = tools;
                     this.toolsLastUpdated = Date.now();
                     return tools;
