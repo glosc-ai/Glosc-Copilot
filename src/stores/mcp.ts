@@ -2,14 +2,24 @@ import { defineStore } from "pinia";
 import { storeUtils } from "@/utils/StoreUtils";
 import { McpUtils } from "@/utils/McpUtils";
 
+// Cache duration for MCP tools (in milliseconds)
+const CACHE_DURATION_MS = 5000;
+
 export const useMcpStore = defineStore("mcp", {
     state: () => ({
         servers: [] as McpServer[],
         mcpEnabled: false,
         initialized: false,
         serverCapabilities: {} as Record<string, any>,
+        cachedTools: null as Record<string, any> | null,
+        toolsLastUpdated: 0,
+        toolsLoadingPromise: null as Promise<Record<string, any>> | null,
     }),
-    getters: {},
+    getters: {
+        hasEnabledServers(state) {
+            return state.servers.some((s) => s.enabled);
+        },
+    },
     actions: {
         setServerCapability(id: string, capability: any) {
             this.serverCapabilities[id] = capability;
@@ -80,6 +90,9 @@ export const useMcpStore = defineStore("mcp", {
 
                 // Handle start/stop if enabled status changed
                 if (updates.enabled !== undefined) {
+                    // Invalidate tools cache when server state changes
+                    this.invalidateToolsCache();
+                    
                     if (updates.enabled) {
                         try {
                             await McpUtils.startServer(newServer);
@@ -108,6 +121,43 @@ export const useMcpStore = defineStore("mcp", {
         async toggleMcp() {
             this.mcpEnabled = !this.mcpEnabled;
             await this.saveEnabled();
+        },
+        async getCachedTools(forceRefresh = false) {
+            // Cache tools to avoid reloading on each message
+            const now = Date.now();
+            const cacheValid = this.cachedTools && (now - this.toolsLastUpdated) < CACHE_DURATION_MS;
+            
+            if (!forceRefresh && cacheValid) {
+                return this.cachedTools;
+            }
+
+            // If already loading, return the existing promise to avoid concurrent fetches
+            if (this.toolsLoadingPromise) {
+                return this.toolsLoadingPromise;
+            }
+
+            // Create and store the loading promise
+            this.toolsLoadingPromise = (async () => {
+                try {
+                    const tools = await McpUtils.getTools();
+                    this.cachedTools = tools;
+                    this.toolsLastUpdated = Date.now();
+                    return tools;
+                } catch (error) {
+                    // On error, invalidate cache and re-throw
+                    this.invalidateToolsCache();
+                    throw error;
+                } finally {
+                    // Clear the loading promise
+                    this.toolsLoadingPromise = null;
+                }
+            })();
+
+            return this.toolsLoadingPromise;
+        },
+        invalidateToolsCache() {
+            this.cachedTools = null;
+            this.toolsLastUpdated = 0;
         },
     },
 });

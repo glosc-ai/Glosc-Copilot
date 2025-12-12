@@ -36,16 +36,26 @@ provide(CodeBlockKey, {
 
 let requestId = 0;
 let isUnmounted = false;
+let idleCallbackId: number | null = null;
 
-const updateHighlight = useDebounceFn(
-    async (
-        code: string,
-        language: BundledLanguage,
-        showLineNumbers: boolean
-    ) => {
-        requestId += 1;
-        const currentId = requestId;
+// Timeout for requestIdleCallback - ensures highlighting completes within reasonable time
+const HIGHLIGHT_TIMEOUT_MS = 200;
 
+const scheduleHighlight = (
+    code: string,
+    language: BundledLanguage,
+    showLineNumbers: boolean
+) => {
+    // Cancel any pending idle callback
+    if (idleCallbackId !== null && typeof cancelIdleCallback !== 'undefined') {
+        cancelIdleCallback(idleCallbackId);
+    }
+
+    requestId += 1;
+    const currentId = requestId;
+
+    // Use requestIdleCallback to perform highlighting during browser idle time
+    const performHighlight = async () => {
         try {
             const [light, dark] = await highlightCode(
                 code,
@@ -60,6 +70,27 @@ const updateHighlight = useDebounceFn(
         } catch (error) {
             console.error("[CodeBlock] highlight failed", error);
         }
+    };
+
+    // Use requestIdleCallback if available, otherwise setTimeout
+    if (typeof requestIdleCallback !== 'undefined') {
+        idleCallbackId = requestIdleCallback(() => {
+            performHighlight();
+        }, { timeout: HIGHLIGHT_TIMEOUT_MS });
+    } else {
+        // Fallback for browsers without requestIdleCallback
+        // Use 16ms (~1 frame at 60fps) to allow browser to complete other work
+        setTimeout(performHighlight, 16);
+    }
+};
+
+const updateHighlight = useDebounceFn(
+    (
+        code: string,
+        language: BundledLanguage,
+        showLineNumbers: boolean
+    ) => {
+        scheduleHighlight(code, language, showLineNumbers);
     },
     100
 );
@@ -74,6 +105,9 @@ watch(
 
 onBeforeUnmount(() => {
     isUnmounted = true;
+    if (idleCallbackId !== null && typeof cancelIdleCallback !== 'undefined') {
+        cancelIdleCallback(idleCallbackId);
+    }
 });
 </script>
 
