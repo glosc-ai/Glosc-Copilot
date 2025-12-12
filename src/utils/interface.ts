@@ -106,7 +106,7 @@ export type CreateChatClientOptions = {
      * 客户端可执行工具表（通常来自 MCP）。
      * onToolCall 会在这里查找 toolName 并执行其 execute。
      */
-    toolsRef?: ShallowRef<ClientToolRegistry | undefined>;
+    toolsRef?: ShallowRef<ClientToolRegistry | null>;
     /**
      * 可选：把工具调用/执行过程打到控制台，便于排查为何停在 tool-calls。
      */

@@ -110,7 +110,7 @@ export class ChatUtils {
         };
     }
 
-    public static getCht(options: CreateChatClientOptions = {}) {
+    public static getChat(options: CreateChatClientOptions = {}) {
         const chat = new Chat({
             transport: new DefaultChatTransport({
                 api: `${this.host}/api/chat`,

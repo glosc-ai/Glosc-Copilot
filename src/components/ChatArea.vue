@@ -62,8 +62,8 @@ onMounted(async () => {
 });
 
 // 客户端可执行工具表（用于 onToolCall 执行并 addToolOutput 回填）
-const clientToolsRef = shallowRef<Record<string, any> | undefined>(undefined);
-const chat = ChatUtils.getCht({
+const clientToolsRef = shallowRef<Record<string, any> | null>(null);
+const chat = ChatUtils.getChat({
     toolsRef: clientToolsRef,
     debugTools: false,
 });
@@ -100,37 +100,67 @@ watch(
 );
 
 // Sync from Chat to Store
+let syncTimer: number | null = null;
+const syncChatToStore = () => {
+    if (!activeKey.value || !conversations.value[activeKey.value]) return;
+
+    const currentConversation = conversations.value[activeKey.value];
+    const oldMessagesMap = new Map(
+        currentConversation.messages.map((m) => [m.id, m])
+    );
+
+    const updatedMessages: StoredChatMessage[] = messages.value.map((m) => {
+        const old = oldMessagesMap.get(m.id);
+        const textContent =
+            m.parts
+                ?.filter((part) => part.type === "text")
+                .map((part) => (part as any).text)
+                .join("\n") ?? "";
+        return {
+            id: m.id,
+            role: m.role as any,
+            content: textContent,
+            timestamp: old ? old.timestamp : Date.now(),
+            parts: m.parts,
+            reasoning: old?.reasoning,
+        };
+    });
+
+    currentConversation.messages = updatedMessages;
+    chatStore.debouncedSave();
+};
+
+const scheduleSyncChatToStore = (delayMs = 200) => {
+    if (syncTimer != null) window.clearTimeout(syncTimer);
+    syncTimer = window.setTimeout(() => {
+        syncTimer = null;
+        // 流式期间避免逐 token 深度同步；在结束/非流式时再同步
+        if (status.value === "streaming") return;
+        syncChatToStore();
+    }, delayMs);
+};
+
 watch(
-    messages,
-    (newMessages) => {
-        if (!activeKey.value || !conversations.value[activeKey.value]) return;
+    () => messages.value.length,
+    () => {
+        // 新消息进入（用户/助手占位）时，非流式情况下可以同步一次
+        scheduleSyncChatToStore(0);
+    }
+);
 
-        const currentConversation = conversations.value[activeKey.value];
-        const oldMessagesMap = new Map(
-            currentConversation.messages.map((m) => [m.id, m])
-        );
-
-        const updatedMessages: StoredChatMessage[] = newMessages.map((m) => {
-            const old = oldMessagesMap.get(m.id);
-            const textContent =
-                m.parts
-                    ?.filter((part) => part.type === "text")
-                    .map((part) => (part as any).text)
-                    .join("\n") ?? "";
-            return {
-                id: m.id,
-                role: m.role as any,
-                content: textContent,
-                timestamp: old ? old.timestamp : Date.now(),
-                parts: m.parts,
-                reasoning: old?.reasoning,
-            };
-        });
-
-        currentConversation.messages = updatedMessages;
-        chatStore.debouncedSave();
-    },
-    { deep: true }
+watch(
+    () => status.value,
+    (next, prev) => {
+        // 流式结束时做一次完整同步并保存
+        if (prev === "streaming" && next !== "streaming") {
+            if (syncTimer != null) {
+                window.clearTimeout(syncTimer);
+                syncTimer = null;
+            }
+            syncChatToStore();
+            chatStore.saveImmediately();
+        }
+    }
 );
 
 const lastAssistantMessageId = computed(() => {
@@ -280,22 +310,25 @@ function restoreToCheckpoint(messageIndex: number) {
     );
 }
 
-const calculatedUsage = computed(() => {
+const tokenizer = TokenizerLoader.fromPreTrained({
+    tokenizerConfig,
+    tokenizerJSON,
+});
+
+const calculatedUsage = shallowRef({
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+});
+
+let usageTimer: number | null = null;
+const recalcUsage = () => {
+    // 流式期间 token 统计开销很大；结束时再算一次即可
+    if (status.value === "streaming") return;
+
     let input = 0;
     let output = 0;
-
-    if (!messages.value)
-        return {
-            inputTokens: 0,
-            outputTokens: 0,
-            totalTokens: 0,
-            cachedInputTokens: 0,
-            reasoningTokens: 0,
-            inputTokenDetails: [],
-            outputTokenDetails: [],
-        };
-
-    for (const msg of messages.value) {
+    for (const msg of messages.value || []) {
         const content =
             msg.parts
                 ?.filter((p) => p.type === "text")
@@ -304,29 +337,43 @@ const calculatedUsage = computed(() => {
             (msg as any).text ||
             "";
 
-        const tokenizer = TokenizerLoader.fromPreTrained({
-            tokenizerConfig,
-            tokenizerJSON,
-        });
-
-        // const tokenizer =  tokenizers.AutoTokenizer.from_pretrained(
-        //     model.value?.id || "gpt-4"
-        // );
-
         const tokens = tokenizer.encode(content).length || 0;
-        if (msg.role === "assistant") {
-            output += tokens;
-        } else {
-            input += tokens;
-        }
+        if (msg.role === "assistant") output += tokens;
+        else input += tokens;
     }
 
-    return {
+    calculatedUsage.value = {
         inputTokens: input,
         outputTokens: output,
         totalTokens: input + output,
     };
-});
+};
+
+const scheduleRecalcUsage = (delayMs = 300) => {
+    if (usageTimer != null) window.clearTimeout(usageTimer);
+    usageTimer = window.setTimeout(() => {
+        usageTimer = null;
+        recalcUsage();
+    }, delayMs);
+};
+
+watch(
+    () => status.value,
+    (next, prev) => {
+        if (prev === "streaming" && next !== "streaming") {
+            if (usageTimer != null) {
+                window.clearTimeout(usageTimer);
+                usageTimer = null;
+            }
+            recalcUsage();
+        }
+    }
+);
+
+watch(
+    () => messages.value.length,
+    () => scheduleRecalcUsage(0)
+);
 
 const contextProps: any = computed(() => ({
     usedTokens: calculatedUsage.value.totalTokens,
@@ -400,6 +447,9 @@ const contextProps: any = computed(() => ({
                                     <MessageResponse
                                         v-if="part.type === 'text'"
                                         :content="part.text"
+                                        :is-streaming="
+                                            isStreamingPart(index, partIndex)
+                                        "
                                     />
                                     <Reasoning
                                         v-if="part.type === 'reasoning'"

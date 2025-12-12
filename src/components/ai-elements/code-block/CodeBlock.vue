@@ -47,7 +47,7 @@ const scheduleHighlight = (
     showLineNumbers: boolean
 ) => {
     // Cancel any pending idle callback
-    if (idleCallbackId !== null && typeof cancelIdleCallback !== 'undefined') {
+    if (idleCallbackId !== null && typeof cancelIdleCallback !== "undefined") {
         cancelIdleCallback(idleCallbackId);
     }
 
@@ -73,10 +73,13 @@ const scheduleHighlight = (
     };
 
     // Use requestIdleCallback if available, otherwise setTimeout
-    if (typeof requestIdleCallback !== 'undefined') {
-        idleCallbackId = requestIdleCallback(() => {
-            performHighlight();
-        }, { timeout: HIGHLIGHT_TIMEOUT_MS });
+    if (typeof requestIdleCallback !== "undefined") {
+        idleCallbackId = requestIdleCallback(
+            () => {
+                performHighlight();
+            },
+            { timeout: HIGHLIGHT_TIMEOUT_MS }
+        );
     } else {
         // Fallback for browsers without requestIdleCallback
         // Use 16ms (~1 frame at 60fps) to allow browser to complete other work
@@ -85,11 +88,7 @@ const scheduleHighlight = (
 };
 
 const updateHighlight = useDebounceFn(
-    (
-        code: string,
-        language: BundledLanguage,
-        showLineNumbers: boolean
-    ) => {
+    (code: string, language: BundledLanguage, showLineNumbers: boolean) => {
         scheduleHighlight(code, language, showLineNumbers);
     },
     100
@@ -105,7 +104,7 @@ watch(
 
 onBeforeUnmount(() => {
     isUnmounted = true;
-    if (idleCallbackId !== null && typeof cancelIdleCallback !== 'undefined') {
+    if (idleCallbackId !== null && typeof cancelIdleCallback !== "undefined") {
         cancelIdleCallback(idleCallbackId);
     }
 });
@@ -122,13 +121,13 @@ onBeforeUnmount(() => {
             )
         "
     >
-        <div class="relative">
+        <div class="relative overflow-auto">
             <div
-                class="overflow-hidden dark:hidden [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
+                class="dark:hidden [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
                 v-html="html"
             />
             <div
-                class="hidden overflow-hidden dark:block [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
+                class="hidden dark:block [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
                 v-html="darkHtml"
             />
             <div
