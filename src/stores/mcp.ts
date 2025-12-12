@@ -2,6 +2,9 @@ import { defineStore } from "pinia";
 import { storeUtils } from "@/utils/StoreUtils";
 import { McpUtils } from "@/utils/McpUtils";
 
+// Cache duration for MCP tools (in milliseconds)
+const CACHE_DURATION_MS = 5000;
+
 export const useMcpStore = defineStore("mcp", {
     state: () => ({
         servers: [] as McpServer[],
@@ -119,8 +122,7 @@ export const useMcpStore = defineStore("mcp", {
             await this.saveEnabled();
         },
         async getCachedTools(forceRefresh = false) {
-            // Cache tools for 5 seconds to avoid reloading on each message
-            const CACHE_DURATION_MS = 5000;
+            // Cache tools to avoid reloading on each message
             const now = Date.now();
             const cacheValid = this.cachedTools && (now - this.toolsLastUpdated) < CACHE_DURATION_MS;
             

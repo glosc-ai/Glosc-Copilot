@@ -26,10 +26,22 @@ const lineNumberTransformer: ShikiTransformer = {
 // Cache for highlighted code to avoid re-highlighting the same content
 const highlightCache = new Map<string, [string, string]>();
 const MAX_CACHE_SIZE = 100;
-const CACHE_KEY_PREFIX_LENGTH = 100; // Length of code snippet used in cache key
+
+// Simple hash function for cache keys to avoid collisions
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return hash.toString(36);
+}
 
 function getCacheKey(code: string, language: BundledLanguage, showLineNumbers: boolean): string {
-  return `${language}:${showLineNumbers}:${code.substring(0, CACHE_KEY_PREFIX_LENGTH)}:${code.length}`;
+  // Use hash to avoid collisions from prefix-only comparison
+  const codeHash = simpleHash(code);
+  return `${language}:${showLineNumbers}:${codeHash}:${code.length}`;
 }
 
 export async function highlightCode(
