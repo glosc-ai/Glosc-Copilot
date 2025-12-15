@@ -2,6 +2,8 @@
 import { type ChatStatus, type SourceUrlUIPart, type UIMessage } from "ai";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { ChatUtils } from "@/utils/ChatUtils";
+import type { StoredChatMessage } from "@/utils/interface";
+import { Textarea } from "@/components/ui/textarea";
 
 import {
     CopyIcon,
@@ -14,6 +16,7 @@ import {
     MessageSquare,
     Coins,
     Settings2,
+    Pencil,
 } from "lucide-vue-next";
 
 import { formatModelName, groupModelsByProvider } from "@/utils/ModelApi";
@@ -72,42 +75,111 @@ const status = computed<ChatStatus>(() => chat.status);
 const messages = computed<UIMessage[]>(() => chat.messages);
 const error = computed(() => chat.error);
 
+// ===== 用户消息编辑 / 重新发送 =====
+const editingUserMessageId = ref<string | null>(null);
+const editingUserMessageText = ref<string>("");
+
+function getUserMessageText(message: UIMessage): string {
+    return (
+        message.parts
+            ?.filter((p: any) => p?.type === "text")
+            .map((p: any) => p.text ?? "")
+            .join("\n") ?? ""
+    );
+}
+
+function replaceTextParts(parts: any[], nextText: string): any[] {
+    const result: any[] = [];
+    let replaced = false;
+    for (const part of parts ?? []) {
+        if (part?.type === "text") {
+            if (!replaced) {
+                result.push({ ...part, text: nextText });
+                replaced = true;
+            }
+            continue;
+        }
+        result.push(part);
+    }
+    if (!replaced) {
+        result.unshift({ type: "text", text: nextText });
+    }
+    return result;
+}
+
+async function sendChatMessage(text: string, messageId?: string) {
+    const tools = await mcpStore.getCachedTools();
+    clientToolsRef.value = tools;
+
+    await chat.sendMessage(
+        { text, messageId },
+        {
+            body: {
+                model: selectedModel.value?.id,
+                mcpEnabled: hasEnabledServers.value,
+                tools,
+            },
+        }
+    );
+}
+
+function truncateChatToMessage(messageId: string, updatedText?: string) {
+    const current = chat.messages;
+    const index = current.findIndex((m) => m.id === messageId);
+    if (index < 0) return false;
+
+    const prefix = current.slice(0, index + 1);
+    const target = prefix[index];
+    if (updatedText != null) {
+        prefix[index] = {
+            ...target,
+            parts: replaceTextParts(target.parts as any, updatedText),
+        } as any;
+    }
+    chat.messages = prefix as any;
+    return true;
+}
+
+function startEditUserMessage(message: UIMessage) {
+    if (status.value === "streaming" || status.value === "submitted") return;
+    editingUserMessageId.value = message.id;
+    editingUserMessageText.value = getUserMessageText(message);
+}
+
+function cancelEditUserMessage() {
+    editingUserMessageId.value = null;
+    editingUserMessageText.value = "";
+}
+
+async function resendUserMessage(message: UIMessage) {
+    if (status.value === "streaming" || status.value === "submitted") return;
+    const text = getUserMessageText(message);
+    if (!truncateChatToMessage(message.id)) return;
+    await sendChatMessage(text, message.id);
+}
+
+async function confirmEditAndResendUserMessage() {
+    if (status.value === "streaming" || status.value === "submitted") return;
+    const nextText = editingUserMessageText.value.trim();
+    const messageId = editingUserMessageId.value;
+    if (!messageId || !nextText) return;
+
+    if (!truncateChatToMessage(messageId, nextText)) return;
+    cancelEditUserMessage();
+    await sendChatMessage(nextText, messageId);
+}
+
 watch(error, (newError) => {
     if (newError) {
         console.error("Chat error:", newError);
     }
 });
 
-// Sync from Store to Chat
-watch(
-    activeKey,
-    (newKey) => {
-        if (!newKey) return;
-        const conversation = conversations.value[newKey];
-        if (conversation) {
-            // Assuming chat.messages is a Ref or writable
-            (chat as any).messages.value = conversation.messages.map((m) => ({
-                id: m.id,
-                role: m.role,
-                content: m.content,
-                parts: m.parts,
-            }));
-        } else {
-            (chat as any).messages.value = [];
-        }
-    },
-    { immediate: true }
-);
+function syncChatToStoreFor(conversationId: string) {
+    const conversation = conversations.value[conversationId];
+    if (!conversation) return;
 
-// Sync from Chat to Store
-let syncTimer: number | null = null;
-const syncChatToStore = () => {
-    if (!activeKey.value || !conversations.value[activeKey.value]) return;
-
-    const currentConversation = conversations.value[activeKey.value];
-    const oldMessagesMap = new Map(
-        currentConversation.messages.map((m) => [m.id, m])
-    );
+    const oldMessagesMap = new Map(conversation.messages.map((m) => [m.id, m]));
 
     const updatedMessages: StoredChatMessage[] = messages.value.map((m) => {
         const old = oldMessagesMap.get(m.id);
@@ -116,6 +188,7 @@ const syncChatToStore = () => {
                 ?.filter((part) => part.type === "text")
                 .map((part) => (part as any).text)
                 .join("\n") ?? "";
+
         return {
             id: m.id,
             role: m.role as any,
@@ -126,8 +199,61 @@ const syncChatToStore = () => {
         };
     });
 
-    currentConversation.messages = updatedMessages;
+    conversation.messages = updatedMessages;
+    conversation.updatedAt = Date.now();
+
+    // 基于第一条用户消息自动命名（同步版，避免额外 saveConversations）
+    chatStore.applyAutoTitle(conversationId);
+
+    const item = chatStore.conversationsItems.find(
+        (it) => it.key === conversationId
+    );
+    if (item) item.timestamp = conversation.updatedAt;
+
+    chatStore.markPendingChanges();
     chatStore.debouncedSave();
+}
+
+// Sync from Store to Chat (switch conversation)
+watch(
+    activeKey,
+    (newKey, oldKey) => {
+        // 切换会话前，先把当前 UI 中的消息写回旧会话，避免覆盖/丢失
+        if (oldKey && oldKey !== newKey) {
+            if (syncTimer != null) {
+                window.clearTimeout(syncTimer);
+                syncTimer = null;
+            }
+            // 流式时不强行同步，避免把半截内容写进 store
+            if (status.value !== "streaming") {
+                syncChatToStoreFor(oldKey);
+            }
+        }
+
+        if (!newKey) {
+            chat.messages = [];
+            return;
+        }
+
+        const conversation = conversations.value[newKey];
+        chat.messages = conversation
+            ? conversation.messages.map((m) => ({
+                  id: m.id,
+                  role: m.role === "data" ? "assistant" : m.role,
+                  parts:
+                      Array.isArray(m.parts) && m.parts.length > 0
+                          ? (m.parts as any)
+                          : ([{ type: "text", text: m.content ?? "" }] as any),
+              }))
+            : [];
+    },
+    { immediate: true }
+);
+
+let syncTimer: number | null = null;
+const syncChatToStore = () => {
+    if (!activeKey.value) return;
+    syncChatToStoreFor(activeKey.value);
 };
 
 const scheduleSyncChatToStore = (delayMs = 200) => {
@@ -444,13 +570,35 @@ const contextProps: any = computed(() => ({
                                     v-for="(part, partIndex) in message.parts"
                                     :key="partIndex"
                                 >
-                                    <MessageResponse
-                                        v-if="part.type === 'text'"
-                                        :content="part.text"
-                                        :is-streaming="
-                                            isStreamingPart(index, partIndex)
-                                        "
-                                    />
+                                    <template v-if="part.type === 'text'">
+                                        <template
+                                            v-if="
+                                                message.role === 'user' &&
+                                                editingUserMessageId ===
+                                                    message.id &&
+                                                isLastTextPart(
+                                                    message,
+                                                    partIndex
+                                                )
+                                            "
+                                        >
+                                            <Textarea
+                                                v-model="editingUserMessageText"
+                                                class="min-h-[80px]"
+                                            />
+                                        </template>
+                                        <template v-else>
+                                            <MessageResponse
+                                                :content="part.text"
+                                                :is-streaming="
+                                                    isStreamingPart(
+                                                        index,
+                                                        partIndex
+                                                    )
+                                                "
+                                            />
+                                        </template>
+                                    </template>
                                     <Reasoning
                                         v-if="part.type === 'reasoning'"
                                         class="w-full"
@@ -507,6 +655,58 @@ const contextProps: any = computed(() => ({
                                         >
                                             <CopyIcon class="size-3" />
                                         </MessageAction>
+                                    </MessageActions>
+
+                                    <MessageActions
+                                        v-if="
+                                            message.role === 'user' &&
+                                            part.type === 'text' &&
+                                            isLastTextPart(message, partIndex)
+                                        "
+                                    >
+                                        <template
+                                            v-if="
+                                                editingUserMessageId ===
+                                                message.id
+                                            "
+                                        >
+                                            <MessageAction
+                                                label="取消"
+                                                @click="cancelEditUserMessage"
+                                            />
+                                            <MessageAction
+                                                label="发送"
+                                                @click="
+                                                    confirmEditAndResendUserMessage()
+                                                "
+                                            >
+                                                <RefreshCcwIcon
+                                                    class="size-3"
+                                                />
+                                            </MessageAction>
+                                        </template>
+                                        <template v-else>
+                                            <MessageAction
+                                                label="编辑"
+                                                @click="
+                                                    startEditUserMessage(
+                                                        message
+                                                    )
+                                                "
+                                            >
+                                                <Pencil class="size-3" />
+                                            </MessageAction>
+                                            <MessageAction
+                                                label="重新发送"
+                                                @click="
+                                                    resendUserMessage(message)
+                                                "
+                                            >
+                                                <RefreshCcwIcon
+                                                    class="size-3"
+                                                />
+                                            </MessageAction>
+                                        </template>
                                     </MessageActions>
                                 </template>
                             </MessageContent>

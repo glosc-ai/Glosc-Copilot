@@ -31,8 +31,11 @@ export class McpUtils {
                     url: server.url,
                     headers: server.headers,
                 },
+            }).catch((error) => {
+                ElMessage.error(`Failed to create HTTP MCP client: ${error}`);
             });
         }
+
         return { client: mcpClient, transport };
     }
 
@@ -78,8 +81,9 @@ export class McpUtils {
         if (inflight) {
             try {
                 await inflight;
-            } catch {
+            } catch (e) {
                 // ignore start error; proceed to cleanup
+                ElMessage.error(`Failed to start MCP server during stop: ${e}`);
             }
         }
 

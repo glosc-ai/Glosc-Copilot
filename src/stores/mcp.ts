@@ -43,9 +43,15 @@ export const useMcpStore = defineStore("mcp", {
                 try {
                     const client = await McpUtils.startServer(server);
                     const tools = await client.tools();
-                    const resources = await client.listResources().catch(() => ({ resources: [] }));
-                    const templates = await client.listResourceTemplates().catch(() => ({ resourceTemplates: [] }));
-                    const prompts = await client.listPrompts().catch(() => ({ prompts: [] }));
+                    const resources = await client
+                        .listResources()
+                        .catch(() => ({ resources: [] }));
+                    const templates = await client
+                        .listResourceTemplates()
+                        .catch(() => ({ resourceTemplates: [] }));
+                    const prompts = await client
+                        .listPrompts()
+                        .catch(() => ({ prompts: [] }));
 
                     this.setServerCapability(server.id, {
                         success: true,
@@ -56,15 +62,15 @@ export const useMcpStore = defineStore("mcp", {
                     });
                 } catch (e) {
                     console.error(`Check failed for ${server.name}:`, e);
-                        const errorText =
-                            e instanceof Error
-                                ? e.message
-                                : (e as any)?.message
-                                  ? String((e as any).message)
-                                  : String(e);
+                    const errorText =
+                        e instanceof Error
+                            ? e.message
+                            : (e as any)?.message
+                              ? String((e as any).message)
+                              : String(e);
                     this.setServerCapability(server.id, {
                         success: false,
-                            error: errorText,
+                        error: errorText,
                     });
                 }
             });
@@ -135,8 +141,10 @@ export const useMcpStore = defineStore("mcp", {
         async getCachedTools(forceRefresh = false) {
             // Cache tools to avoid reloading on each message
             const now = Date.now();
-            const cacheValid = this.cachedTools && (now - this.toolsLastUpdated) < CACHE_DURATION_MS;
-            
+            const cacheValid =
+                this.cachedTools &&
+                now - this.toolsLastUpdated < CACHE_DURATION_MS;
+
             if (!forceRefresh && cacheValid) {
                 return this.cachedTools;
             }

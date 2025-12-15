@@ -66,23 +66,95 @@ export const useChatStore = defineStore("chat", {
                     this.conversations = data.conversations || {};
 
                     // 构建会话列表
-                    const order =
-                        data.conversationsOrder ||
-                        Object.keys(this.conversations);
-                    this.conversationsItems = order
+                    const hasPersistedOrder =
+                        Array.isArray(data.conversationsOrder) &&
+                        data.conversationsOrder.length > 0;
+                    const order = hasPersistedOrder
+                        ? data.conversationsOrder
+                        : Object.keys(this.conversations);
+
+                    const items = order
                         .filter((id) => this.conversations[id])
                         .map((id) => ({
                             key: id,
                             label: this.conversations[id].title,
                             timestamp: this.conversations[id].updatedAt,
-                        }))
-                        .sort(
-                            (a, b) => (b.timestamp || 0) - (a.timestamp || 0)
-                        );
+                        }));
+
+                    // 仅在没有保存过排序时，默认按时间排序
+                    this.conversationsItems = hasPersistedOrder
+                        ? items
+                        : items.sort(
+                              (a, b) => (b.timestamp || 0) - (a.timestamp || 0)
+                          );
                 }
             } catch (error) {
                 console.error("加载会话失败:", error);
             }
+        },
+
+        /**
+         * 根据第一条用户消息自动生成标题（同步版：只更新 state，不触发保存）。
+         * 返回 true 表示发生了标题变更。
+         */
+        applyAutoTitle(conversationId: string) {
+            const conversation = this.conversations[conversationId];
+            if (!conversation) return false;
+
+            if (
+                conversation.title !== "新对话" &&
+                !conversation.title.startsWith("新对话 ")
+            ) {
+                return false;
+            }
+
+            const firstUserMsg = conversation.messages.find(
+                (msg) => msg.role === "user"
+            );
+            if (!firstUserMsg) return false;
+
+            let title = firstUserMsg.content.trim().substring(0, 30);
+            if (firstUserMsg.content.length > 30) {
+                title += "...";
+            }
+
+            if (!title) return false;
+
+            conversation.title = title;
+            conversation.updatedAt = Date.now();
+
+            const item = this.conversationsItems.find(
+                (it) => it.key === conversationId
+            );
+            if (item) {
+                item.label = title;
+                item.timestamp = conversation.updatedAt;
+            }
+
+            return true;
+        },
+
+        /**
+         * 拖拽排序：把 sourceKey 移动到 targetKey 之前。
+         */
+        async moveConversation(sourceKey: string, targetKey: string) {
+            if (sourceKey === targetKey) return;
+
+            const fromIndex = this.conversationsItems.findIndex(
+                (it) => it.key === sourceKey
+            );
+            const toIndex = this.conversationsItems.findIndex(
+                (it) => it.key === targetKey
+            );
+            if (fromIndex < 0 || toIndex < 0) return;
+
+            const next = [...this.conversationsItems];
+            const [moved] = next.splice(fromIndex, 1);
+            const insertIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+            next.splice(insertIndex, 0, moved);
+            this.conversationsItems = next;
+
+            await this.saveConversations();
         },
 
         async saveConversations() {
