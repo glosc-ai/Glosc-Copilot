@@ -47,7 +47,7 @@ async function downloadToFile(url, destFile) {
         redirect: "follow",
         headers: {
             // Avoid some GitHub edge cases
-            "User-Agent": "gloss-copilot-build",
+            "User-Agent": "glosc-copilot-build",
         },
     });
     if (!res.ok) {
@@ -98,7 +98,7 @@ async function main() {
             : `uv-${triple}.tar.gz`;
 
     const url = `https://github.com/astral-sh/uv/releases/latest/download/${artifact}`;
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "gloss-uv-"));
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "glosc-uv-"));
     const archivePath = path.join(tmpDir, artifact);
 
     console.log(`[prepare-uv] Downloading ${artifact} ...`);

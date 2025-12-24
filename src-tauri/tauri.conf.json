@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "gloss-copilot",
+  "productName": "glosc-copilot",
   "version": "1.0.0",
-  "identifier": "aoe.top.gloss-copilot",
+  "identifier": "aoe.top.glosc-copilot",
   "build": {
     "beforeDevCommand": "yarn dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "gloss-copilot",
+        "title": "glosc-copilot",
         "width": 1280,
         "height": 720,
         "decorations": false

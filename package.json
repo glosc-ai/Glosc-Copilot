@@ -1,5 +1,5 @@
 {
-  "name": "gloss-copilot",
+  "name": "glosc-copilot",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -21,7 +21,6 @@
     "@lenml/tokenizers": "^3.7.2",
     "@modelcontextprotocol/sdk": "^1.24.3",
     "@parallel-web/ai-sdk-tools": "^0.1.6",
-    "@rollup/rollup-linux-x64-gnu": "^4.53.3",
     "@tailwindcss/vite": "^4.1.17",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",

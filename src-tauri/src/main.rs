@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    gloss_copilot_lib::run()
+    glosc_copilot_lib::run()
 }

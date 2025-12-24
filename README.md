@@ -1,16 +1,16 @@
-# Gloss Copilot
+# Glosc Copilot
 
 <div align="center">
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/GlossMod/GlossCopilot)
-[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](https://github.com/GlossMod/GlossCopilot/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/glosc-ai/Glosc-Copilot)
+[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](https://github.com/glosc-ai/Glosc-Copilot/releases)
 
 </div>
 
 ## 📖 简介
 
-Gloss Copilot 是一款跨平台的 AI 智能助手，灵感来源于钢铁侠中的贾维斯（J.A.R.V.I.S.），旨在通过自然语言交互帮助用户直接操作系统级任务，显著提高工作效率。支持 Windows、macOS 和 Linux 系统，集成了先进的语音识别、情感分析和虚拟形象技术。
+Glosc Copilot 是一款跨平台的 AI 智能助手，灵感来源于钢铁侠中的贾维斯（J.A.R.V.I.S.），旨在通过自然语言交互帮助用户直接操作系统级任务，显著提高工作效率。支持 Windows、macOS 和 Linux 系统，集成了先进的语音识别、情感分析和虚拟形象技术。
 
 ## ✨ 核心特性
 
@@ -46,7 +46,7 @@ Gloss Copilot 是一款跨平台的 AI 智能助手，灵感来源于钢铁侠�
 
 ## 🔌 插件开发
 
-Gloss Copilot 支持第三方插件扩展功能。
+Glosc Copilot 支持第三方插件扩展功能。
 
 ## 🧩 MCP（Stdio）里的 Python / uvx
 

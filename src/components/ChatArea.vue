@@ -522,7 +522,7 @@ const contextProps: any = computed(() => ({
                                 <Bot class="w-12 h-12 text-primary" />
                             </div>
                             <h1 class="text-2xl font-bold tracking-tight">
-                                欢迎使用 Gloss Copilot
+                                欢迎使用 Glosc Copilot
                             </h1>
                             <p
                                 class="text-muted-foreground max-w-md text-center"

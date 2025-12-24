@@ -27,7 +27,7 @@ const close = () => appWindow.close();
     >
         <div class="flex items-center gap-2 text-sm font-medium">
             <img src="/favicon.ico" class="w-4 h-4" alt="Logo" />
-            <span>Gloss Copilot</span>
+            <span>Glosc Copilot</span>
         </div>
         <div class="flex items-center gap-1">
             <button
