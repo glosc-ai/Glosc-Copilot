@@ -44,6 +44,9 @@ const router = useRouter();
 
 const hasEnabledServers = computed(() => servers.value.some((s) => s.enabled));
 
+// 跟踪是否已经为当前会话生成过总结标题
+const hasGeneratedSummaryTitle = ref(false);
+
 function toggleServer(id: string, checked: boolean) {
     mcpStore.updateServer(id, { enabled: checked });
 }
@@ -202,9 +205,6 @@ function syncChatToStoreFor(conversationId: string) {
     conversation.messages = updatedMessages;
     conversation.updatedAt = Date.now();
 
-    // 基于第一条用户消息自动命名（同步版，避免额外 saveConversations）
-    chatStore.applyAutoTitle(conversationId);
-
     const item = chatStore.conversationsItems.find(
         (it) => it.key === conversationId
     );
@@ -232,6 +232,7 @@ watch(
 
         if (!newKey) {
             chat.messages = [];
+            hasGeneratedSummaryTitle.value = false;
             return;
         }
 
@@ -246,6 +247,9 @@ watch(
                           : ([{ type: "text", text: m.content ?? "" }] as any),
               }))
             : [];
+
+        // 切换会话时重置总结标题生成标志
+        hasGeneratedSummaryTitle.value = false;
     },
     { immediate: true }
 );
@@ -285,6 +289,20 @@ watch(
             }
             syncChatToStore();
             chatStore.saveImmediately();
+
+            // AI回复完成后，如果是首次且未生成总结标题，则生成总结标题
+            if (next === "ready" && !hasGeneratedSummaryTitle.value) {
+                const conversation = conversations.value[activeKey.value];
+                if (
+                    conversation &&
+                    conversation.messages.some((m) => m.role === "assistant")
+                ) {
+                    console.log(next);
+
+                    hasGeneratedSummaryTitle.value = true;
+                    chatStore.generateSummaryTitle(activeKey.value);
+                }
+            }
         }
     }
 );

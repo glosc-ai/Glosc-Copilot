@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import OpenAI from "openai";
 
 import { fetchAvailableModels } from "../utils/ModelApi";
 import { storeUtils } from "../utils/StoreUtils";
@@ -298,6 +299,81 @@ export const useChatStore = defineStore("chat", {
                 }
 
                 await this.renameConversation(conversationId, title);
+            }
+        },
+
+        // 生成基于对话内容的总结标题
+        async generateSummaryTitle(conversationId: string) {
+            const conversation = this.conversations[conversationId];
+            if (!conversation) return;
+
+            // 如果已经有自定义标题，不生成总结
+            if (
+                conversation.title !== "新对话" &&
+                !conversation.title.startsWith("新对话 ")
+            ) {
+                return;
+            }
+
+            // 需要至少有一轮对话（用户消息 + AI回复）
+            const userMessages = conversation.messages.filter(
+                (m) => m.role === "user"
+            );
+            const assistantMessages = conversation.messages.filter(
+                (m) => m.role === "assistant"
+            );
+            if (userMessages.length < 1 || assistantMessages.length < 1) {
+                return;
+            }
+
+            try {
+                // 构建对话内容用于总结
+                const conversationText = conversation.messages
+                    .map(
+                        (m) =>
+                            `${m.role === "user" ? "用户" : "AI"}: ${m.content}`
+                    )
+                    .join("\n");
+
+                // 使用AI生成总结
+                const summaryPrompt = `请为以下对话生成一个简短的标题（不超过20个字符）：\n\n${conversationText}\n\n标题：`;
+
+                const host =
+                    import.meta.env.VITE_API_HOST || "http://localhost:3000";
+
+                const openai = new OpenAI({
+                    apiKey: "123456",
+                    baseURL: `${host}/api/v1`,
+                    dangerouslyAllowBrowser: true,
+                });
+
+                const response = await openai.chat.completions.create({
+                    model: "xai/grok-4.1-fast-non-reasoning",
+                    messages: [{ role: "user", content: summaryPrompt }],
+                    temperature: 0.7,
+                    stream: false,
+                });
+
+                // 处理OpenAI响应
+                const summary = response.choices[0]?.message?.content || "";
+                console.log("Summary API response:", summary); // 调试日志
+
+                // 清理总结文本
+                let cleanedSummary = summary.trim();
+                if (cleanedSummary.length > 20) {
+                    cleanedSummary = cleanedSummary.substring(0, 20) + "...";
+                }
+
+                if (cleanedSummary) {
+                    await this.renameConversation(
+                        conversationId,
+                        cleanedSummary
+                    );
+                }
+            } catch (error) {
+                console.error("生成总结标题失败:", error);
+                // 回退到基于第一条用户消息的标题
+                await this.autoGenerateTitle(conversationId);
             }
         },
 
