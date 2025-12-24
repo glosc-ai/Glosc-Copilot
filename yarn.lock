@@ -2,72 +2,47 @@
 # yarn lockfile v1
 
 
-"@ai-sdk/gateway@2.0.0-beta.85":
-  version "2.0.0-beta.85"
-  resolved "https://registry.yarnpkg.com/@ai-sdk/gateway/-/gateway-2.0.0-beta.85.tgz#732744b0e7dd847e7462ad1093d7cdd389fe0815"
-  integrity sha512-1LFCTwweCe1KWyBR/v64zbvNJbAu4JPooa+0JVUclcb90RYQH2FDIQCbxN4H6J8is4yaTkHW5tbLNjHpOkxZuA==
+"@ai-sdk/gateway@3.0.2", "@ai-sdk/gateway@^3.0.2":
+  version "3.0.2"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/gateway/-/gateway-3.0.2.tgz#0a345ae3c7cf6e9533936dcba2fb7a4664131f19"
+  integrity sha512-giJEg9ob45htbu3iautK+2kvplY2JnTj7ir4wZzYSQWvqGatWfBBfDuNCU5wSJt9BCGjymM5ZS9ziD42JGCZBw==
   dependencies:
-    "@ai-sdk/provider" "3.0.0-beta.27"
-    "@ai-sdk/provider-utils" "4.0.0-beta.53"
+    "@ai-sdk/provider" "3.0.0"
+    "@ai-sdk/provider-utils" "4.0.1"
     "@vercel/oidc" "3.0.5"
 
-"@ai-sdk/gateway@^2.0.0-beta.74":
-  version "2.0.22"
-  resolved "https://registry.yarnpkg.com/@ai-sdk/gateway/-/gateway-2.0.22.tgz#045ba030ad47728748efb60e213e9b1d6aa89ff6"
-  integrity sha512-6fHjDfCbjfj4vyMExuLei7ir2///E5sNwNZaobdJsJIxJjDSsjzSLGO/aUI7p9eOnB8XctDrDSF5ilwDGpi6eg==
+"@ai-sdk/mcp@^1.0.1":
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/mcp/-/mcp-1.0.1.tgz#f7e19f1d7af8a9a83622e6edf4370eb08734927a"
+  integrity sha512-4ejg3Nol3ma7r8Otj9m05+K0mpCoGq1gY1vp4IMS23uEflFHPRuZqq4PIogRZrD+r9FlZmbmwnxhJEcEob22nw==
   dependencies:
-    "@ai-sdk/provider" "2.0.0"
-    "@ai-sdk/provider-utils" "3.0.19"
-    "@vercel/oidc" "3.0.5"
-
-"@ai-sdk/mcp@^1.0.0-beta.31":
-  version "1.0.0-beta.39"
-  resolved "https://registry.yarnpkg.com/@ai-sdk/mcp/-/mcp-1.0.0-beta.39.tgz#e520a929a041cf7744e4a43e48c886f0e9d0d548"
-  integrity sha512-CiIKLyAUtAiYIn+YKX1JG/FFcneSip2sIdYNZh1AEshRxcShvP0HKI60XriNntfDXvZ1cKk6DEJMvDvZlQ/V8A==
-  dependencies:
-    "@ai-sdk/provider" "3.0.0-beta.27"
-    "@ai-sdk/provider-utils" "4.0.0-beta.53"
+    "@ai-sdk/provider" "3.0.0"
+    "@ai-sdk/provider-utils" "4.0.1"
     pkce-challenge "^5.0.0"
 
-"@ai-sdk/provider-utils@3.0.19":
-  version "3.0.19"
-  resolved "https://registry.yarnpkg.com/@ai-sdk/provider-utils/-/provider-utils-3.0.19.tgz#065e4ffe287ec536b882fdcdff0bd38c250a4873"
-  integrity sha512-W41Wc9/jbUVXVwCN/7bWa4IKe8MtxO3EyA0Hfhx6grnmiYlCvpI8neSYWFE0zScXJkgA/YK3BRybzgyiXuu6JA==
+"@ai-sdk/provider-utils@4.0.1":
+  version "4.0.1"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/provider-utils/-/provider-utils-4.0.1.tgz#6102fe98138021cd7196b2cdc1ce33f7f956426b"
+  integrity sha512-de2v8gH9zj47tRI38oSxhQIewmNc+OZjYIOOaMoVWKL65ERSav2PYYZHPSPCrfOeLMkv+Dyh8Y0QGwkO29wMWQ==
   dependencies:
-    "@ai-sdk/provider" "2.0.0"
-    "@standard-schema/spec" "^1.0.0"
-    eventsource-parser "^3.0.6"
-
-"@ai-sdk/provider-utils@4.0.0-beta.53":
-  version "4.0.0-beta.53"
-  resolved "https://registry.yarnpkg.com/@ai-sdk/provider-utils/-/provider-utils-4.0.0-beta.53.tgz#02b8cabbf60f19b833079ac953ec132cf1e717c1"
-  integrity sha512-83/aNTnKfurb4jdaOSfh1KgxY27SuWZbecc3bUfiUxLMtAMBLusgWMaaSbfl2VHufAoGLXIuRYRq4lXlNCdXzw==
-  dependencies:
-    "@ai-sdk/provider" "3.0.0-beta.27"
+    "@ai-sdk/provider" "3.0.0"
     "@standard-schema/spec" "^1.1.0"
     eventsource-parser "^3.0.6"
 
-"@ai-sdk/provider@2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@ai-sdk/provider/-/provider-2.0.0.tgz#b853c739d523b33675bc74b6c506b2c690bc602b"
-  integrity sha512-6o7Y2SeO9vFKB8lArHXehNuusnpddKPk7xqL7T2/b+OvXMRIXUO1rR4wcv1hAFUAT9avGZshty3Wlua/XA7TvA==
+"@ai-sdk/provider@3.0.0":
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/provider/-/provider-3.0.0.tgz#de5b60ae8570177604048e79edf4a032c92851e6"
+  integrity sha512-m9ka3ptkPQbaHHZHqDXDF9C9B5/Mav0KTdky1k2HZ3/nrW2t1AgObxIVPyGDWQNS9FXT/FS6PIoSjpcP/No8rQ==
   dependencies:
     json-schema "^0.4.0"
 
-"@ai-sdk/provider@3.0.0-beta.27":
-  version "3.0.0-beta.27"
-  resolved "https://registry.yarnpkg.com/@ai-sdk/provider/-/provider-3.0.0-beta.27.tgz#241d982b4ba76b17ca3284e308dc69d53f26c1a9"
-  integrity sha512-g/H1lyBQa5TAolD0t9uW552z0dwo2evMPxE9gu22zkEUvQSkOl8F1C0Jg31sUPTn9xmKnDK+hjWsAsZnOFE9mQ==
+"@ai-sdk/vue@^3.0.3":
+  version "3.0.3"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/vue/-/vue-3.0.3.tgz#fefc3fa945546b80b9e6f13398edc068857fc575"
+  integrity sha512-Hedm7dFFTHuvCYVXANF2dHF8bQUXIuzstZmAgZX1ImTiUU0FmJTfdif2yTkZLvv6JXs2fROJcR39VgPAlM7DMg==
   dependencies:
-    json-schema "^0.4.0"
-
-"@ai-sdk/vue@^3.0.0-beta.139":
-  version "3.0.0-beta.159"
-  resolved "https://registry.yarnpkg.com/@ai-sdk/vue/-/vue-3.0.0-beta.159.tgz#01377ae4e9d4c6cb8425a180b004070c1b83653f"
-  integrity sha512-dXfzAyb6yDTc2/V4ta8guI36dNTjVdHUEeGhAVZhnQCtR9V1tF57RgwvxqCKC2KdFd3IeZnJEkPS7jmBJ34MWA==
-  dependencies:
-    "@ai-sdk/provider-utils" "4.0.0-beta.53"
-    ai "6.0.0-beta.159"
+    "@ai-sdk/provider-utils" "4.0.1"
+    ai "6.0.3"
     swrv "^1.0.4"
 
 "@antfu/install-pkg@^1.1.0":
@@ -1072,7 +1047,7 @@
   resolved "https://registry.yarnpkg.com/@shikijs/vscode-textmate/-/vscode-textmate-10.0.2.tgz#a90ab31d0cc1dfb54c66a69e515bf624fa7b2224"
   integrity sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg==
 
-"@standard-schema/spec@^1.0.0", "@standard-schema/spec@^1.1.0":
+"@standard-schema/spec@^1.1.0":
   version "1.1.0"
   resolved "https://registry.yarnpkg.com/@standard-schema/spec/-/spec-1.1.0.tgz#a79b55dbaf8604812f52d140b2c9ab41bc150bb8"
   integrity sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==
@@ -2056,14 +2031,14 @@ ai-elements-vue@^1.0.0:
   resolved "https://registry.yarnpkg.com/ai-elements-vue/-/ai-elements-vue-1.0.1.tgz#ca6e07af74d535f82da47d4875c355948bc56778"
   integrity sha512-BanZJqVEThrIj+yzVRZ7XtAOe88PxLiegdneLTsAsEc01nncGbk0lyIz6/Sqdhuc2k72E/v3gJEMOBy+hHfihQ==
 
-ai@6.0.0-beta.159, ai@^6.0.0-beta.139:
-  version "6.0.0-beta.159"
-  resolved "https://registry.yarnpkg.com/ai/-/ai-6.0.0-beta.159.tgz#3972afdff74ecea29b8492eef3c57cd22180d820"
-  integrity sha512-iwyz0iycu0Tu1of9GLGwiXvNgW6dB+hnFE0dzWubTQFKz0C8nB8gjMwRTiNhNXO6HuN9+uokg9DO7HYM2CRExw==
+ai@6.0.3, ai@^6.0.3:
+  version "6.0.3"
+  resolved "https://registry.yarnpkg.com/ai/-/ai-6.0.3.tgz#6fa7f59a0cac12ca46b3abea5ca1cdf57c3b43bf"
+  integrity sha512-OOo+/C+sEyscoLnbY3w42vjQDICioVNyS+F+ogwq6O5RJL/vgWGuiLzFwuP7oHTeni/MkmX8tIge48GTdaV7QQ==
   dependencies:
-    "@ai-sdk/gateway" "2.0.0-beta.85"
-    "@ai-sdk/provider" "3.0.0-beta.27"
-    "@ai-sdk/provider-utils" "4.0.0-beta.53"
+    "@ai-sdk/gateway" "3.0.2"
+    "@ai-sdk/provider" "3.0.0"
+    "@ai-sdk/provider-utils" "4.0.1"
     "@opentelemetry/api" "1.9.0"
 
 ajv-formats@^3.0.1:
@@ -4375,10 +4350,10 @@ lucide-vue-next@^0.542.0:
   resolved "https://registry.yarnpkg.com/lucide-vue-next/-/lucide-vue-next-0.542.0.tgz#ff5287edc8da8043b716b0b91833de2fee9fc65e"
   integrity sha512-cJfyhFoneDgYTouHwUJEutXaCW5EQuRrBsvfELudWnMiwfqvcEtpZTFZLdZ5Nrqow+znzn+Iyhu3KeYIfa3mEg==
 
-lucide-vue-next@^0.560.0:
-  version "0.560.0"
-  resolved "https://registry.yarnpkg.com/lucide-vue-next/-/lucide-vue-next-0.560.0.tgz#e0efb64e65af5265596d6567675cfb0d60c9b457"
-  integrity sha512-vVUVEollzn33iloTKn0GqH7lyifvmXWCU2kRYz6ePt0QeJU8hXbWHC11vgv/4QaXEA1dEdWzlMh+Ckb0V30QDA==
+lucide-vue-next@^0.562.0:
+  version "0.562.0"
+  resolved "https://registry.yarnpkg.com/lucide-vue-next/-/lucide-vue-next-0.562.0.tgz#a4cc08c2d00b9664c768e5da76e6634212a02a23"
+  integrity sha512-LN0BLGKMFulv0lnfK29r14DcngRUhIqdcaL0zXTt2o0oS9odlrjCGaU3/X9hIihOjjN8l8e+Y9G/famcNYaI7Q==
 
 magic-string-ast@^1.0.2:
   version "1.0.3"
@@ -5694,6 +5669,22 @@ reka-ui@^2.6.1:
     defu "^6.1.4"
     ohash "^2.0.11"
 
+reka-ui@^2.7.0:
+  version "2.7.0"
+  resolved "https://registry.yarnpkg.com/reka-ui/-/reka-ui-2.7.0.tgz#906697e744e9a9682f89372a46ef384d4500eae7"
+  integrity sha512-m+XmxQN2xtFzBP3OAdIafKq7C8OETo2fqfxcIIxYmNN2Ch3r5oAf6yEYCIJg5tL/yJU2mHqF70dCCekUkrAnXA==
+  dependencies:
+    "@floating-ui/dom" "^1.6.13"
+    "@floating-ui/vue" "^1.1.6"
+    "@internationalized/date" "^3.5.0"
+    "@internationalized/number" "^3.5.0"
+    "@tanstack/vue-virtual" "^3.12.0"
+    "@vueuse/core" "^12.5.0"
+    "@vueuse/shared" "^12.5.0"
+    aria-hidden "^1.2.4"
+    defu "^6.1.4"
+    ohash "^2.0.11"
+
 remark-gfm@^4.0.1:
   version "4.0.1"
   resolved "https://registry.yarnpkg.com/remark-gfm/-/remark-gfm-4.0.1.tgz#33227b2a74397670d357bf05c098eaf8513f0d6b"
@@ -5981,7 +5972,7 @@ shebang-regex@^3.0.0:
   resolved "https://registry.yarnpkg.com/shebang-regex/-/shebang-regex-3.0.0.tgz#ae16f1644d873ecad843b0307b143362d4c42172"
   integrity sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==
 
-shiki@^3.12.1:
+shiki@^3.12.1, shiki@^3.20.0:
   version "3.20.0"
   resolved "https://registry.yarnpkg.com/shiki/-/shiki-3.20.0.tgz#1eb8669857373d74e90822e03663a86b5b1f9a24"
   integrity sha512-kgCOlsnyWb+p0WU+01RjkCH+eBVsjL1jOwUYWv0YDWkM2/A46+LDKVs5yZCUXjJG6bj4ndFoAg5iLIIue6dulg==

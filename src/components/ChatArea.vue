@@ -55,6 +55,9 @@ const groupedModels = computed(() =>
     groupModelsByProvider(availableModels.value)
 );
 const selectedModelData = computed(() => selectedModel.value);
+const selectedModelSearchTerm = computed(() =>
+    selectedModel.value ? getModelSearchTerm(selectedModel.value) : ""
+);
 const openModelSelector = ref(false);
 
 const checkpoints = ref<CheckpointType[]>([]);
@@ -77,6 +80,24 @@ const chat = ChatUtils.getChat({
 const status = computed<ChatStatus>(() => chat.status);
 const messages = computed<UIMessage[]>(() => chat.messages);
 const error = computed(() => chat.error);
+
+// Prevent duplicate sends caused by rapid consecutive submits before `chat.status` updates.
+const sendLock = ref(false);
+const isChatBusy = computed(
+    () =>
+        sendLock.value ||
+        status.value === "submitted" ||
+        status.value === "streaming"
+);
+
+watch(
+    () => status.value,
+    (next) => {
+        if (next !== "submitted" && next !== "streaming") {
+            sendLock.value = false;
+        }
+    }
+);
 
 // ===== 用户消息编辑 / 重新发送 =====
 const editingUserMessageId = ref<string | null>(null);
@@ -111,19 +132,27 @@ function replaceTextParts(parts: any[], nextText: string): any[] {
 }
 
 async function sendChatMessage(text: string, messageId?: string) {
+    if (isChatBusy.value) return;
+    sendLock.value = true;
     const tools = await mcpStore.getCachedTools();
     clientToolsRef.value = tools;
 
-    await chat.sendMessage(
-        { text, messageId },
-        {
-            body: {
-                model: selectedModel.value?.id,
-                mcpEnabled: hasEnabledServers.value,
-                tools,
-            },
+    try {
+        await chat.sendMessage(
+            { text, messageId },
+            {
+                body: {
+                    model: selectedModel.value?.id,
+                    mcpEnabled: hasEnabledServers.value,
+                    tools,
+                },
+            }
+        );
+    } finally {
+        if (status.value !== "submitted" && status.value !== "streaming") {
+            sendLock.value = false;
         }
-    );
+    }
 }
 
 function truncateChatToMessage(messageId: string, updatedText?: string) {
@@ -329,15 +358,17 @@ async function handleSubmit(message: PromptInputMessage) {
     const hasAttachments = Boolean(message.files?.length);
 
     if (!hasText && !hasAttachments) return;
+    if (isChatBusy.value) return;
 
     try {
+        sendLock.value = true;
         // Use cached tools to avoid reloading on each message
         const tools = await mcpStore.getCachedTools();
 
         // 供客户端 onToolCall 使用：真正执行工具并回填 output
         clientToolsRef.value = tools;
 
-        chat.sendMessage(
+        const p = chat.sendMessage(
             {
                 text: hasText ? message.text : "Sent with attachments",
             },
@@ -349,9 +380,14 @@ async function handleSubmit(message: PromptInputMessage) {
                 },
             }
         );
-        message.text = "";
+
+        p.catch((error) => {
+            console.error("Failed to send message", error);
+            sendLock.value = false;
+        });
     } catch (error) {
         console.error("Failed to send message", error);
+        sendLock.value = false;
     }
 }
 
@@ -371,7 +407,12 @@ const hasPendingInput = computed(() => {
     );
 });
 
-const submitDisabled = computed(() => !hasPendingInput.value && !status.value);
+const submitDisabled = computed(
+    () =>
+        !hasPendingInput.value ||
+        isChatBusy.value ||
+        promptInput.isLoading.value
+);
 
 function getSourceUrlParts(message: UIMessage) {
     return (
@@ -602,7 +643,7 @@ const contextProps: any = computed(() => ({
                                         >
                                             <Textarea
                                                 v-model="editingUserMessageText"
-                                                class="min-h-[80px]"
+                                                class="min-h-20"
                                             />
                                         </template>
                                         <template v-else>
@@ -836,7 +877,7 @@ const contextProps: any = computed(() => ({
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                         <div
-                                            class="p-2 text-xs text-muted-foreground max-h-[300px] overflow-y-auto"
+                                            class="p-2 text-xs text-muted-foreground max-h-75 overflow-y-auto"
                                         >
                                             <div
                                                 v-if="
@@ -986,7 +1027,9 @@ const contextProps: any = computed(() => ({
                                     />
                                 </Button>
                             </ModelSelectorTrigger>
-                            <ModelSelectorContent>
+                            <ModelSelectorContent
+                                :model-value="selectedModelSearchTerm"
+                            >
                                 <ModelSelectorInput placeholder="搜索模型..." />
                                 <ModelSelectorList>
                                     <ModelSelectorEmpty

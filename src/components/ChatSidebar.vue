@@ -5,10 +5,46 @@ import { Plus, MessageSquare, Trash2, Pencil } from "lucide-vue-next";
 import { useChatStore } from "@/stores/chat";
 import { storeToRefs } from "pinia";
 import { cn } from "@/lib/utils";
-import { nextTick, ref } from "vue";
+import { nextTick, ref, watch } from "vue";
 
 const chatStore = useChatStore();
 const { conversationsItems, activeKey } = storeToRefs(chatStore);
+
+// ===== 可拖拽调整宽度 =====
+const sidebarWidth = ref(
+    parseInt(localStorage.getItem("chatSidebarWidth") || "256")
+); // 从localStorage加载，默认256px
+const isResizing = ref(false);
+
+const startResize = (event: MouseEvent) => {
+    isResizing.value = true;
+    document.addEventListener("mousemove", resize);
+    document.addEventListener("mouseup", stopResize);
+    event.preventDefault();
+};
+
+const resize = (event: MouseEvent) => {
+    if (isResizing.value) {
+        const newWidth = event.clientX;
+        if (newWidth >= 200 && newWidth <= 500) {
+            // 限制最小和最大宽度
+            sidebarWidth.value = newWidth;
+        }
+    }
+};
+
+const stopResize = () => {
+    isResizing.value = false;
+    document.removeEventListener("mousemove", resize);
+    document.removeEventListener("mouseup", stopResize);
+    // 保存宽度到localStorage
+    localStorage.setItem("chatSidebarWidth", sidebarWidth.value.toString());
+};
+
+// 监听宽度变化并保存（作为备用方案）
+watch(sidebarWidth, (newWidth) => {
+    localStorage.setItem("chatSidebarWidth", newWidth.toString());
+});
 
 const createNewChat = async () => {
     await chatStore.createNewConversation();
@@ -81,7 +117,10 @@ const onDrop = async (targetKey: string, event: DragEvent) => {
 </script>
 
 <template>
-    <div class="flex flex-col h-full border-r bg-muted/10 w-64">
+    <div
+        class="flex flex-col h-full border-r bg-muted/10 relative"
+        :style="{ width: sidebarWidth + 'px' }"
+    >
         <div class="p-4">
             <Button
                 @click="createNewChat"
@@ -91,12 +130,6 @@ const onDrop = async (targetKey: string, event: DragEvent) => {
                 <Plus class="w-4 h-4" />
                 新建对话
             </Button>
-            <!-- <Button
-                class="w-full justify-start gap-2"
-                @click="$router.push('/test')"
-                variant="default"
-                >测试</Button
-            > -->
         </div>
 
         <div class="flex-1 overflow-y-auto px-2">
@@ -155,6 +188,12 @@ const onDrop = async (targetKey: string, event: DragEvent) => {
                 </div>
             </div>
         </div>
+
+        <!-- 拖拽调整宽度手柄 -->
+        <div
+            class="absolute top-0 right-0 w-1 h-full cursor-col-resize bg-border hover:bg-accent transition-colors"
+            @mousedown="startResize"
+        ></div>
 
         <!-- <div class="p-4 border-t">
             <Button

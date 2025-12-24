@@ -3,6 +3,7 @@ import type { HTMLAttributes } from "vue";
 import { cn } from "@/lib/utils";
 import { StreamMarkdown } from "streamdown-vue";
 import { computed, useSlots } from "vue";
+import StreamdownCodeBlock from "../code-block/StreamdownCodeBlock.vue";
 
 interface Props {
     content?: string;
@@ -23,6 +24,8 @@ const slotContent = computed<string | undefined>(() => {
 
 const md = computed(() => (slotContent.value ?? props.content ?? "") as string);
 
+const components = { codeblock: StreamdownCodeBlock };
+
 const shikiTheme = computed(() => {
     // 流式期间禁用高亮，避免每个增量都触发昂贵的 Shiki 处理
     if (props.isStreaming) return undefined;
@@ -36,6 +39,7 @@ const shikiTheme = computed(() => {
 <template>
     <StreamMarkdown
         :shiki-theme="shikiTheme"
+        :components="components"
         :content="md"
         :class="
             cn(
