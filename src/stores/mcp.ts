@@ -41,27 +41,11 @@ export const useMcpStore = defineStore("mcp", {
             const promises = this.servers.map(async (server) => {
                 if (!server.enabled) return;
                 try {
-                    const client = await McpUtils.startServer(server);
-                    const tools = await client.tools();
-                    const resources = await client
-                        .listResources()
-                        .catch(() => ({ resources: [] }));
-                    const templates = await client
-                        .listResourceTemplates()
-                        .catch(() => ({ resourceTemplates: [] }));
-                    const prompts = await client
-                        .listPrompts()
-                        .catch(() => ({ prompts: [] }));
-
-                    this.setServerCapability(server.id, {
-                        success: true,
-                        tools,
-                        resources,
-                        templates,
-                        prompts,
-                    });
+                    // Use a single, resilient capability fetch path (same semantics as MCP page "启动" flow).
+                    const caps = await McpUtils.getActiveCapabilities(server);
+                    this.setServerCapability(server.id, caps);
                 } catch (e) {
-                    console.error(`Check failed for ${server.name}:`, e);
+                    console.log(`Check failed for ${server.name}:`, e);
                     const errorText =
                         e instanceof Error
                             ? e.message

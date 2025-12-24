@@ -137,31 +137,43 @@ export class McpUtils {
 
     private static async listResources(mcpClient: any) {
         try {
+            if (!mcpClient || typeof mcpClient.listResources !== "function") {
+                return { resources: [] };
+            }
             return await mcpClient.listResources();
         } catch (error) {
             console.warn("Error fetching resources from MCP client:", error);
-            return [];
+            return { resources: [] };
         }
     }
 
     private static async listResourceTemplates(mcpClient: any) {
         try {
+            if (
+                !mcpClient ||
+                typeof mcpClient.listResourceTemplates !== "function"
+            ) {
+                return { resourceTemplates: [] };
+            }
             return await mcpClient.listResourceTemplates();
         } catch (error) {
             console.error(
                 "Error fetching resource templates from MCP client:",
                 error
             );
-            return [];
+            return { resourceTemplates: [] };
         }
     }
 
     private static async listPrompts(mcpClient: any) {
         try {
+            if (!mcpClient || typeof mcpClient.listPrompts !== "function") {
+                return { prompts: [] };
+            }
             return await mcpClient.listPrompts();
         } catch (error) {
             console.error("Error fetching prompts from MCP client:", error);
-            return [];
+            return { prompts: [] };
         }
     }
 

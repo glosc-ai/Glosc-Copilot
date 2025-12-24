@@ -22,8 +22,9 @@ export async function fetchAvailableModels(): Promise<ModelInfo[]> {
         const data: ModelsResponse = await response.json();
         return data.data || [];
     } catch (error) {
-        console.error("Failed to fetch models:", error);
-        throw error;
+        console.log("Failed to fetch models:", error);
+        ElMessage.error("无法获取模型列表，请检查网络连接或配置。");
+        return [];
     }
 }
 
@@ -50,12 +51,15 @@ export function getModelProvider(modelId: string): string {
 export function groupModelsByProvider(
     models: ModelInfo[]
 ): Record<string, ModelInfo[]> {
-    return models.reduce((acc, model) => {
-        const provider = model.owned_by || "unknown";
-        if (!acc[provider]) {
-            acc[provider] = [];
-        }
-        acc[provider].push(model);
-        return acc;
-    }, {} as Record<string, ModelInfo[]>);
+    return models.reduce(
+        (acc, model) => {
+            const provider = model.owned_by || "unknown";
+            if (!acc[provider]) {
+                acc[provider] = [];
+            }
+            acc[provider].push(model);
+            return acc;
+        },
+        {} as Record<string, ModelInfo[]>
+    );
 }
