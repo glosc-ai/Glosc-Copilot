@@ -31,8 +31,78 @@ export const useChatStore = defineStore("chat", {
         hasPendingChanges: false,
         saveTimer: null as any,
     }),
-    getters: {},
+    getters: {
+        // 按日期分组的会话列表
+        groupedConversations: (state) => {
+            const groups: Record<string, ConversationItem[]> = {};
+            const now = new Date();
+            const today = new Date(
+                now.getFullYear(),
+                now.getMonth(),
+                now.getDate()
+            );
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            state.conversationsItems.forEach((item) => {
+                const date = new Date(item.timestamp || 0);
+                let dateKey: string;
+
+                if (date >= today) {
+                    dateKey = "今天";
+                } else if (date >= yesterday) {
+                    dateKey = "昨天";
+                } else {
+                    dateKey = date.toISOString().split("T")[0]; // YYYY-MM-DD
+                }
+
+                if (!groups[dateKey]) {
+                    groups[dateKey] = [];
+                }
+                groups[dateKey].push(item);
+            });
+
+            // 按日期排序：今天、昨天，然后按日期降序
+            const sortedGroups: Record<string, ConversationItem[]> = {};
+            const keys = Object.keys(groups).sort((a, b) => {
+                if (a === "今天") return -1;
+                if (b === "今天") return 1;
+                if (a === "昨天") return -1;
+                if (b === "昨天") return 1;
+                return b.localeCompare(a); // 日期降序
+            });
+
+            keys.forEach((key) => {
+                sortedGroups[key] = groups[key].sort(
+                    (a, b) => (b.timestamp || 0) - (a.timestamp || 0)
+                );
+            });
+
+            return sortedGroups;
+        },
+    },
     actions: {
+        async loadPersistedSelectedModelId() {
+            try {
+                return await storeUtils.get<string>("chat_selected_model_id");
+            } catch (error) {
+                console.error("加载已选模型失败:", error);
+                return null;
+            }
+        },
+
+        async persistSelectedModelId(modelId: string | null) {
+            try {
+                if (!modelId) {
+                    await storeUtils.delete("chat_selected_model_id");
+                    return;
+                }
+                await storeUtils.set("chat_selected_model_id", modelId, false);
+            } catch (error) {
+                console.error("保存已选模型失败:", error);
+            }
+        },
+
         // ============ 初始化 ============
         async init() {
             if (this.isInitialized) return;
@@ -468,14 +538,38 @@ export const useChatStore = defineStore("chat", {
             this.modelsError = null;
             try {
                 this.availableModels = await fetchAvailableModels();
-                // 如果还没有选中模型，选择默认模型或第一个
-                if (!this.selectedModel && this.availableModels.length > 0) {
+
+                if (this.availableModels.length > 0) {
+                    const persistedModelId =
+                        await this.loadPersistedSelectedModelId();
+
+                    const currentModelId = this.selectedModel?.id;
+                    const desiredModelId = currentModelId || persistedModelId;
+
                     const defaultModelId = "xai/grok-code-fast-1";
-                    const defaultModel = this.availableModels.find(
+
+                    const resolvedModel = desiredModelId
+                        ? this.availableModels.find(
+                              (m) => m.id === desiredModelId
+                          )
+                        : undefined;
+
+                    const fallbackDefaultModel = this.availableModels.find(
                         (m) => m.id === defaultModelId
                     );
-                    this.selectedModel =
-                        defaultModel || this.availableModels[0];
+
+                    const nextModel =
+                        resolvedModel ||
+                        fallbackDefaultModel ||
+                        this.availableModels[0];
+
+                    if (this.selectedModel?.id !== nextModel?.id) {
+                        this.selectedModel = nextModel;
+                    }
+
+                    await this.persistSelectedModelId(
+                        this.selectedModel?.id || null
+                    );
                 }
             } catch (error) {
                 this.modelsError =
@@ -488,6 +582,7 @@ export const useChatStore = defineStore("chat", {
 
         selectModel(model: ModelInfo | null) {
             this.selectedModel = model;
+            void this.persistSelectedModelId(model?.id || null);
         },
     },
 });

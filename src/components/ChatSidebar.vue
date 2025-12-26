@@ -1,14 +1,47 @@
 <script setup lang="ts">
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, MessageSquare, Trash2, Pencil } from "lucide-vue-next";
+import {
+    Plus,
+    MessageSquare,
+    Trash2,
+    Pencil,
+    ChevronDown,
+    ChevronRight,
+} from "lucide-vue-next";
 import { useChatStore } from "@/stores/chat";
 import { storeToRefs } from "pinia";
 import { cn } from "@/lib/utils";
 import { nextTick, ref, watch } from "vue";
 
 const chatStore = useChatStore();
-const { conversationsItems, activeKey } = storeToRefs(chatStore);
+const { conversationsItems, activeKey, groupedConversations } =
+    storeToRefs(chatStore);
+
+// ===== 分组折叠状态 =====
+const collapsedGroups = ref<Record<string, boolean>>({});
+
+// 切换分组折叠状态
+const toggleGroup = (groupKey: string) => {
+    collapsedGroups.value[groupKey] = !collapsedGroups.value[groupKey];
+};
+
+// 初始化分组折叠状态（默认展开）
+watch(
+    groupedConversations,
+    (newGroups) => {
+        const newCollapsed: Record<string, boolean> = {};
+        Object.keys(newGroups).forEach((key) => {
+            if (!(key in collapsedGroups.value)) {
+                newCollapsed[key] = false; // 默认展开
+            } else {
+                newCollapsed[key] = collapsedGroups.value[key];
+            }
+        });
+        collapsedGroups.value = newCollapsed;
+    },
+    { immediate: true }
+);
 
 // ===== 可拖拽调整宽度 =====
 const sidebarWidth = ref(
@@ -133,57 +166,90 @@ const onDrop = async (targetKey: string, event: DragEvent) => {
         </div>
 
         <div class="flex-1 overflow-y-auto px-2">
-            <div class="space-y-1">
+            <div class="space-y-2">
                 <div
-                    v-for="item in conversationsItems"
-                    :key="item.key"
-                    @click="selectChat(item.key)"
-                    draggable="true"
-                    @dragstart="(e: DragEvent) => onDragStart(item.key, e)"
-                    @dragover="onDragOver"
-                    @drop="(e: DragEvent) => onDrop(item.key, e)"
-                    :class="
-                        cn(
-                            'flex items-center justify-between p-2 rounded-md cursor-pointer text-sm transition-colors group',
-                            activeKey === item.key
-                                ? 'bg-accent text-accent-foreground'
-                                : 'hover:bg-accent/50 text-muted-foreground'
-                        )
-                    "
+                    v-for="(items, groupKey) in groupedConversations"
+                    :key="groupKey"
+                    class="space-y-1"
                 >
-                    <div class="flex items-center gap-2 overflow-hidden">
-                        <MessageSquare class="w-4 h-4 shrink-0" />
-                        <template v-if="editingKey === item.key">
-                            <Input
-                                v-model="editingTitle"
-                                class="h-7"
-                                @click.stop
-                                @keydown.enter.prevent="confirmRename"
-                                @keydown.esc.prevent="cancelRename"
-                                @blur="confirmRename"
-                            />
-                        </template>
-                        <template v-else>
-                            <span class="truncate">{{ item.label }}</span>
-                        </template>
+                    <!-- 分组标题 -->
+                    <div
+                        class="flex items-center gap-2 px-2 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                        @click="toggleGroup(groupKey)"
+                    >
+                        <ChevronDown
+                            v-if="!collapsedGroups[groupKey]"
+                            class="w-3 h-3"
+                        />
+                        <ChevronRight v-else class="w-3 h-3" />
+                        <span>{{ groupKey }}</span>
+                        <span class="ml-auto text-xs opacity-50"
+                            >({{ items.length }})</span
+                        >
                     </div>
-                    <div class="flex items-center gap-1">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            class="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                            @click="(e: any) => startRename(item.key, e)"
+
+                    <!-- 分组内容 -->
+                    <div v-show="!collapsedGroups[groupKey]" class="space-y-1">
+                        <div
+                            v-for="item in items"
+                            :key="item.key"
+                            @click="selectChat(item.key)"
+                            draggable="true"
+                            @dragstart="
+                                (e: DragEvent) => onDragStart(item.key, e)
+                            "
+                            @dragover="onDragOver"
+                            @drop="(e: DragEvent) => onDrop(item.key, e)"
+                            :class="
+                                cn(
+                                    'flex items-center justify-between p-2 rounded-md cursor-pointer text-sm transition-colors group',
+                                    activeKey === item.key
+                                        ? 'bg-accent text-accent-foreground'
+                                        : 'hover:bg-accent/50 text-muted-foreground'
+                                )
+                            "
                         >
-                            <Pencil class="w-3 h-3" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            class="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                            @click="(e: any) => deleteChat(item.key, e)"
-                        >
-                            <Trash2 class="w-3 h-3" />
-                        </Button>
+                            <div
+                                class="flex items-center gap-2 overflow-hidden"
+                            >
+                                <MessageSquare class="w-4 h-4 shrink-0" />
+                                <template v-if="editingKey === item.key">
+                                    <Input
+                                        v-model="editingTitle"
+                                        class="h-7"
+                                        @click.stop
+                                        @keydown.enter.prevent="confirmRename"
+                                        @keydown.esc.prevent="cancelRename"
+                                        @blur="confirmRename"
+                                    />
+                                </template>
+                                <template v-else>
+                                    <span class="truncate">{{
+                                        item.label
+                                    }}</span>
+                                </template>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    class="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    @click="
+                                        (e: any) => startRename(item.key, e)
+                                    "
+                                >
+                                    <Pencil class="w-3 h-3" />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    class="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    @click="(e: any) => deleteChat(item.key, e)"
+                                >
+                                    <Trash2 class="w-3 h-3" />
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
