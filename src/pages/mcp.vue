@@ -821,7 +821,7 @@ onMounted(async () => {
 
                 <div
                     v-else
-                    class="py-4 h-[400px] border rounded-md overflow-hidden"
+                    class="py-4 h-100 border rounded-md overflow-hidden"
                 >
                     <Codemirror
                         v-model="jsonContent"

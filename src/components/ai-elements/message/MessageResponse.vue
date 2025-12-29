@@ -41,12 +41,7 @@ const shikiTheme = computed(() => {
         :shiki-theme="shikiTheme"
         :components="components"
         :content="md"
-        :class="
-            cn(
-                'size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
-                props.class
-            )
-        "
+        :class="cn(props.class)"
         v-bind="$attrs"
     />
 </template>

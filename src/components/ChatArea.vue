@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { type ChatStatus, type SourceUrlUIPart, type UIMessage } from "ai";
-import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
+import type {
+    AttachmentFile,
+    PromptInputMessage,
+} from "@/components/ai-elements/prompt-input";
 import { ChatUtils } from "@/utils/ChatUtils";
 import type { StoredChatMessage } from "@/utils/interface";
 import { Textarea } from "@/components/ui/textarea";
+import { Image } from "@/components/ai-elements/image";
 
 import {
     CopyIcon,
@@ -112,6 +116,26 @@ function getUserMessageText(message: UIMessage): string {
     );
 }
 
+function getMessageFileParts(message: UIMessage): any[] {
+    return (message.parts ?? []).filter((p: any) => p?.type === "file");
+}
+
+function asAttachmentFile(
+    part: any,
+    messageId: string,
+    index: number
+): AttachmentFile {
+    const id = part?.id ?? `${messageId}-file-${index}`;
+    const filename = part?.filename ?? part?.name;
+
+    return {
+        ...part,
+        id,
+        type: "file",
+        filename,
+    } as AttachmentFile;
+}
+
 function replaceTextParts(parts: any[], nextText: string): any[] {
     const result: any[] = [];
     let replaced = false;
@@ -131,7 +155,11 @@ function replaceTextParts(parts: any[], nextText: string): any[] {
     return result;
 }
 
-async function sendChatMessage(text: string, messageId?: string) {
+async function sendChatMessage(
+    text: string,
+    messageId?: string,
+    files?: any[]
+) {
     if (isChatBusy.value) return;
     sendLock.value = true;
     const tools = await mcpStore.getCachedTools();
@@ -139,7 +167,7 @@ async function sendChatMessage(text: string, messageId?: string) {
 
     try {
         await chat.sendMessage(
-            { text, messageId },
+            { text, messageId, files },
             {
                 body: {
                     model: selectedModel.value?.id,
@@ -186,8 +214,9 @@ function cancelEditUserMessage() {
 async function resendUserMessage(message: UIMessage) {
     if (status.value === "streaming" || status.value === "submitted") return;
     const text = getUserMessageText(message);
+    const files = message.parts.filter((part) => part.type === "file") as any[];
     if (!truncateChatToMessage(message.id)) return;
-    await sendChatMessage(text, message.id);
+    await sendChatMessage(text, message.id, files);
 }
 
 async function confirmEditAndResendUserMessage() {
@@ -196,9 +225,17 @@ async function confirmEditAndResendUserMessage() {
     const messageId = editingUserMessageId.value;
     if (!messageId || !nextText) return;
 
+    // 获取原始消息的文件信息
+    const originalMessage = messages.value.find((m) => m.id === messageId);
+    const files = originalMessage
+        ? (originalMessage.parts.filter(
+              (part) => part.type === "file"
+          ) as any[])
+        : [];
+
     if (!truncateChatToMessage(messageId, nextText)) return;
     cancelEditUserMessage();
-    await sendChatMessage(nextText, messageId);
+    await sendChatMessage(nextText, messageId, files);
 }
 
 watch(error, (newError) => {
@@ -370,7 +407,8 @@ async function handleSubmit(message: PromptInputMessage) {
 
         const p = chat.sendMessage(
             {
-                text: hasText ? message.text : "Sent with attachments",
+                text: hasText ? message.text : "已发送附件",
+                files: hasAttachments ? message.files : [],
             },
             {
                 body: {
@@ -542,6 +580,16 @@ const scheduleRecalcUsage = (delayMs = 300) => {
     }, delayMs);
 };
 
+const imageData = (part: any): any => {
+    console.log(part);
+
+    return {
+        base64: part.url,
+        mediaType: part.mediaType,
+        uint8Array: new Uint8Array([]),
+    };
+};
+
 watch(
     () => status.value,
     (next, prev) => {
@@ -559,13 +607,6 @@ watch(
     () => messages.value.length,
     () => scheduleRecalcUsage(0)
 );
-
-const contextProps: any = computed(() => ({
-    usedTokens: calculatedUsage.value.totalTokens,
-    maxTokens: selectedModel.value?.context_window || 128000,
-    modelId: selectedModel.value?.id || "openai:gpt-5",
-    usage: calculatedUsage.value,
-}));
 </script>
 
 <template>
@@ -625,6 +666,32 @@ const contextProps: any = computed(() => ({
 
                             <!-- 内容 -->
                             <MessageContent>
+                                <div
+                                    v-if="
+                                        message.role === 'user' &&
+                                        getMessageFileParts(message).length > 0
+                                    "
+                                    class="flex flex-wrap items-center gap-2 p-3 w-full"
+                                >
+                                    <PromptInputAttachment
+                                        v-for="(
+                                            filePart, fileIndex
+                                        ) in getMessageFileParts(message)"
+                                        :key="
+                                            filePart.id ||
+                                            `${message.id}-file-${fileIndex}`
+                                        "
+                                        :file="
+                                            asAttachmentFile(
+                                                filePart,
+                                                message.id,
+                                                fileIndex
+                                            )
+                                        "
+                                        readonly
+                                    />
+                                </div>
+
                                 <template
                                     v-for="(part, partIndex) in message.parts"
                                     :key="partIndex"
@@ -693,6 +760,21 @@ const contextProps: any = computed(() => ({
                                             ></ToolOutput>
                                         </ToolContent>
                                     </Tool>
+                                    <Image
+                                        v-if="
+                                            part.type === 'file' &&
+                                            part.mediaType.startsWith(
+                                                'image/'
+                                            ) &&
+                                            message.role === 'assistant'
+                                        "
+                                        v-bind="imageData(part)"
+                                        class="max-w-[90%] h-auto rounded-md"
+                                        :alt="
+                                            (part as any).alt ||
+                                            'Generated image'
+                                        "
+                                    />
 
                                     <MessageActions
                                         v-if="
@@ -818,7 +900,6 @@ const contextProps: any = computed(() => ({
                         </PromptInputActionMenu>
 
                         <PromptInputSpeechButton />
-
                         <DropdownMenu>
                             <DropdownMenuTrigger as-child>
                                 <PromptInputButton
@@ -1172,20 +1253,6 @@ const contextProps: any = computed(() => ({
                                 </ModelSelectorList>
                             </ModelSelectorContent>
                         </ModelSelector>
-                        <Context v-bind="contextProps">
-                            <ContextTrigger />
-
-                            <ContextContent>
-                                <ContextContentHeader />
-                                <ContextContentBody>
-                                    <ContextInputUsage />
-                                    <ContextOutputUsage />
-                                    <ContextReasoningUsage />
-                                    <ContextCacheUsage />
-                                </ContextContentBody>
-                                <ContextContentFooter />
-                            </ContextContent>
-                        </Context>
                     </PromptInputTools>
 
                     <PromptInputSubmit
