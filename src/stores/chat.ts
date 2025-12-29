@@ -45,7 +45,15 @@ export const useChatStore = defineStore("chat", {
             yesterday.setDate(yesterday.getDate() - 1);
 
             state.conversationsItems.forEach((item) => {
-                const date = new Date(item.timestamp || 0);
+                // 获取最后一次会话时间（最后一条消息的时间）
+                const conversation = state.conversations[item.key];
+                const lastMessageTime =
+                    conversation?.messages?.length > 0
+                        ? conversation.messages[
+                              conversation.messages.length - 1
+                          ].timestamp
+                        : item.timestamp || 0;
+                const date = new Date(lastMessageTime);
                 let dateKey: string;
 
                 if (date >= today) {
@@ -73,9 +81,18 @@ export const useChatStore = defineStore("chat", {
             });
 
             keys.forEach((key) => {
-                sortedGroups[key] = groups[key].sort(
-                    (a, b) => (b.timestamp || 0) - (a.timestamp || 0)
-                );
+                sortedGroups[key] = groups[key].sort((a, b) => {
+                    // 获取最后一次消息时间进行排序
+                    const getLastMessageTime = (item: ConversationItem) => {
+                        const conversation = state.conversations[item.key];
+                        return conversation?.messages?.length > 0
+                            ? conversation.messages[
+                                  conversation.messages.length - 1
+                              ].timestamp
+                            : item.timestamp || 0;
+                    };
+                    return getLastMessageTime(b) - getLastMessageTime(a);
+                });
             });
 
             return sortedGroups;
@@ -111,13 +128,8 @@ export const useChatStore = defineStore("chat", {
                 // 加载会话数据
                 await this.loadConversations();
 
-                // 如果没有会话，创建默认会话
-                if (this.conversationsItems.length === 0) {
-                    await this.createNewConversation();
-                } else {
-                    // 选中第一个会话
-                    this.activeKey = this.conversationsItems[0].key;
-                }
+                // 不自动选中会话，保持 activeKey 为空以显示欢迎页面
+                // 如果需要，可以手动选择会话
 
                 this.isInitialized = true;
             } catch (error) {
