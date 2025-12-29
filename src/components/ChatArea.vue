@@ -8,6 +8,11 @@ import { ChatUtils } from "@/utils/ChatUtils";
 import type { StoredChatMessage } from "@/utils/interface";
 import { Textarea } from "@/components/ui/textarea";
 import { Image } from "@/components/ai-elements/image";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 
 import {
     CopyIcon,
@@ -21,6 +26,7 @@ import {
     Coins,
     Settings2,
     Pencil,
+    X,
 } from "lucide-vue-next";
 
 import { formatModelName, groupModelsByProvider } from "@/utils/ModelApi";
@@ -40,8 +46,13 @@ import { useRouter } from "vue-router";
 // import { nanoid } from "nanoid";
 
 const chatStore = useChatStore();
-const { activeKey, conversations, selectedModel, availableModels } =
-    storeToRefs(chatStore);
+const {
+    activeKey,
+    conversations,
+    selectedModel,
+    availableModels,
+    recentModelUsage,
+} = storeToRefs(chatStore);
 const mcpStore = useMcpStore();
 const { servers } = storeToRefs(mcpStore);
 const router = useRouter();
@@ -55,8 +66,71 @@ function toggleServer(id: string, checked: boolean) {
     mcpStore.updateServer(id, { enabled: checked });
 }
 
+const selectedModelType = ref<string>("all");
+const selectedModelTags = ref<string[]>([]);
+
+const availableModelTypes = computed(() => {
+    const types = new Set<string>();
+    for (const m of availableModels.value || []) {
+        if (m?.type) types.add(m.type);
+    }
+    return Array.from(types).sort((a, b) => a.localeCompare(b));
+});
+
+const availableModelTags = computed(() => {
+    const tags = new Set<string>();
+    for (const m of availableModels.value || []) {
+        for (const t of m?.tags || []) {
+            if (t) tags.add(t);
+        }
+    }
+    return Array.from(tags).sort((a, b) => a.localeCompare(b));
+});
+
+function clearModelFilters() {
+    selectedModelType.value = "all";
+    selectedModelTags.value = [];
+}
+
+function updateSelectedTag(tag: string, checked: boolean) {
+    const next = new Set(selectedModelTags.value);
+    if (checked) next.add(tag);
+    else next.delete(tag);
+    selectedModelTags.value = Array.from(next);
+}
+
+function matchesModelFilters(m: ModelInfo) {
+    if (selectedModelType.value !== "all" && m.type !== selectedModelType.value)
+        return false;
+    if (selectedModelTags.value.length > 0) {
+        const tags = m.tags || [];
+        // 多选标签：采用“必须全部包含”的筛选语义
+        if (!selectedModelTags.value.every((t) => tags.includes(t)))
+            return false;
+    }
+    return true;
+}
+
+const recentModels = computed(() => {
+    const usage = recentModelUsage.value || {};
+    return (availableModels.value || [])
+        .filter((m) => !!usage[m.id])
+        .filter(matchesModelFilters)
+        .sort((a, b) => (usage[b.id] || 0) - (usage[a.id] || 0));
+});
+
+const recentModelIdSet = computed(
+    () => new Set(recentModels.value.map((m) => m.id))
+);
+
+const filteredModels = computed(() =>
+    (availableModels.value || [])
+        .filter((m) => !recentModelIdSet.value.has(m.id))
+        .filter(matchesModelFilters)
+);
+
 const groupedModels = computed(() =>
-    groupModelsByProvider(availableModels.value)
+    groupModelsByProvider(filteredModels.value)
 );
 const selectedModelData = computed(() => selectedModel.value);
 const selectedModelSearchTerm = computed(() =>
@@ -69,6 +143,9 @@ const checkpoints = ref<CheckpointType[]>([]);
 onMounted(async () => {
     await mcpStore.init();
     mcpStore.checkConnections();
+    if (!chatStore.recentModelUsageLoaded) {
+        await chatStore.loadRecentModelUsage();
+    }
     if (availableModels.value.length === 0) {
         await chatStore.loadAvailableModels();
     }
@@ -280,6 +357,20 @@ function syncChatToStoreFor(conversationId: string) {
     chatStore.debouncedSave();
 }
 
+function applyConversationToChat(conversationId: string) {
+    const conversation = conversations.value[conversationId];
+    chat.messages = conversation
+        ? conversation.messages.map((m) => ({
+              id: m.id,
+              role: m.role === "data" ? "assistant" : m.role,
+              parts:
+                  Array.isArray(m.parts) && m.parts.length > 0
+                      ? (m.parts as any)
+                      : ([{ type: "text", text: m.content ?? "" }] as any),
+          }))
+        : [];
+}
+
 // Sync from Store to Chat (switch conversation)
 watch(
     activeKey,
@@ -302,23 +393,49 @@ watch(
             return;
         }
 
-        const conversation = conversations.value[newKey];
-        chat.messages = conversation
-            ? conversation.messages.map((m) => ({
-                  id: m.id,
-                  role: m.role === "data" ? "assistant" : m.role,
-                  parts:
-                      Array.isArray(m.parts) && m.parts.length > 0
-                          ? (m.parts as any)
-                          : ([{ type: "text", text: m.content ?? "" }] as any),
-              }))
-            : [];
+        applyConversationToChat(newKey);
 
         // 切换会话时重置总结标题生成标志
         hasGeneratedSummaryTitle.value = false;
     },
     { immediate: true }
 );
+
+// ===== 会话系统提示词（每个会话独立，可选） =====
+const openSystemPromptEditor = ref(false);
+const systemPromptDraft = ref<string>("");
+
+const currentSystemPrompt = computed(() => {
+    const key = activeKey.value;
+    if (!key) return "";
+    return chatStore.getConversationSystemPrompt(key);
+});
+
+watch(
+    () => openSystemPromptEditor.value,
+    (open) => {
+        if (!open) return;
+        systemPromptDraft.value = currentSystemPrompt.value || "";
+    }
+);
+
+async function saveSystemPrompt() {
+    const key = activeKey.value;
+    if (!key) return;
+    await chatStore.setConversationSystemPrompt(key, systemPromptDraft.value);
+    applyConversationToChat(key);
+    // 保存后避免把 UI 里未完成状态误写入
+    openSystemPromptEditor.value = false;
+}
+
+async function clearSystemPrompt() {
+    const key = activeKey.value;
+    if (!key) return;
+    systemPromptDraft.value = "";
+    await chatStore.setConversationSystemPrompt(key, "");
+    applyConversationToChat(key);
+    openSystemPromptEditor.value = false;
+}
 
 let syncTimer: number | null = null;
 const syncChatToStore = () => {
@@ -499,6 +616,10 @@ async function handleRegenerate() {
             mcpEnabled: hasEnabledServers.value,
         },
     });
+}
+
+async function handleStop() {
+    await chat.stop();
 }
 
 function getModelSearchTerm(item: ModelInfo) {
@@ -900,6 +1021,48 @@ watch(
                         </PromptInputActionMenu>
 
                         <PromptInputSpeechButton />
+
+                        <Popover v-model:open="openSystemPromptEditor">
+                            <PopoverTrigger as-child>
+                                <PromptInputButton
+                                    variant="ghost"
+                                    :disabled="!activeKey"
+                                    :title="
+                                        currentSystemPrompt
+                                            ? '已为当前会话设置系统提示词'
+                                            : '为当前会话设置系统提示词'
+                                    "
+                                >
+                                    <Settings2 class="size-4" />
+                                    <span>提示词</span>
+                                </PromptInputButton>
+                            </PopoverTrigger>
+                            <PopoverContent class="w-105 p-3" align="start">
+                                <div class="text-sm font-medium mb-2">
+                                    会话系统提示词
+                                </div>
+                                <Textarea
+                                    v-model="systemPromptDraft"
+                                    class="min-h-28"
+                                    placeholder="可选：仅对当前会话生效。留空表示不使用。"
+                                />
+                                <div
+                                    class="mt-3 flex items-center justify-end gap-2"
+                                >
+                                    <Button
+                                        variant="ghost"
+                                        :disabled="!currentSystemPrompt"
+                                        @click="clearSystemPrompt"
+                                    >
+                                        清空
+                                    </Button>
+                                    <Button @click="saveSystemPrompt"
+                                        >保存</Button
+                                    >
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+
                         <DropdownMenu>
                             <DropdownMenuTrigger as-child>
                                 <PromptInputButton
@@ -1112,10 +1275,255 @@ watch(
                                 :model-value="selectedModelSearchTerm"
                             >
                                 <ModelSelectorInput placeholder="搜索模型..." />
+
+                                <div
+                                    class="px-3 pb-2 flex items-center gap-2 flex-wrap"
+                                >
+                                    <Select v-model="selectedModelType">
+                                        <SelectTrigger class="h-8 w-40">
+                                            <SelectValue placeholder="类型" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">
+                                                全部类型
+                                            </SelectItem>
+                                            <SelectItem
+                                                v-for="t in availableModelTypes"
+                                                :key="t"
+                                                :value="t"
+                                            >
+                                                {{ t }}
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger as-child>
+                                            <Button
+                                                variant="outline"
+                                                class="h-8"
+                                            >
+                                                标签
+                                                <span
+                                                    v-if="
+                                                        selectedModelTags.length
+                                                    "
+                                                    class="ml-1 text-muted-foreground"
+                                                >
+                                                    ({{
+                                                        selectedModelTags.length
+                                                    }})
+                                                </span>
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent
+                                            class="w-64 max-h-72 overflow-auto"
+                                        >
+                                            <DropdownMenuLabel>
+                                                标签筛选
+                                            </DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuCheckboxItem
+                                                v-for="tag in availableModelTags"
+                                                :key="tag"
+                                                :checked="
+                                                    selectedModelTags.includes(
+                                                        tag
+                                                    )
+                                                "
+                                                @update:checked="
+                                                    (checked: boolean) =>
+                                                        updateSelectedTag(
+                                                            tag,
+                                                            checked
+                                                        )
+                                                "
+                                            >
+                                                {{ tag }}
+                                            </DropdownMenuCheckboxItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                                :disabled="
+                                                    selectedModelTags.length ===
+                                                    0
+                                                "
+                                                @click="selectedModelTags = []"
+                                            >
+                                                清空标签
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+
+                                    <Button
+                                        v-if="
+                                            selectedModelType !== 'all' ||
+                                            selectedModelTags.length
+                                        "
+                                        variant="ghost"
+                                        class="h-8 px-2"
+                                        @click="clearModelFilters"
+                                    >
+                                        清除
+                                    </Button>
+                                </div>
+
                                 <ModelSelectorList>
                                     <ModelSelectorEmpty
                                         >未找到模型。</ModelSelectorEmpty
                                     >
+
+                                    <ModelSelectorGroup
+                                        v-if="recentModels.length"
+                                        heading="最近使用"
+                                    >
+                                        <ModelSelectorItem
+                                            v-for="item in recentModels"
+                                            :key="item.id"
+                                            :value="getModelSearchTerm(item)"
+                                            class="flex items-start gap-2 py-3"
+                                            @select="
+                                                () => {
+                                                    chatStore.selectModel(item);
+                                                    openModelSelector = false;
+                                                }
+                                            "
+                                        >
+                                            <Check
+                                                :class="
+                                                    cn(
+                                                        'mt-1 h-4 w-4 shrink-0',
+                                                        selectedModel?.id ===
+                                                            item.id
+                                                            ? 'opacity-100'
+                                                            : 'opacity-0'
+                                                    )
+                                                "
+                                            />
+                                            <div
+                                                class="flex flex-col gap-1 w-full min-w-0"
+                                            >
+                                                <div
+                                                    class="flex items-center justify-between gap-2"
+                                                >
+                                                    <div
+                                                        class="flex items-center gap-2 truncate"
+                                                    >
+                                                        <ModelSelectorLogo
+                                                            :provider="
+                                                                item.owned_by
+                                                            "
+                                                        />
+                                                        <ModelSelectorName
+                                                            class="font-medium truncate"
+                                                        >
+                                                            {{
+                                                                formatModelName(
+                                                                    item.id
+                                                                )
+                                                            }}
+                                                        </ModelSelectorName>
+                                                    </div>
+                                                    <div
+                                                        class="flex items-center gap-1"
+                                                    >
+                                                        <span
+                                                            class="text-[10px] uppercase text-muted-foreground border px-1 rounded"
+                                                            >{{
+                                                                item.type
+                                                            }}</span
+                                                        >
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            class="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                                                            @click.stop="
+                                                                chatStore.removeRecentModel(
+                                                                    item.id
+                                                                )
+                                                            "
+                                                        >
+                                                            <X
+                                                                class="h-3 w-3"
+                                                            />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+
+                                                <div
+                                                    class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"
+                                                >
+                                                    <span
+                                                        v-if="
+                                                            item.context_window
+                                                        "
+                                                        class="flex items-center gap-1"
+                                                        title="上下文窗口"
+                                                    >
+                                                        <Maximize2
+                                                            class="w-3 h-3"
+                                                        />
+                                                        {{
+                                                            (
+                                                                item.context_window /
+                                                                1000
+                                                            ).toFixed(0)
+                                                        }}k
+                                                    </span>
+                                                    <span
+                                                        v-if="item.max_tokens"
+                                                        class="flex items-center gap-1"
+                                                        title="最大输出 Token"
+                                                    >
+                                                        <MessageSquare
+                                                            class="w-3 h-3"
+                                                        />
+                                                        {{
+                                                            (
+                                                                item.max_tokens /
+                                                                1000
+                                                            ).toFixed(0)
+                                                        }}k
+                                                    </span>
+                                                </div>
+
+                                                <div
+                                                    v-if="item.pricing"
+                                                    class="flex items-center gap-2 text-[10px] text-muted-foreground/80"
+                                                >
+                                                    <Coins class="w-3 h-3" />
+                                                    <span
+                                                        >输入:
+                                                        {{
+                                                            item.pricing.input
+                                                        }}</span
+                                                    >
+                                                    <span
+                                                        >输出:
+                                                        {{
+                                                            item.pricing.output
+                                                        }}</span
+                                                    >
+                                                </div>
+
+                                                <div
+                                                    v-if="
+                                                        item.tags &&
+                                                        item.tags.length
+                                                    "
+                                                    class="flex flex-wrap gap-1 mt-1"
+                                                >
+                                                    <span
+                                                        v-for="tag in item.tags"
+                                                        :key="tag"
+                                                        class="bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded text-[10px]"
+                                                    >
+                                                        {{ tag }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </ModelSelectorItem>
+                                    </ModelSelectorGroup>
+
                                     <ModelSelectorGroup
                                         v-for="(
                                             groupModels, provider
@@ -1256,8 +1664,16 @@ watch(
                     </PromptInputTools>
 
                     <PromptInputSubmit
+                        v-if="status !== 'streaming' && status !== 'submitted'"
                         :disabled="submitDisabled"
                         :status="status"
+                    />
+                    <PromptInputSubmit
+                        v-else
+                        :disabled="false"
+                        :status="status"
+                        @click="handleStop"
+                        type="button"
                     />
                 </PromptInputFooter>
             </PromptInput>

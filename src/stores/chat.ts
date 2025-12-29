@@ -25,6 +25,9 @@ export const useChatStore = defineStore("chat", {
         selectedModel: null as ModelInfo | null,
         isLoadingModels: false,
         modelsError: null as string | null,
+        // 最近使用模型（modelId -> timestamp）
+        recentModelUsage: {} as Record<string, number>,
+        recentModelUsageLoaded: false,
         // 初始化状态
         isInitialized: false,
         // 存储优化
@@ -99,6 +102,141 @@ export const useChatStore = defineStore("chat", {
         },
     },
     actions: {
+        // ============ 会话系统提示词（可选，每个会话独立） ============
+        getConversationSystemPrompt(conversationId: string): string {
+            const conversation = this.conversations[conversationId];
+            if (!conversation) return "";
+
+            const msg = conversation.messages.find((m) => m.role === "system");
+            return (msg?.content ?? "").toString();
+        },
+
+        /**
+         * 设置会话系统提示词。
+         * - 传入空字符串/仅空白：清空（移除 system 消息）
+         * - 否则：在 messages 最前插入/更新一条 role=system 的消息
+         */
+        async setConversationSystemPrompt(
+            conversationId: string,
+            prompt: string | null | undefined
+        ) {
+            const conversation = this.conversations[conversationId];
+            if (!conversation) return;
+
+            const nextPrompt = (prompt ?? "").toString();
+            const shouldClear = nextPrompt.trim().length === 0;
+
+            const existingIndex = conversation.messages.findIndex(
+                (m) => m.role === "system"
+            );
+
+            if (shouldClear) {
+                if (existingIndex >= 0) {
+                    conversation.messages.splice(existingIndex, 1);
+                    conversation.updatedAt = Date.now();
+
+                    const item = this.conversationsItems.find(
+                        (it) => it.key === conversationId
+                    );
+                    if (item) item.timestamp = conversation.updatedAt;
+
+                    await this.saveConversations();
+                }
+                return;
+            }
+
+            if (existingIndex >= 0) {
+                const existing = conversation.messages[existingIndex];
+                existing.content = nextPrompt;
+                existing.parts = [{ type: "text", text: nextPrompt }] as any;
+                // 保持 timestamp 不变更（它代表“创建时间”）；updatedAt 反映编辑。
+                // 若希望 timestamp 也更新，可以改成：existing.timestamp = Date.now();
+
+                // 确保 system 消息位于最前
+                if (existingIndex !== 0) {
+                    conversation.messages.splice(existingIndex, 1);
+                    conversation.messages.unshift(existing);
+                }
+            } else {
+                const now = Date.now();
+                const systemMessage: StoredChatMessage = {
+                    id: `sys_${now}_${Math.random().toString(36).substr(2, 9)}`,
+                    role: "system",
+                    content: nextPrompt,
+                    timestamp: now,
+                    parts: [{ type: "text", text: nextPrompt }] as any,
+                };
+                conversation.messages.unshift(systemMessage);
+            }
+
+            conversation.updatedAt = Date.now();
+            const item = this.conversationsItems.find(
+                (it) => it.key === conversationId
+            );
+            if (item) item.timestamp = conversation.updatedAt;
+
+            await this.saveConversations();
+        },
+
+        async loadRecentModelUsage() {
+            try {
+                const data = await storeUtils.get<Record<string, number>>(
+                    "chat_recent_model_usage"
+                );
+                this.recentModelUsage = data || {};
+                this.recentModelUsageLoaded = true;
+            } catch (error) {
+                console.error("加载最近使用模型失败:", error);
+                this.recentModelUsage = {};
+                this.recentModelUsageLoaded = true;
+            }
+        },
+
+        async persistRecentModelUsage() {
+            try {
+                // 只保留最近 50 条，避免无限增长
+                const entries = Object.entries(this.recentModelUsage).sort(
+                    (a, b) => (b[1] || 0) - (a[1] || 0)
+                );
+                const next: Record<string, number> = {};
+                for (const [modelId, ts] of entries.slice(0, 50)) {
+                    if (!modelId) continue;
+                    if (typeof ts !== "number" || !Number.isFinite(ts))
+                        continue;
+                    next[modelId] = ts;
+                }
+                this.recentModelUsage = next;
+                await storeUtils.set("chat_recent_model_usage", next, false);
+            } catch (error) {
+                console.error("保存最近使用模型失败:", error);
+            }
+        },
+
+        markModelUsed(modelId: string | null | undefined) {
+            if (!modelId) return;
+            // 若未加载过，则先标记到内存，异步补加载也不会影响当前写入
+            if (!this.recentModelUsageLoaded) {
+                void this.loadRecentModelUsage();
+            }
+
+            this.recentModelUsage = {
+                ...this.recentModelUsage,
+                [modelId]: Date.now(),
+            };
+            void this.persistRecentModelUsage();
+        },
+
+        removeRecentModel(modelId: string) {
+            if (!this.recentModelUsageLoaded) {
+                void this.loadRecentModelUsage();
+            }
+
+            const next = { ...this.recentModelUsage };
+            delete next[modelId];
+            this.recentModelUsage = next;
+            void this.persistRecentModelUsage();
+        },
+
         async loadPersistedSelectedModelId() {
             try {
                 return await storeUtils.get<string>("chat_selected_model_id");
@@ -287,6 +425,11 @@ export const useChatStore = defineStore("chat", {
         },
 
         async createNewConversation() {
+            const emptyKey = this.findEmptyConversation();
+            if (emptyKey) {
+                return emptyKey;
+            }
+            // 创建新的
             const id = `conv_${Date.now()}_${Math.random()
                 .toString(36)
                 .substr(2, 9)}`;
@@ -411,6 +554,7 @@ export const useChatStore = defineStore("chat", {
             try {
                 // 构建对话内容用于总结
                 const conversationText = conversation.messages
+                    .filter((m) => m.role !== "system")
                     .map(
                         (m) =>
                             `${m.role === "user" ? "用户" : "AI"}: ${m.content}`
@@ -532,8 +676,20 @@ export const useChatStore = defineStore("chat", {
         },
 
         // ============ UI 交互 ============
-        onAddConversation() {
-            this.createNewConversation();
+        findEmptyConversation(): string | null {
+            for (const [key, conversation] of Object.entries(
+                this.conversations
+            )) {
+                if (conversation.messages.length === 0) {
+                    return key;
+                }
+            }
+            return null;
+        },
+
+        async onAddConversation() {
+            const newId = await this.createNewConversation();
+            this.activeKey = newId;
         },
 
         onConversationClick(key: string) {
@@ -595,6 +751,7 @@ export const useChatStore = defineStore("chat", {
         selectModel(model: ModelInfo | null) {
             this.selectedModel = model;
             void this.persistSelectedModelId(model?.id || null);
+            this.markModelUsed(model?.id);
         },
     },
 });
