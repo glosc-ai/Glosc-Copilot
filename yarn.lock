@@ -20,6 +20,14 @@
     "@ai-sdk/provider-utils" "4.0.1"
     pkce-challenge "^5.0.0"
 
+"@ai-sdk/openai-compatible@2.0.2":
+  version "2.0.2"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/openai-compatible/-/openai-compatible-2.0.2.tgz#f34939cebac25b8981225799e21fbd1bb33e9047"
+  integrity sha512-9HFztZv9FBC7UxdLaA+gGKKEQjVNnI3nRmc6mRDPW5z5czvVKMrRgoXqjsYGbv+3giOXsVlRITHsrPswGn6O1w==
+  dependencies:
+    "@ai-sdk/provider" "3.0.1"
+    "@ai-sdk/provider-utils" "4.0.2"
+
 "@ai-sdk/provider-utils@4.0.1":
   version "4.0.1"
   resolved "https://registry.yarnpkg.com/@ai-sdk/provider-utils/-/provider-utils-4.0.1.tgz#6102fe98138021cd7196b2cdc1ce33f7f956426b"
@@ -29,10 +37,26 @@
     "@standard-schema/spec" "^1.1.0"
     eventsource-parser "^3.0.6"
 
+"@ai-sdk/provider-utils@4.0.2":
+  version "4.0.2"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/provider-utils/-/provider-utils-4.0.2.tgz#0b80872651ac9854a1a43efd81567d06d70c2368"
+  integrity sha512-KaykkuRBdF/ffpI5bwpL4aSCmO/99p8/ci+VeHwJO8tmvXtiVAb99QeyvvvXmL61e9Zrvv4GBGoajW19xdjkVQ==
+  dependencies:
+    "@ai-sdk/provider" "3.0.1"
+    "@standard-schema/spec" "^1.1.0"
+    eventsource-parser "^3.0.6"
+
 "@ai-sdk/provider@3.0.0":
   version "3.0.0"
   resolved "https://registry.yarnpkg.com/@ai-sdk/provider/-/provider-3.0.0.tgz#de5b60ae8570177604048e79edf4a032c92851e6"
   integrity sha512-m9ka3ptkPQbaHHZHqDXDF9C9B5/Mav0KTdky1k2HZ3/nrW2t1AgObxIVPyGDWQNS9FXT/FS6PIoSjpcP/No8rQ==
+  dependencies:
+    json-schema "^0.4.0"
+
+"@ai-sdk/provider@3.0.1":
+  version "3.0.1"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/provider/-/provider-3.0.1.tgz#5bd8809910fc401f024c7784a77eb116171d0296"
+  integrity sha512-2lR4w7mr9XrydzxBSjir4N6YMGdXD+Np1Sh0RXABh7tWdNFFwIeRI1Q+SaYZMbfL8Pg8RRLcrxQm51yxTLhokg==
   dependencies:
     json-schema "^0.4.0"
 
@@ -44,6 +68,15 @@
     "@ai-sdk/provider-utils" "4.0.1"
     ai "6.0.3"
     swrv "^1.0.4"
+
+"@ai-sdk/xai@^3.0.3":
+  version "3.0.3"
+  resolved "https://registry.yarnpkg.com/@ai-sdk/xai/-/xai-3.0.3.tgz#c75e554aa06bde7e4ff248524b33d95bbc6988f1"
+  integrity sha512-Ts0RQ2yNlgX/mIj+1cvJvh/GYPZnXLe8Lzr4VFn9QNRjWJmRCQ1TSGymdmSB2dRHyBQU10acuem/bkkxFmL8vQ==
+  dependencies:
+    "@ai-sdk/openai-compatible" "2.0.2"
+    "@ai-sdk/provider" "3.0.1"
+    "@ai-sdk/provider-utils" "4.0.2"
 
 "@antfu/install-pkg@^1.1.0":
   version "1.1.0"

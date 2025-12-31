@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { type ChatStatus, type SourceUrlUIPart, type UIMessage } from "ai";
+import {
+    type ChatStatus,
+    type LanguageModelUsage,
+    type SourceUrlUIPart,
+    type UIMessage,
+} from "ai";
 import type {
     AttachmentFile,
     PromptInputMessage,
@@ -665,6 +670,18 @@ const calculatedUsage = shallowRef({
     totalTokens: 0,
 });
 
+const contextMaxTokens = computed(
+    () => selectedModelData.value?.context_window ?? 0
+);
+
+const contextUsage = computed<LanguageModelUsage>(() => {
+    return {
+        inputTokens: calculatedUsage.value.inputTokens,
+        outputTokens: calculatedUsage.value.outputTokens,
+        totalTokens: calculatedUsage.value.totalTokens,
+    } as any;
+});
+
 let usageTimer: number | null = null;
 const recalcUsage = () => {
     // 流式期间 token 统计开销很大；结束时再算一次即可
@@ -1021,6 +1038,25 @@ watch(
                         </PromptInputActionMenu>
 
                         <PromptInputSpeechButton />
+
+                        <Context
+                            :used-tokens="calculatedUsage.totalTokens"
+                            :max-tokens="contextMaxTokens"
+                            :usage="contextUsage"
+                            :model-id="selectedModelData?.id"
+                        >
+                            <ContextTrigger />
+                            <ContextContent class="w-72">
+                                <ContextContentHeader />
+                                <ContextContentBody class="space-y-2">
+                                    <ContextInputUsage />
+                                    <ContextOutputUsage />
+                                    <ContextReasoningUsage />
+                                    <ContextCacheUsage />
+                                </ContextContentBody>
+                                <ContextContentFooter />
+                            </ContextContent>
+                        </Context>
 
                         <Popover v-model:open="openSystemPromptEditor">
                             <PopoverTrigger as-child>
