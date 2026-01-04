@@ -5,7 +5,6 @@ import {
     Box,
     FileJson,
     LayoutTemplate,
-    MessageSquare,
     ChevronDown,
     ChevronUp,
 } from "lucide-vue-next";
@@ -15,7 +14,7 @@ const props = defineProps<{
     capabilities: any;
 }>();
 
-const activeTab = ref<"tools" | "resources" | "templates" | "prompts">("tools");
+const activeTab = ref<"tools" | "resources" | "templates">("tools");
 const expandedToolSchemas = ref<Set<string>>(new Set());
 
 const toggleToolSchema = (toolKey: string) => {
@@ -34,7 +33,7 @@ const toggleToolSchema = (toolKey: string) => {
     <div class="border-t bg-muted/30 p-4">
         <div class="flex items-center gap-2 border-b pb-2 mb-4">
             <Button
-                v-for="tab in ['tools', 'resources', 'templates', 'prompts']"
+                v-for="tab in ['tools', 'resources', 'templates']"
                 :key="tab"
                 variant="ghost"
                 size="sm"
@@ -52,9 +51,7 @@ const toggleToolSchema = (toolKey: string) => {
                             ? Box
                             : tab === 'resources'
                               ? FileJson
-                              : tab === 'templates'
-                                ? LayoutTemplate
-                                : MessageSquare
+                              : LayoutTemplate
                     "
                     class="w-4 h-4 mr-2"
                 />
@@ -70,9 +67,7 @@ const toggleToolSchema = (toolKey: string) => {
                               : tab === "templates"
                                 ? capabilities?.templates?.resourceTemplates
                                       ?.length
-                                : tab === "prompts"
-                                  ? capabilities?.prompts?.prompts?.length
-                                  : 0
+                                : 0
                     }}
                 </span>
             </Button>
@@ -208,54 +203,6 @@ const toggleToolSchema = (toolKey: string) => {
                             class="text-muted-foreground mt-1"
                         >
                             {{ template.description }}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div v-else-if="activeTab === 'prompts'" class="grid gap-4">
-                <div
-                    v-if="!capabilities.prompts?.prompts?.length"
-                    class="text-center py-8 text-muted-foreground"
-                >
-                    未发现提示词
-                </div>
-                <div
-                    v-for="prompt in capabilities.prompts?.prompts"
-                    :key="prompt.name"
-                    class="border rounded-lg p-4 bg-card"
-                >
-                    <div class="flex items-center gap-2 mb-2">
-                        <div class="p-2 bg-green-500/10 rounded-md">
-                            <MessageSquare class="w-4 h-4 text-green-500" />
-                        </div>
-                        <h3 class="font-semibold">
-                            {{ prompt.name }}
-                        </h3>
-                    </div>
-                    <p class="text-sm text-muted-foreground mb-3">
-                        {{ prompt.description || "无描述" }}
-                    </p>
-                    <div v-if="prompt.arguments?.length" class="mt-2">
-                        <h4 class="text-xs font-semibold mb-1">参数:</h4>
-                        <div class="grid gap-2">
-                            <div
-                                v-for="arg in prompt.arguments"
-                                :key="arg.name"
-                                class="text-xs bg-muted/50 p-2 rounded flex items-center justify-between"
-                            >
-                                <span class="font-mono text-primary">{{
-                                    arg.name
-                                }}</span>
-                                <span class="text-muted-foreground">{{
-                                    arg.description
-                                }}</span>
-                                <span
-                                    v-if="arg.required"
-                                    class="text-[10px] bg-destructive/10 text-destructive px-1 rounded"
-                                    >Required</span
-                                >
-                            </div>
                         </div>
                     </div>
                 </div>

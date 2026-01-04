@@ -15,6 +15,8 @@ export const useChatStore = defineStore("chat", {
         headerOpen: false,
         settingsOpen: false,
         content: "",
+        // 是否启用 Web 搜索（透传给后端）
+        webSearchEnabled: false,
         // 会话相关
         conversations: {} as Record<string, Conversation>,
         conversationsItems: [] as ConversationItem[],
@@ -102,80 +104,30 @@ export const useChatStore = defineStore("chat", {
         },
     },
     actions: {
-        // ============ 会话系统提示词（可选，每个会话独立） ============
-        getConversationSystemPrompt(conversationId: string): string {
-            const conversation = this.conversations[conversationId];
-            if (!conversation) return "";
-
-            const msg = conversation.messages.find((m) => m.role === "system");
-            return (msg?.content ?? "").toString();
+        // ============ WebSearch 开关（可选，全局） ============
+        async loadWebSearchEnabled() {
+            try {
+                const value = await storeUtils.get<boolean>(
+                    "chat_web_search_enabled"
+                );
+                this.webSearchEnabled = Boolean(value);
+            } catch (error) {
+                console.error("加载 webSearch 开关失败:", error);
+                this.webSearchEnabled = false;
+            }
         },
 
-        /**
-         * 设置会话系统提示词。
-         * - 传入空字符串/仅空白：清空（移除 system 消息）
-         * - 否则：在 messages 最前插入/更新一条 role=system 的消息
-         */
-        async setConversationSystemPrompt(
-            conversationId: string,
-            prompt: string | null | undefined
-        ) {
-            const conversation = this.conversations[conversationId];
-            if (!conversation) return;
-
-            const nextPrompt = (prompt ?? "").toString();
-            const shouldClear = nextPrompt.trim().length === 0;
-
-            const existingIndex = conversation.messages.findIndex(
-                (m) => m.role === "system"
-            );
-
-            if (shouldClear) {
-                if (existingIndex >= 0) {
-                    conversation.messages.splice(existingIndex, 1);
-                    conversation.updatedAt = Date.now();
-
-                    const item = this.conversationsItems.find(
-                        (it) => it.key === conversationId
-                    );
-                    if (item) item.timestamp = conversation.updatedAt;
-
-                    await this.saveConversations();
-                }
-                return;
+        async setWebSearchEnabled(enabled: boolean) {
+            try {
+                this.webSearchEnabled = Boolean(enabled);
+                await storeUtils.set(
+                    "chat_web_search_enabled",
+                    this.webSearchEnabled,
+                    false
+                );
+            } catch (error) {
+                console.error("保存 webSearch 开关失败:", error);
             }
-
-            if (existingIndex >= 0) {
-                const existing = conversation.messages[existingIndex];
-                existing.content = nextPrompt;
-                existing.parts = [{ type: "text", text: nextPrompt }] as any;
-                // 保持 timestamp 不变更（它代表“创建时间”）；updatedAt 反映编辑。
-                // 若希望 timestamp 也更新，可以改成：existing.timestamp = Date.now();
-
-                // 确保 system 消息位于最前
-                if (existingIndex !== 0) {
-                    conversation.messages.splice(existingIndex, 1);
-                    conversation.messages.unshift(existing);
-                }
-            } else {
-                const now = Date.now();
-                const systemMessage: StoredChatMessage = {
-                    id: `sys_${now}_${Math.random().toString(36).substr(2, 9)}`,
-                    role: "system",
-                    content: nextPrompt,
-                    timestamp: now,
-                    parts: [{ type: "text", text: nextPrompt }] as any,
-                };
-                conversation.messages.unshift(systemMessage);
-            }
-
-            conversation.updatedAt = Date.now();
-            const item = this.conversationsItems.find(
-                (it) => it.key === conversationId
-            );
-            if (item) item.timestamp = conversation.updatedAt;
-
-            await this.saveConversations();
         },
 
         async loadRecentModelUsage() {
@@ -263,6 +215,9 @@ export const useChatStore = defineStore("chat", {
             if (this.isInitialized) return;
 
             try {
+                // 加载全局设置
+                await this.loadWebSearchEnabled();
+
                 // 加载会话数据
                 await this.loadConversations();
 

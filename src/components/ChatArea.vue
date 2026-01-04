@@ -13,11 +13,6 @@ import { ChatUtils } from "@/utils/ChatUtils";
 import type { StoredChatMessage } from "@/utils/interface";
 import { Textarea } from "@/components/ui/textarea";
 import { Image } from "@/components/ai-elements/image";
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover";
 
 import {
     CopyIcon,
@@ -30,8 +25,10 @@ import {
     MessageSquare,
     Coins,
     Settings2,
+    Globe,
     Pencil,
     X,
+    Loader2Icon,
 } from "lucide-vue-next";
 
 import { formatModelName, groupModelsByProvider } from "@/utils/ModelApi";
@@ -48,7 +45,7 @@ import { useChatStore } from "@/stores/chat";
 import { storeToRefs } from "pinia";
 import { useMcpStore } from "@/stores/mcp";
 import { useRouter } from "vue-router";
-import { Loader2Icon } from "lucide-vue-next";
+
 // import { nanoid } from "nanoid";
 
 const chatStore = useChatStore();
@@ -64,6 +61,12 @@ const { servers } = storeToRefs(mcpStore);
 const router = useRouter();
 
 const hasEnabledServers = computed(() => servers.value.some((s) => s.enabled));
+
+// WebSearch 开关（透传给后端）
+const webSearchEnabled = computed(() => chatStore.webSearchEnabled);
+async function toggleWebSearch() {
+    await chatStore.setWebSearchEnabled(!webSearchEnabled.value);
+}
 
 // 跟踪是否已经为当前会话生成过总结标题
 const hasGeneratedSummaryTitle = ref(false);
@@ -288,6 +291,7 @@ async function sendChatMessage(
                     model: selectedModel.value?.id,
                     mcpEnabled: hasEnabledServers.value,
                     tools,
+                    ...(webSearchEnabled.value ? { webSearch: true } : {}),
                 },
             }
         );
@@ -438,42 +442,6 @@ watch(
     },
     { immediate: true }
 );
-
-// ===== 会话系统提示词（每个会话独立，可选） =====
-const openSystemPromptEditor = ref(false);
-const systemPromptDraft = ref<string>("");
-
-const currentSystemPrompt = computed(() => {
-    const key = activeKey.value;
-    if (!key) return "";
-    return chatStore.getConversationSystemPrompt(key);
-});
-
-watch(
-    () => openSystemPromptEditor.value,
-    (open) => {
-        if (!open) return;
-        systemPromptDraft.value = currentSystemPrompt.value || "";
-    }
-);
-
-async function saveSystemPrompt() {
-    const key = activeKey.value;
-    if (!key) return;
-    await chatStore.setConversationSystemPrompt(key, systemPromptDraft.value);
-    applyConversationToChat(key);
-    // 保存后避免把 UI 里未完成状态误写入
-    openSystemPromptEditor.value = false;
-}
-
-async function clearSystemPrompt() {
-    const key = activeKey.value;
-    if (!key) return;
-    systemPromptDraft.value = "";
-    await chatStore.setConversationSystemPrompt(key, "");
-    applyConversationToChat(key);
-    openSystemPromptEditor.value = false;
-}
 
 let syncTimer: number | null = null;
 const syncChatToStore = () => {
@@ -1091,46 +1059,14 @@ watch(
                             </ContextContent>
                         </Context>
 
-                        <Popover v-model:open="openSystemPromptEditor">
-                            <PopoverTrigger as-child>
-                                <PromptInputButton
-                                    variant="ghost"
-                                    :disabled="!activeKey"
-                                    :title="
-                                        currentSystemPrompt
-                                            ? '已为当前会话设置系统提示词'
-                                            : '为当前会话设置系统提示词'
-                                    "
-                                >
-                                    <Settings2 class="size-4" />
-                                    <span>提示词</span>
-                                </PromptInputButton>
-                            </PopoverTrigger>
-                            <PopoverContent class="w-105 p-3" align="start">
-                                <div class="text-sm font-medium mb-2">
-                                    会话系统提示词
-                                </div>
-                                <Textarea
-                                    v-model="systemPromptDraft"
-                                    class="min-h-28"
-                                    placeholder="可选：仅对当前会话生效。留空表示不使用。"
-                                />
-                                <div
-                                    class="mt-3 flex items-center justify-end gap-2"
-                                >
-                                    <Button
-                                        variant="ghost"
-                                        :disabled="!currentSystemPrompt"
-                                        @click="clearSystemPrompt"
-                                    >
-                                        清空
-                                    </Button>
-                                    <Button @click="saveSystemPrompt"
-                                        >保存</Button
-                                    >
-                                </div>
-                            </PopoverContent>
-                        </Popover>
+                        <PromptInputButton
+                            :variant="webSearchEnabled ? 'default' : 'ghost'"
+                            title="联网搜索"
+                            @click="toggleWebSearch"
+                        >
+                            <Globe class="size-4" />
+                            <span>联网搜索</span>
+                        </PromptInputButton>
 
                         <DropdownMenu>
                             <DropdownMenuTrigger as-child>
@@ -1281,36 +1217,6 @@ watch(
                                                         :title="resource.name"
                                                     >
                                                         - {{ resource.name }}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div
-                                                v-if="
-                                                    mcpStore.serverCapabilities[
-                                                        server.id
-                                                    ]?.prompts?.prompts?.length
-                                                "
-                                            >
-                                                <div class="font-semibold mb-1">
-                                                    提示词 ({{
-                                                        mcpStore
-                                                            .serverCapabilities[
-                                                            server.id
-                                                        ].prompts.prompts
-                                                            .length
-                                                    }})
-                                                </div>
-                                                <div class="pl-2 mb-2">
-                                                    <div
-                                                        v-for="prompt in mcpStore
-                                                            .serverCapabilities[
-                                                            server.id
-                                                        ].prompts.prompts"
-                                                        :key="prompt.name"
-                                                        class="truncate"
-                                                        :title="prompt.name"
-                                                    >
-                                                        - {{ prompt.name }}
                                                     </div>
                                                 </div>
                                             </div>
