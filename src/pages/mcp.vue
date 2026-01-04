@@ -16,13 +16,13 @@ import {
     Plus,
     Trash2,
     Edit,
-    Play,
     Activity,
     ArrowLeft,
     Code,
     FileText,
     ChevronDown,
     ChevronUp,
+    Loader2,
 } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 
@@ -68,6 +68,15 @@ const jsonContent = ref("");
 
 // Test Results State
 const expandedServers = ref<Set<string>>(new Set());
+
+// Per-server action loading states
+const togglingServerIds = ref<Set<string>>(new Set());
+const testingServerIds = ref<Set<string>>(new Set());
+const toggleActionLabel = ref<Record<string, "enable" | "disable">>({});
+
+const isServerBusy = (serverId: string) =>
+    togglingServerIds.value.has(serverId) ||
+    testingServerIds.value.has(serverId);
 
 const getServerState = (server: McpServer) => {
     const cap = mcpStore.serverCapabilities[server.id];
@@ -509,7 +518,51 @@ const deleteServer = async (id: string) => {
 };
 
 const toggleServer = async (server: McpServer) => {
-    await mcpStore.updateServer(server.id, { enabled: !server.enabled });
+    if (isServerBusy(server.id)) return;
+
+    const nextEnabled = !server.enabled;
+    toggleActionLabel.value = {
+        ...toggleActionLabel.value,
+        [server.id]: nextEnabled ? "enable" : "disable",
+    };
+    togglingServerIds.value = new Set(togglingServerIds.value).add(server.id);
+
+    try {
+        await mcpStore.updateServer(server.id, { enabled: nextEnabled });
+
+        if (!nextEnabled) {
+            // Hide previous capability results when disabled
+            mcpStore.setServerCapability(server.id, null);
+            const newSet = new Set(expandedServers.value);
+            newSet.delete(server.id);
+            expandedServers.value = newSet;
+            return;
+        }
+
+        // Treat "启用" as "启动并刷新能力" to avoid duplicated "启动" button.
+        const caps = await McpUtils.getActiveCapabilities({
+            ...server,
+            enabled: true,
+        } as McpServer);
+        mcpStore.setServerCapability(server.id, caps);
+        const newSet = new Set(expandedServers.value);
+        newSet.add(server.id);
+        expandedServers.value = newSet;
+    } catch (e: any) {
+        ElMessage.error(
+            `${server.enabled ? "禁用" : "启用"} ${server.name} 失败: ${
+                e?.message || String(e)
+            }`
+        );
+        mcpStore.setServerCapability(server.id, {
+            success: false,
+            error: e?.message || String(e),
+        });
+    } finally {
+        const next = new Set(togglingServerIds.value);
+        next.delete(server.id);
+        togglingServerIds.value = next;
+    }
 };
 
 const toggleServerExpansion = (serverId: string) => {
@@ -524,6 +577,8 @@ const toggleServerExpansion = (serverId: string) => {
 
 const testServer = async (server: McpServer) => {
     console.log("Testing server:", server);
+    if (isServerBusy(server.id)) return;
+    testingServerIds.value = new Set(testingServerIds.value).add(server.id);
     try {
         const result = await McpUtils.testConnection(server);
         if (result.success) {
@@ -546,34 +601,10 @@ const testServer = async (server: McpServer) => {
             success: false,
             error: String(e),
         });
-    }
-};
-
-const startServer = async (server: McpServer) => {
-    try {
-        if (server.enabled) {
-            await mcpStore.updateServer(server.id, { enabled: false });
-            ElMessage.success(`已停止 ${server.name}`);
-            return;
-        }
-
-        await mcpStore.updateServer(server.id, { enabled: true });
-        const caps = await McpUtils.getActiveCapabilities({
-            ...server,
-            enabled: true,
-        } as McpServer);
-        mcpStore.setServerCapability(server.id, caps);
-        ElMessage.success(`已启动 ${server.name}`);
-
-        const newSet = new Set(expandedServers.value);
-        newSet.add(server.id);
-        expandedServers.value = newSet;
-    } catch (e: any) {
-        ElMessage.error(`启动 ${server.name} 失败: ${e?.message || String(e)}`);
-        mcpStore.setServerCapability(server.id, {
-            success: false,
-            error: e?.message || String(e),
-        });
+    } finally {
+        const next = new Set(testingServerIds.value);
+        next.delete(server.id);
+        testingServerIds.value = next;
     }
 };
 
@@ -634,29 +665,45 @@ onMounted(async () => {
                             variant="outline"
                             size="sm"
                             @click="toggleServer(server)"
+                            :disabled="isServerBusy(server.id)"
                         >
-                            {{ server.enabled ? "禁用" : "启用" }}
+                            <Loader2
+                                v-if="togglingServerIds.has(server.id)"
+                                class="w-4 h-4 mr-1 animate-spin"
+                            />
+                            <span v-if="togglingServerIds.has(server.id)">
+                                {{
+                                    toggleActionLabel[server.id] === "disable"
+                                        ? "禁用中"
+                                        : "启用中"
+                                }}
+                            </span>
+                            <span v-else>
+                                {{ server.enabled ? "禁用" : "启用" }}
+                            </span>
                         </Button>
                         <Button
                             variant="outline"
                             size="sm"
                             @click="testServer(server)"
+                            :disabled="isServerBusy(server.id)"
                         >
-                            <Activity class="w-4 h-4 mr-1" />
-                            测试
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            @click="startServer(server)"
-                        >
-                            <Play class="w-4 h-4 mr-1" />
-                            {{ server.enabled ? "停止" : "启动" }}
+                            <Loader2
+                                v-if="testingServerIds.has(server.id)"
+                                class="w-4 h-4 mr-1 animate-spin"
+                            />
+                            <Activity v-else class="w-4 h-4 mr-1" />
+                            {{
+                                testingServerIds.has(server.id)
+                                    ? "测试中"
+                                    : "测试"
+                            }}
                         </Button>
                         <Button
                             variant="ghost"
                             size="icon"
                             @click="openEditDialog(server)"
+                            :disabled="isServerBusy(server.id)"
                         >
                             <Edit class="w-4 h-4" />
                         </Button>
@@ -665,6 +712,7 @@ onMounted(async () => {
                             size="icon"
                             class="text-destructive hover:text-destructive"
                             @click="deleteServer(server.id)"
+                            :disabled="isServerBusy(server.id)"
                         >
                             <Trash2 class="w-4 h-4" />
                         </Button>
@@ -673,6 +721,7 @@ onMounted(async () => {
                             variant="ghost"
                             size="icon"
                             @click="toggleServerExpansion(server.id)"
+                            :disabled="isServerBusy(server.id)"
                         >
                             <component
                                 :is="

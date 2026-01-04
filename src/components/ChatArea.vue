@@ -48,6 +48,7 @@ import { useChatStore } from "@/stores/chat";
 import { storeToRefs } from "pinia";
 import { useMcpStore } from "@/stores/mcp";
 import { useRouter } from "vue-router";
+import { Loader2Icon } from "lucide-vue-next";
 // import { nanoid } from "nanoid";
 
 const chatStore = useChatStore();
@@ -67,12 +68,23 @@ const hasEnabledServers = computed(() => servers.value.some((s) => s.enabled));
 // 跟踪是否已经为当前会话生成过总结标题
 const hasGeneratedSummaryTitle = ref(false);
 
-function toggleServer(id: string, checked: boolean) {
-    mcpStore.updateServer(id, { enabled: checked });
+const mcpTogglingServerIds = ref<Set<string>>(new Set());
+
+async function toggleServer(id: string, checked: boolean) {
+    if (mcpTogglingServerIds.value.has(id)) return;
+    mcpTogglingServerIds.value = new Set(mcpTogglingServerIds.value).add(id);
+    try {
+        await mcpStore.updateServer(id, { enabled: checked });
+    } finally {
+        const next = new Set(mcpTogglingServerIds.value);
+        next.delete(id);
+        mcpTogglingServerIds.value = next;
+    }
 }
 
 const selectedModelType = ref<string>("all");
 const selectedModelTags = ref<string[]>([]);
+const selectedModelOwners = ref<string[]>([]);
 
 const availableModelTypes = computed(() => {
     const types = new Set<string>();
@@ -92,9 +104,18 @@ const availableModelTags = computed(() => {
     return Array.from(tags).sort((a, b) => a.localeCompare(b));
 });
 
+const availableModelOwners = computed(() => {
+    const owners = new Set<string>();
+    for (const m of availableModels.value || []) {
+        if (m?.owned_by) owners.add(m.owned_by);
+    }
+    return Array.from(owners).sort((a, b) => a.localeCompare(b));
+});
+
 function clearModelFilters() {
     selectedModelType.value = "all";
     selectedModelTags.value = [];
+    selectedModelOwners.value = [];
 }
 
 function updateSelectedTag(tag: string, checked: boolean) {
@@ -104,6 +125,13 @@ function updateSelectedTag(tag: string, checked: boolean) {
     selectedModelTags.value = Array.from(next);
 }
 
+function updateSelectedOwner(owner: string, checked: boolean) {
+    const next = new Set(selectedModelOwners.value);
+    if (checked) next.add(owner);
+    else next.delete(owner);
+    selectedModelOwners.value = Array.from(next);
+}
+
 function matchesModelFilters(m: ModelInfo) {
     if (selectedModelType.value !== "all" && m.type !== selectedModelType.value)
         return false;
@@ -111,6 +139,11 @@ function matchesModelFilters(m: ModelInfo) {
         const tags = m.tags || [];
         // 多选标签：采用“必须全部包含”的筛选语义
         if (!selectedModelTags.value.every((t) => tags.includes(t)))
+            return false;
+    }
+    if (selectedModelOwners.value.length > 0) {
+        // 多选开发商：采用“命中任意一个”的筛选语义
+        if (!m.owned_by || !selectedModelOwners.value.includes(m.owned_by))
             return false;
     }
     return true;
@@ -1137,6 +1170,11 @@ watch(
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent class="w-64">
                                         <DropdownMenuItem
+                                            :disabled="
+                                                mcpTogglingServerIds.has(
+                                                    server.id
+                                                )
+                                            "
                                             @click="
                                                 toggleServer(
                                                     server.id,
@@ -1144,16 +1182,39 @@ watch(
                                                 )
                                             "
                                         >
+                                            <Loader2Icon
+                                                v-if="
+                                                    mcpTogglingServerIds.has(
+                                                        server.id
+                                                    )
+                                                "
+                                                class="mr-2 h-4 w-4 animate-spin"
+                                            />
                                             <Check
-                                                v-if="server.enabled"
+                                                v-else-if="server.enabled"
                                                 class="mr-2 h-4 w-4"
                                             />
                                             <span v-else class="mr-6"></span>
-                                            {{
-                                                server.enabled
-                                                    ? "已启用"
-                                                    : "启用"
-                                            }}
+                                            <span
+                                                v-if="
+                                                    mcpTogglingServerIds.has(
+                                                        server.id
+                                                    )
+                                                "
+                                            >
+                                                {{
+                                                    server.enabled
+                                                        ? "禁用中"
+                                                        : "启用中"
+                                                }}
+                                            </span>
+                                            <span v-else>
+                                                {{
+                                                    server.enabled
+                                                        ? "已启用"
+                                                        : "启用"
+                                                }}
+                                            </span>
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                         <div
@@ -1367,12 +1428,13 @@ watch(
                                                         tag
                                                     )
                                                 "
-                                                @update:checked="
-                                                    (checked: boolean) =>
-                                                        updateSelectedTag(
-                                                            tag,
-                                                            checked
+                                                @select.prevent="
+                                                    updateSelectedTag(
+                                                        tag,
+                                                        !selectedModelTags.includes(
+                                                            tag
                                                         )
+                                                    )
                                                 "
                                             >
                                                 {{ tag }}
@@ -1390,10 +1452,71 @@ watch(
                                         </DropdownMenuContent>
                                     </DropdownMenu>
 
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger as-child>
+                                            <Button
+                                                variant="outline"
+                                                class="h-8"
+                                            >
+                                                开发商
+                                                <span
+                                                    v-if="
+                                                        selectedModelOwners.length
+                                                    "
+                                                    class="ml-1 text-muted-foreground"
+                                                >
+                                                    ({{
+                                                        selectedModelOwners.length
+                                                    }})
+                                                </span>
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent
+                                            class="w-64 max-h-72 overflow-auto"
+                                        >
+                                            <DropdownMenuLabel>
+                                                开发商筛选 (owned_by)
+                                            </DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuCheckboxItem
+                                                v-for="owner in availableModelOwners"
+                                                :key="owner"
+                                                :checked="
+                                                    selectedModelOwners.includes(
+                                                        owner
+                                                    )
+                                                "
+                                                @select.prevent="
+                                                    updateSelectedOwner(
+                                                        owner,
+                                                        !selectedModelOwners.includes(
+                                                            owner
+                                                        )
+                                                    )
+                                                "
+                                            >
+                                                {{ owner }}
+                                            </DropdownMenuCheckboxItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                                :disabled="
+                                                    selectedModelOwners.length ===
+                                                    0
+                                                "
+                                                @click="
+                                                    selectedModelOwners = []
+                                                "
+                                            >
+                                                清空开发商
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+
                                     <Button
                                         v-if="
                                             selectedModelType !== 'all' ||
-                                            selectedModelTags.length
+                                            selectedModelTags.length ||
+                                            selectedModelOwners.length
                                         "
                                         variant="ghost"
                                         class="h-8 px-2"
@@ -1416,7 +1539,15 @@ watch(
                                             v-for="item in recentModels"
                                             :key="item.id"
                                             :value="getModelSearchTerm(item)"
-                                            class="flex items-start gap-2 py-3"
+                                            :class="
+                                                cn(
+                                                    'flex items-start gap-2 py-3',
+                                                    selectedModel?.id ===
+                                                        item.id
+                                                        ? 'bg-accent text-accent-foreground'
+                                                        : ''
+                                                )
+                                            "
                                             @select="
                                                 () => {
                                                     chatStore.selectModel(item);
@@ -1571,7 +1702,15 @@ watch(
                                             v-for="item in groupModels"
                                             :key="item.id"
                                             :value="getModelSearchTerm(item)"
-                                            class="flex items-start gap-2 py-3"
+                                            :class="
+                                                cn(
+                                                    'flex items-start gap-2 py-3',
+                                                    selectedModel?.id ===
+                                                        item.id
+                                                        ? 'bg-accent text-accent-foreground'
+                                                        : ''
+                                                )
+                                            "
                                             @select="
                                                 () => {
                                                     chatStore.selectModel(item);

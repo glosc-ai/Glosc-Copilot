@@ -15,5 +15,5 @@ app.mount("#app");
 // 配置 CORSFetch
 (window as any).CORSFetch.config({
     include: [/^https?:\/\//i], // 处理所有 HTTP 请求（默认）
-    exclude: ["http://localhost:3000"], // 跳过 CORS 绕过
+    exclude: ["https://www.glosc.ai"], // 跳过 CORS 绕过
 });
