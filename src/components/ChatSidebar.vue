@@ -268,7 +268,7 @@ const onDrop = async (targetKey: string, event: DragEvent) => {
                 variant="ghost"
             >
                 <Server class="w-4 h-4" />
-                MCP 配置
+                工具配置
             </Button>
         </div> -->
     </div>

@@ -622,11 +622,11 @@ onMounted(async () => {
                 <Button variant="ghost" size="icon" @click="router.back()">
                     <ArrowLeft class="w-4 h-4" />
                 </Button>
-                <h1 class="text-2xl font-bold">MCP 服务器管理</h1>
+                <h1 class="text-2xl font-bold">工具管理</h1>
             </div>
             <Button @click="openAddDialog">
                 <Plus class="w-4 h-4 mr-2" />
-                添加服务器
+                添加工具
             </Button>
         </div>
 
@@ -750,7 +750,7 @@ onMounted(async () => {
                 v-if="mcpStore.servers.length === 0"
                 class="text-center py-12 text-muted-foreground"
             >
-                未配置 MCP 服务器。点击“添加服务器”开始使用。
+                未配置工具。点击“添加工具”开始使用。
             </div>
         </div>
 
@@ -759,7 +759,7 @@ onMounted(async () => {
                 <DialogHeader>
                     <div class="flex items-center justify-between">
                         <DialogTitle>{{
-                            editingServer ? "编辑服务器" : "添加服务器"
+                            editingServer ? "编辑工具" : "添加工具"
                         }}</DialogTitle>
                         <div
                             class="flex items-center gap-2 bg-muted p-1 rounded-md"
@@ -795,7 +795,7 @@ onMounted(async () => {
                         </div>
                     </div>
                     <DialogDescription>
-                        配置您的模型上下文协议 (MCP) 服务器。
+                        配置您的工具（MCP 服务器）。
                     </DialogDescription>
                 </DialogHeader>
 
@@ -814,10 +814,7 @@ onMounted(async () => {
                     </div>
                     <div class="grid gap-2">
                         <label class="text-sm font-medium">名称</label>
-                        <Input
-                            v-model="form.name"
-                            placeholder="我的 MCP 服务器"
-                        />
+                        <Input v-model="form.name" placeholder="我的工具" />
                     </div>
 
                     <template v-if="form.type === 'stdio'">

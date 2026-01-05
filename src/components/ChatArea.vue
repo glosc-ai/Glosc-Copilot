@@ -1077,13 +1077,11 @@ watch(
                                     @contextmenu.prevent="openMcpManager"
                                 >
                                     <Server class="size-4" />
-                                    <span>MCP</span>
+                                    <span>工具</span>
                                 </PromptInputButton>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent class="w-56">
-                                <DropdownMenuLabel
-                                    >MCP 服务器</DropdownMenuLabel
-                                >
+                                <DropdownMenuLabel>工具</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuSub
                                     v-for="server in servers"
@@ -1237,7 +1235,7 @@ watch(
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem @click="openMcpManager">
                                     <Settings2 class="mr-2 h-4 w-4" />
-                                    <span>管理服务器...</span>
+                                    <span>管理工具...</span>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
