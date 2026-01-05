@@ -73,7 +73,7 @@ const toggleToolSchema = (toolKey: string) => {
             </Button>
         </div>
 
-        <div class="max-h-[400px] overflow-y-auto pr-2">
+        <div class="max-h-100 overflow-y-auto pr-2">
             <div v-if="activeTab === 'tools'" class="grid gap-4">
                 <div
                     v-if="!capabilities.tools"

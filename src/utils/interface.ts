@@ -103,6 +103,11 @@ export type McpServer = z.infer<typeof McpServerSchema>;
 export type ClientToolRegistry = Record<string, any>;
 export type CreateChatClientOptions = {
     /**
+     * 后端 Chat/Agent 接口路径。
+     * 默认 `/api/chat`；任务模式可传 `/api/agent`。
+     */
+    apiPath?: string;
+    /**
      * 客户端可执行工具表（通常来自 MCP）。
      * onToolCall 会在这里查找 toolName 并执行其 execute。
      */

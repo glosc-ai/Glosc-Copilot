@@ -46,6 +46,18 @@ import { storeToRefs } from "pinia";
 import { useMcpStore } from "@/stores/mcp";
 import { useRouter } from "vue-router";
 
+const props = withDefaults(
+    defineProps<{
+        /**
+         * 后端接口路径：默认 /api/chat；任务模式传 /api/agent。
+         */
+        apiPath?: string;
+    }>(),
+    {
+        apiPath: "/api/chat",
+    }
+);
+
 // import { nanoid } from "nanoid";
 
 const chatStore = useChatStore();
@@ -197,6 +209,7 @@ const clientToolsRef = shallowRef<Record<string, any> | null>(null);
 const chat = ChatUtils.getChat({
     toolsRef: clientToolsRef,
     debugTools: false,
+    apiPath: props.apiPath,
 });
 
 const status = computed<ChatStatus>(() => chat.status);
@@ -538,6 +551,7 @@ async function handleSubmit(message: PromptInputMessage) {
                     model: selectedModel.value?.id,
                     mcpEnabled: hasEnabledServers.value,
                     tools,
+                    ...(webSearchEnabled.value ? { webSearch: true } : {}),
                 },
             }
         );
@@ -616,10 +630,14 @@ async function copyToClipboard(text: string) {
 }
 
 async function handleRegenerate() {
+    const tools = await mcpStore.getCachedTools();
+    clientToolsRef.value = tools;
     chat.regenerate({
         body: {
             model: selectedModel.value?.id,
             mcpEnabled: hasEnabledServers.value,
+            tools,
+            ...(webSearchEnabled.value ? { webSearch: true } : {}),
         },
     });
 }
@@ -749,7 +767,7 @@ watch(
 </script>
 
 <template>
-    <div class="relative pl-5 pr-5 size-full h-screen p-6">
+    <div class="relative pl-5 pr-5 size-full h-full p-6">
         <div class="flex h-full flex-col">
             <Conversation class="h-full">
                 <ConversationContent>

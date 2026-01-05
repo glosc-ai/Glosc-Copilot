@@ -111,9 +111,10 @@ export class ChatUtils {
     }
 
     public static getChat(options: CreateChatClientOptions = {}) {
+        const apiPath = options.apiPath || "/api/chat";
         const chat = new Chat({
             transport: new DefaultChatTransport({
-                api: `${this.host}/api/chat`,
+                api: `${this.host}${apiPath}`,
             }),
             sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
             onToolCall: async ({ toolCall }) => {

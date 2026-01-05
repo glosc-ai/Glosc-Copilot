@@ -12,11 +12,35 @@ import {
 import { useChatStore } from "@/stores/chat";
 import { storeToRefs } from "pinia";
 import { cn } from "@/lib/utils";
-import { nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch, onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 const chatStore = useChatStore();
 const { conversationsItems, activeKey, groupedConversations } =
     storeToRefs(chatStore);
+
+const router = useRouter();
+const route = useRoute();
+
+onMounted(() => {
+    // 让侧边栏在任何模式下首次挂载时都能恢复会话数据
+    void chatStore.init();
+});
+
+const modeItems = [
+    { label: "对话", path: "/" },
+    { label: "任务", path: "/tasks" },
+    { label: "工作区", path: "/workspace" },
+    { label: "计划", path: "/plan" },
+];
+
+const isChatMode = computed(() => route.path === "/");
+
+const isModeActive = (path: string) => route.path === path;
+const goToMode = (path: string) => {
+    if (route.path === path) return;
+    void router.push(path);
+};
 
 // ===== 分组折叠状态 =====
 const collapsedGroups = ref<Record<string, boolean>>({});
@@ -154,106 +178,140 @@ const onDrop = async (targetKey: string, event: DragEvent) => {
         class="flex flex-col h-full border-r bg-muted/10 relative"
         :style="{ width: sidebarWidth + 'px' }"
     >
-        <div class="p-4">
-            <Button
-                @click="createNewChat"
-                class="w-full justify-start gap-2"
-                variant="default"
-            >
-                <Plus class="w-4 h-4" />
-                新建对话
-            </Button>
+        <div class="p-2 border-b">
+            <div class="grid gap-1">
+                <Button
+                    v-for="item in modeItems"
+                    :key="item.path"
+                    variant="ghost"
+                    class="w-full justify-start"
+                    :class="
+                        cn(
+                            isModeActive(item.path)
+                                ? 'bg-accent text-accent-foreground'
+                                : 'text-muted-foreground hover:text-foreground'
+                        )
+                    "
+                    @click="goToMode(item.path)"
+                >
+                    {{ item.label }}
+                </Button>
+            </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto px-2">
-            <div class="space-y-2">
-                <div
-                    v-for="(items, groupKey) in groupedConversations"
-                    :key="groupKey"
-                    class="space-y-1"
+        <template v-if="isChatMode">
+            <div class="p-4">
+                <Button
+                    @click="createNewChat"
+                    class="w-full justify-start gap-2"
+                    variant="default"
                 >
-                    <!-- 分组标题 -->
-                    <div
-                        class="flex items-center gap-2 px-2 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
-                        @click="toggleGroup(groupKey)"
-                    >
-                        <ChevronDown
-                            v-if="!collapsedGroups[groupKey]"
-                            class="w-3 h-3"
-                        />
-                        <ChevronRight v-else class="w-3 h-3" />
-                        <span>{{ groupKey }}</span>
-                        <span class="ml-auto text-xs opacity-50"
-                            >({{ items.length }})</span
-                        >
-                    </div>
+                    <Plus class="w-4 h-4" />
+                    新建对话
+                </Button>
+            </div>
 
-                    <!-- 分组内容 -->
-                    <div v-show="!collapsedGroups[groupKey]" class="space-y-1">
+            <div class="flex-1 overflow-y-auto px-2">
+                <div class="space-y-2">
+                    <div
+                        v-for="(items, groupKey) in groupedConversations"
+                        :key="groupKey"
+                        class="space-y-1"
+                    >
+                        <!-- 分组标题 -->
                         <div
-                            v-for="item in items"
-                            :key="item.key"
-                            @click="selectChat(item.key)"
-                            draggable="true"
-                            @dragstart="
-                                (e: DragEvent) => onDragStart(item.key, e)
-                            "
-                            @dragover="onDragOver"
-                            @drop="(e: DragEvent) => onDrop(item.key, e)"
-                            :class="
-                                cn(
-                                    'flex items-center justify-between p-2 rounded-md cursor-pointer text-sm transition-colors group',
-                                    activeKey === item.key
-                                        ? 'bg-accent text-accent-foreground'
-                                        : 'hover:bg-accent/50 text-muted-foreground'
-                                )
-                            "
+                            class="flex items-center gap-2 px-2 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                            @click="toggleGroup(groupKey)"
+                        >
+                            <ChevronDown
+                                v-if="!collapsedGroups[groupKey]"
+                                class="w-3 h-3"
+                            />
+                            <ChevronRight v-else class="w-3 h-3" />
+                            <span>{{ groupKey }}</span>
+                            <span class="ml-auto text-xs opacity-50"
+                                >({{ items.length }})</span
+                            >
+                        </div>
+
+                        <!-- 分组内容 -->
+                        <div
+                            v-show="!collapsedGroups[groupKey]"
+                            class="space-y-1"
                         >
                             <div
-                                class="flex items-center gap-2 overflow-hidden"
+                                v-for="item in items"
+                                :key="item.key"
+                                @click="selectChat(item.key)"
+                                draggable="true"
+                                @dragstart="
+                                    (e: DragEvent) => onDragStart(item.key, e)
+                                "
+                                @dragover="onDragOver"
+                                @drop="(e: DragEvent) => onDrop(item.key, e)"
+                                :class="
+                                    cn(
+                                        'flex items-center justify-between p-2 rounded-md cursor-pointer text-sm transition-colors group',
+                                        activeKey === item.key
+                                            ? 'bg-accent text-accent-foreground'
+                                            : 'hover:bg-accent/50 text-muted-foreground'
+                                    )
+                                "
                             >
-                                <MessageSquare class="w-4 h-4 shrink-0" />
-                                <template v-if="editingKey === item.key">
-                                    <Input
-                                        v-model="editingTitle"
-                                        class="h-7"
-                                        @click.stop
-                                        @keydown.enter.prevent="confirmRename"
-                                        @keydown.esc.prevent="cancelRename"
-                                        @blur="confirmRename"
-                                    />
-                                </template>
-                                <template v-else>
-                                    <span class="truncate">{{
-                                        item.label
-                                    }}</span>
-                                </template>
-                            </div>
-                            <div class="flex items-center gap-1">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    class="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    @click="
-                                        (e: any) => startRename(item.key, e)
-                                    "
+                                <div
+                                    class="flex items-center gap-2 overflow-hidden"
                                 >
-                                    <Pencil class="w-3 h-3" />
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    class="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    @click="(e: any) => deleteChat(item.key, e)"
-                                >
-                                    <Trash2 class="w-3 h-3" />
-                                </Button>
+                                    <MessageSquare class="w-4 h-4 shrink-0" />
+                                    <template v-if="editingKey === item.key">
+                                        <Input
+                                            v-model="editingTitle"
+                                            class="h-7"
+                                            @click.stop
+                                            @keydown.enter.prevent="
+                                                confirmRename
+                                            "
+                                            @keydown.esc.prevent="cancelRename"
+                                            @blur="confirmRename"
+                                        />
+                                    </template>
+                                    <template v-else>
+                                        <span class="truncate">{{
+                                            item.label
+                                        }}</span>
+                                    </template>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        class="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        @click="
+                                            (e: any) => startRename(item.key, e)
+                                        "
+                                    >
+                                        <Pencil class="w-3 h-3" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        class="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        @click="
+                                            (e: any) => deleteChat(item.key, e)
+                                        "
+                                    >
+                                        <Trash2 class="w-3 h-3" />
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </template>
+
+        <template v-else>
+            <div class="flex-1 p-4 text-sm text-muted-foreground">暂无内容</div>
+        </template>
 
         <!-- 拖拽调整宽度手柄 -->
         <div
