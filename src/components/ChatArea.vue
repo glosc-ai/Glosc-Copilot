@@ -1358,6 +1358,12 @@ watch(
                                                         )
                                                     )
                                                 "
+                                                :class="{
+                                                    'bg-blue-500!':
+                                                        selectedModelTags.includes(
+                                                            tag
+                                                        ),
+                                                }"
                                             >
                                                 {{ tag }}
                                             </DropdownMenuCheckboxItem>
@@ -1416,6 +1422,12 @@ watch(
                                                         )
                                                     )
                                                 "
+                                                :class="{
+                                                    'bg-blue-500!':
+                                                        selectedModelOwners.includes(
+                                                            owner
+                                                        ),
+                                                }"
                                             >
                                                 {{ owner }}
                                             </DropdownMenuCheckboxItem>
