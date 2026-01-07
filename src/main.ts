@@ -10,6 +10,36 @@ app.use(createPinia());
 app.use(router);
 app.mount("#app");
 
+async function setupProdDevtoolsHotkey() {
+    try {
+        // When running in a normal browser (vite dev), Tauri internals are not available.
+        if (!(window as any).__TAURI_INTERNALS__) return;
+
+        const { invoke } = await import("@tauri-apps/api/core");
+        const enabled = await invoke<boolean>("is_debug_enabled");
+        if (!enabled) return;
+
+        window.addEventListener(
+            "keydown",
+            (e) => {
+                const isF12 = e.key === "F12";
+
+                if (!isF12) return;
+
+                e.preventDefault();
+                invoke("open_devtools").catch(() => {
+                    // ignore
+                });
+            },
+            { capture: true }
+        );
+    } catch {
+        // ignore
+    }
+}
+
+setupProdDevtoolsHotkey();
+
 // 配置 CORSFetch
 (window as any).CORSFetch.config({
     include: [/^https?:\/\//i], // 处理所有 HTTP 请求（默认）

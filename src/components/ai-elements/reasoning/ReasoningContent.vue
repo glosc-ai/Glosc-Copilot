@@ -2,12 +2,12 @@
 import type { HTMLAttributes } from "vue";
 import { CollapsibleContent } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { StreamMarkdown } from "streamdown-vue";
 import { computed, useSlots } from "vue";
-import StreamdownCodeBlock from "../code-block/StreamdownCodeBlock.vue";
+import MemoizedMarkdown from "../message/MemoizedMarkdown.vue";
 
 interface Props {
     class?: HTMLAttributes["class"];
+    id?: string;
     content: string;
 }
 
@@ -24,8 +24,6 @@ const slotContent = computed<string | undefined>(() => {
 });
 
 const md = computed(() => (slotContent.value ?? props.content ?? "") as string);
-
-const components = { codeblock: StreamdownCodeBlock };
 </script>
 
 <template>
@@ -40,6 +38,10 @@ const components = { codeblock: StreamdownCodeBlock };
             )
         "
     >
-        <StreamMarkdown :content="md" :components="components" />
+        <MemoizedMarkdown
+            :id="props.id ?? 'reasoning'"
+            :content="md"
+            class="prose prose-sm max-w-none"
+        />
     </CollapsibleContent>
 </template>

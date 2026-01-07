@@ -49,8 +49,8 @@ async function loadDir(dirPath: string) {
                 const isDir = Boolean(e?.isDir);
                 return { name, path, isDir };
             })
-            .filter((n) => Boolean(n.name))
-            .sort((a, b) => {
+            .filter((n: any) => Boolean(n.name))
+            .sort((a: any, b: any) => {
                 if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
                 return a.name.localeCompare(b.name);
             });

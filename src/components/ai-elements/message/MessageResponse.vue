@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from "vue";
 import { cn } from "@/lib/utils";
-import { StreamMarkdown } from "streamdown-vue";
 import { computed, useSlots } from "vue";
-import StreamdownCodeBlock from "../code-block/StreamdownCodeBlock.vue";
+import MemoizedMarkdown from "./MemoizedMarkdown.vue";
 
 interface Props {
+    id: string;
     content?: string;
     isStreaming?: boolean;
     class?: HTMLAttributes["class"];
@@ -23,24 +23,13 @@ const slotContent = computed<string | undefined>(() => {
 });
 
 const md = computed(() => (slotContent.value ?? props.content ?? "") as string);
-
-const components = { codeblock: StreamdownCodeBlock };
-
-const shikiTheme = computed(() => {
-    // 流式期间禁用高亮，避免每个增量都触发昂贵的 Shiki 处理
-    if (props.isStreaming) return undefined;
-    return {
-        light: "github-light",
-        dark: "github-dark",
-    };
-});
 </script>
 
 <template>
-    <StreamMarkdown
-        :shiki-theme="shikiTheme"
-        :components="components"
+    <MemoizedMarkdown
+        :id="props.id"
         :content="md"
+        :is-streaming="props.isStreaming"
         :class="cn(props.class)"
         v-bind="$attrs"
     />

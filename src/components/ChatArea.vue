@@ -872,6 +872,7 @@ watch(
                                         </template>
                                         <template v-else>
                                             <MessageResponse
+                                                :id="`${message.id}-text-${partIndex}`"
                                                 :content="part.text"
                                                 :is-streaming="
                                                     isStreamingPart(
@@ -891,6 +892,7 @@ watch(
                                     >
                                         <ReasoningTrigger />
                                         <ReasoningContent
+                                            :id="`${message.id}-reasoning-${partIndex}`"
                                             :content="part.text"
                                         />
                                     </Reasoning>

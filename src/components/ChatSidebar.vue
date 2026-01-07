@@ -13,13 +13,13 @@ import { useChatStore } from "@/stores/chat";
 import { storeToRefs } from "pinia";
 import { cn } from "@/lib/utils";
 import { computed, nextTick, ref, watch, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 
 const chatStore = useChatStore();
 const { conversationsItems, activeKey, groupedConversations } =
     storeToRefs(chatStore);
 
-const router = useRouter();
+// const router = useRouter();
 const route = useRoute();
 
 onMounted(() => {
@@ -27,20 +27,20 @@ onMounted(() => {
     void chatStore.init();
 });
 
-const modeItems = [
-    { label: "对话", path: "/" },
-    { label: "任务", path: "/tasks" },
-    { label: "工作区", path: "/workspace" },
-    { label: "计划", path: "/plan" },
-];
+// const modeItems = [
+//     { label: "对话", path: "/" },
+//     { label: "任务", path: "/tasks" },
+//     { label: "工作区", path: "/workspace" },
+//     { label: "计划", path: "/plan" },
+// ];
 
 const isChatMode = computed(() => route.path === "/");
 
-const isModeActive = (path: string) => route.path === path;
-const goToMode = (path: string) => {
-    if (route.path === path) return;
-    void router.push(path);
-};
+// const isModeActive = (path: string) => route.path === path;
+// const goToMode = (path: string) => {
+//     if (route.path === path) return;
+//     void router.push(path);
+// };
 
 // ===== 分组折叠状态 =====
 const collapsedGroups = ref<Record<string, boolean>>({});
@@ -178,7 +178,7 @@ const onDrop = async (targetKey: string, event: DragEvent) => {
         class="flex flex-col h-full border-r bg-muted/10 relative"
         :style="{ width: sidebarWidth + 'px' }"
     >
-        <div class="p-2 border-b">
+        <!-- <div class="p-2 border-b">
             <div class="grid gap-1">
                 <Button
                     v-for="item in modeItems"
@@ -197,7 +197,7 @@ const onDrop = async (targetKey: string, event: DragEvent) => {
                     {{ item.label }}
                 </Button>
             </div>
-        </div>
+        </div> -->
 
         <template v-if="isChatMode">
             <div class="p-4">
