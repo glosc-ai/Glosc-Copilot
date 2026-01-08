@@ -12,6 +12,10 @@ const props = defineProps<{
     state: ToolUIPart["state"];
     class?: HTMLAttributes["class"];
 }>();
+
+const name = computed(() =>
+    props.title ? props.type.split("-").slice(1).join(" ") : props.type
+);
 </script>
 
 <template>
@@ -25,11 +29,11 @@ const props = defineProps<{
         v-bind="$attrs"
     >
         <div class="flex items-center gap-2">
-            <WrenchIcon class="size-4 text-muted-foreground" />
-            <span class="font-medium text-sm">
-                {{ props.title ?? props.type.split("-").slice(1).join(" ") }}
-            </span>
+            <!-- <WrenchIcon class="size-4 text-muted-foreground" /> -->
             <StatusBadge :state="props.state" />
+            <span class="font-medium text-sm">
+                {{ name }}
+            </span>
         </div>
         <ChevronDownIcon
             class="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180"

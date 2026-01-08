@@ -13,6 +13,7 @@ import { computed } from "vue";
 
 const props = defineProps<{
     state: ToolUIPart["state"];
+    showLabel?: boolean;
 }>();
 
 const label = computed(() => {
@@ -58,6 +59,6 @@ const iconClass = computed(() => {
 <template>
     <Badge class="gap-1.5 rounded-full text-xs" variant="secondary">
         <component :is="icon" :class="iconClass" />
-        <span>{{ label }}</span>
+        <span v-if="showLabel">{{ label }}</span>
     </Badge>
 </template>

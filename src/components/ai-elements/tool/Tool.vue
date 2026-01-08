@@ -10,7 +10,7 @@ const props = defineProps<{
 
 <template>
     <Collapsible
-        :class="cn('not-prose mb-4 w-full rounded-md border', props.class)"
+        :class="cn('not-prose mb-4 w-full rounded-md ', props.class)"
         v-bind="$attrs"
     >
         <slot />

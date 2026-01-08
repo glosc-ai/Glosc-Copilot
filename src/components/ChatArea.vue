@@ -747,6 +747,28 @@ const imageData = (part: any): any => {
     };
 };
 
+const fileToolTypes = new Set([
+    "tool-editText",
+    "tool-read_file",
+    "tool-read_text_file",
+    "tool-read_media_file",
+    "tool-read_multiple_files",
+    "tool-write_file",
+    "tool-edit_file",
+    "tool-create_directory",
+    "tool-list_directory",
+    "tool-list_directory_with_sizes",
+    "tool-directory_tree",
+    "tool-move_file",
+    "tool-search_files",
+    "tool-get_file_info",
+    "tool-list_allowed_directories",
+]);
+
+function isFileToolType(type: string) {
+    return fileToolTypes.has(type);
+}
+
 watch(
     () => status.value,
     (next, prev) => {
@@ -909,9 +931,37 @@ watch(
                                         ></ToolHeader>
                                         <ToolContent>
                                             <ToolInput
+                                                v-if="
+                                                    part.type !==
+                                                        'tool-sequentialthinking' &&
+                                                    !isFileToolType(part.type)
+                                                "
                                                 :input="(part as any).input"
                                             ></ToolInput>
+                                            <SequentialThinking
+                                                v-if="
+                                                    part.type ===
+                                                    'tool-sequentialthinking'
+                                                "
+                                                :input="(part as any).input"
+                                                :output="(part as any).output"
+                                                :errorText="
+                                                    (part as any).errorText
+                                                "
+                                            />
+                                            <EditText
+                                                v-else-if="
+                                                    isFileToolType(part.type)
+                                                "
+                                                :toolType="part.type"
+                                                :input="(part as any).input"
+                                                :output="(part as any).output"
+                                                :errorText="
+                                                    (part as any).errorText
+                                                "
+                                            />
                                             <ToolOutput
+                                                v-else
                                                 :output="(part as any).output"
                                                 :errorText="
                                                     (part as any).errorText
