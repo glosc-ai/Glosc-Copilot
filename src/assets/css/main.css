@@ -121,3 +121,17 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* GitHub Markdown CSS integration (theme-friendly overrides) */
+.markdown-body {
+    background: transparent !important;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+}
+
+.markdown-body pre,
+.markdown-body code {
+    background: transparent;
+    color: inherit;
+}

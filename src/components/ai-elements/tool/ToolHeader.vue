@@ -3,7 +3,7 @@ import type { ToolUIPart } from "ai";
 import type { HTMLAttributes } from "vue";
 import { CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { ChevronDownIcon, WrenchIcon } from "lucide-vue-next";
+import { ChevronDownIcon } from "lucide-vue-next";
 import StatusBadge from "./ToolStatusBadge.vue";
 
 const props = defineProps<{

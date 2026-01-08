@@ -2,9 +2,7 @@
 import type { HTMLAttributes } from "vue";
 import { computed, ref, watch } from "vue";
 import MarkdownIt from "markdown-it";
-import { StreamMarkdown } from "streamdown-vue";
 import { cn } from "@/lib/utils";
-import StreamdownCodeBlock from "../code-block/StreamdownCodeBlock.vue";
 import { useThrottleFn } from "@vueuse/core";
 
 interface Props {
@@ -41,6 +39,7 @@ watch(
 const mdParser = new MarkdownIt({
     html: false,
     linkify: true,
+    breaks: true,
 });
 
 function parseMarkdownIntoBlocks(markdown: string): string[] {
@@ -121,29 +120,24 @@ const blocksWithKeys = computed(() =>
     }))
 );
 
-const components = { codeblock: StreamdownCodeBlock };
+const htmlCache = new Map<string, string>();
+function renderMarkdownToHtml(markdown: string): string {
+    const cached = htmlCache.get(markdown);
+    if (cached != null) return cached;
 
-const shikiTheme = computed(() => {
-    // 流式期间禁用高亮，避免每个增量都触发昂贵的 Shiki 处理
-    if (props.isStreaming) return undefined;
-    return {
-        light: "github-light",
-        dark: "github-dark",
-    };
-});
-
-const themeKey = computed(() => (props.isStreaming ? "streaming" : "final"));
+    const html = mdParser.render(markdown);
+    htmlCache.set(markdown, html);
+    return html;
+}
 </script>
 
 <template>
-    <template v-for="item in blocksWithKeys" :key="item.key">
-        <StreamMarkdown
-            v-memo="[item.block, themeKey]"
-            :shiki-theme="shikiTheme"
-            :components="components"
-            :content="item.block"
-            :class="cn(props.class)"
-            v-bind="$attrs"
+    <div :class="cn('markdown-body', 'w-full', props.class)" v-bind="$attrs">
+        <div
+            v-for="item in blocksWithKeys"
+            :key="item.key"
+            v-memo="[item.block]"
+            v-html="renderMarkdownToHtml(item.block)"
         />
-    </template>
+    </div>
 </template>
