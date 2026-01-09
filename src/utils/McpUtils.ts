@@ -119,7 +119,7 @@ export class McpUtils {
                 const serverTools = await client.tools();
                 Object.assign(tools, serverTools);
             } catch (error) {
-                console.error(
+                console.log(
                     `Failed to initialize MCP server ${server.name}:`,
                     error
                 );
@@ -142,7 +142,7 @@ export class McpUtils {
             }
             return await mcpClient.listResources();
         } catch (error) {
-            console.warn("Error fetching resources from MCP client:", error);
+            console.log("Error fetching resources from MCP client:", error);
             return { resources: [] };
         }
     }
@@ -157,7 +157,7 @@ export class McpUtils {
             }
             return await mcpClient.listResourceTemplates();
         } catch (error) {
-            console.error(
+            console.log(
                 "Error fetching resource templates from MCP client:",
                 error
             );
@@ -172,7 +172,7 @@ export class McpUtils {
             }
             return await mcpClient.listPrompts();
         } catch (error) {
-            console.error("Error fetching prompts from MCP client:", error);
+            console.log("Error fetching prompts from MCP client:", error);
             return { prompts: [] };
         }
     }
@@ -199,7 +199,7 @@ export class McpUtils {
                 ...caps,
             };
         } catch (error: any) {
-            console.error("MCP Test Error:", error);
+            console.log("MCP Test Error:", error);
             try {
                 if (mcpClient && typeof mcpClient.close === "function") {
                     await mcpClient.close();

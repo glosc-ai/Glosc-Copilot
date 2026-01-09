@@ -186,7 +186,7 @@ export class TauriStdioTransport {
             });
 
             cmd.on("error", (error: any) => {
-                console.error(`command error: "${error}"`);
+                console.log(`command error: "${error}"`);
                 this.onerror?.(new Error(String(error)));
             });
 
@@ -196,13 +196,13 @@ export class TauriStdioTransport {
             });
 
             cmd.stderr.on("data", (line: any) => {
-                console.error(`[${command} stderr]: ${toText(line)}`);
+                console.log(`[${command} stderr]: ${toText(line)}`);
             });
 
             this._process = await cmd.spawn();
             console.log("Child process spawned:", this._process?.pid);
         } catch (e) {
-            console.error("Failed to spawn command:", e);
+            console.log("Failed to spawn command:", e);
             this.onerror?.(e as Error);
             throw e;
         }
@@ -218,7 +218,7 @@ export class TauriStdioTransport {
                 console.log("[TauriStdioTransport] Received:", message);
                 this.onmessage?.(message);
             } catch (error) {
-                console.error(
+                console.log(
                     "[TauriStdioTransport] Error processing message:",
                     error
                 );
