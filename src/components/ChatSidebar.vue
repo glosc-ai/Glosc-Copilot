@@ -209,6 +209,9 @@ const onDrop = async (targetKey: string, event: DragEvent) => {
                     <Plus class="w-4 h-4" />
                     新建对话
                 </Button>
+                <!-- <router-link to="/test">
+                    <Button class="w-full justify-start gap-2">测试</Button>
+                </router-link> -->
             </div>
 
             <div class="flex-1 overflow-y-auto px-2">

@@ -1,17 +1,4 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from "vue";
-import { useMcpStore } from "@/stores/mcp";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-
 import {
     Plus,
     Trash2,
@@ -23,13 +10,11 @@ import {
     ChevronDown,
     ChevronUp,
     Loader2,
+    GripVertical,
 } from "lucide-vue-next";
-import { useRouter } from "vue-router";
 
-import { McpUtils } from "@/utils/McpUtils";
-import McpCapabilityView from "@/components/mcp/McpCapabilityView.vue";
-import type { McpServer } from "@/utils/interface";
-import { Codemirror } from "vue-codemirror";
+import { VueDraggableNext } from "vue-draggable-next";
+
 import { json, jsonLanguage } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
 import {
@@ -65,6 +50,10 @@ const isDialogOpen = ref(false);
 const editingServer = ref<McpServer | null>(null);
 const inputMode = ref<"form" | "json">("form");
 const jsonContent = ref("");
+
+const onSortEnd = async () => {
+    await mcpStore.saveServers();
+};
 
 // Test Results State
 const expandedServers = ref<Set<string>>(new Set());
@@ -338,6 +327,52 @@ const stripJsonComments = (json: string) => {
     );
 };
 
+const splitCommandLine = (commandLine: string) => {
+    const text = (commandLine || "").trim();
+    if (!text) return { command: "", args: [] as string[] };
+
+    const parts: string[] = [];
+    let current = "";
+    let inSingle = false;
+    let inDouble = false;
+
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+
+        if (ch === "\\" && i + 1 < text.length && inDouble) {
+            const next = text[i + 1];
+            if (next === '"' || next === "\\") {
+                current += next;
+                i++;
+                continue;
+            }
+        }
+
+        if (ch === "'" && !inDouble) {
+            inSingle = !inSingle;
+            continue;
+        }
+        if (ch === '"' && !inSingle) {
+            inDouble = !inDouble;
+            continue;
+        }
+
+        if (!inSingle && !inDouble && /\s/.test(ch)) {
+            if (current) {
+                parts.push(current);
+                current = "";
+            }
+            continue;
+        }
+
+        current += ch;
+    }
+
+    if (current) parts.push(current);
+    const [command, ...args] = parts;
+    return { command: command ?? "", args };
+};
+
 const parseServerConfig = (jsonStr: string) => {
     try {
         const data = JSON.parse(stripJsonComments(jsonStr));
@@ -348,11 +383,24 @@ const parseServerConfig = (jsonStr: string) => {
             const keys = Object.keys(data.mcpServers);
             for (const name of keys) {
                 const config = data.mcpServers[name];
+                let command = config.command;
+                let args = config.args || [];
+                if (
+                    typeof command === "string" &&
+                    Array.isArray(args) &&
+                    args.length === 0
+                ) {
+                    const parsed = splitCommandLine(command);
+                    if (parsed.command) {
+                        command = parsed.command;
+                        args = parsed.args;
+                    }
+                }
                 configs.push({
                     type: config.type || "stdio",
                     name: name,
-                    command: config.command,
-                    args: config.args || [],
+                    command,
+                    args,
                     env: config.env || {},
                     url: config.url,
                     headers: config.headers,
@@ -366,11 +414,24 @@ const parseServerConfig = (jsonStr: string) => {
             const keys = Object.keys(data.servers);
             for (const name of keys) {
                 const config = data.servers[name];
+                let command = config.command;
+                let args = config.args || [];
+                if (
+                    typeof command === "string" &&
+                    Array.isArray(args) &&
+                    args.length === 0
+                ) {
+                    const parsed = splitCommandLine(command);
+                    if (parsed.command) {
+                        command = parsed.command;
+                        args = parsed.args;
+                    }
+                }
                 configs.push({
                     type: config.type || "stdio",
                     name: name,
-                    command: config.command,
-                    args: config.args || [],
+                    command,
+                    args,
                     env: config.env || {},
                     url: config.url,
                     headers: config.headers,
@@ -380,12 +441,25 @@ const parseServerConfig = (jsonStr: string) => {
         }
 
         // Handle direct server config
+        let directCommand = data.command;
+        let directArgs = data.args || [];
+        if (
+            typeof directCommand === "string" &&
+            Array.isArray(directArgs) &&
+            directArgs.length === 0
+        ) {
+            const parsed = splitCommandLine(directCommand);
+            if (parsed.command) {
+                directCommand = parsed.command;
+                directArgs = parsed.args;
+            }
+        }
         return [
             {
                 type: data.type || (data.url ? "http" : "stdio"),
                 name: data.name,
-                command: data.command,
-                args: data.args || [],
+                command: directCommand,
+                args: directArgs,
                 env: data.env || {},
                 url: data.url,
                 headers: data.headers || {},
@@ -435,8 +509,15 @@ const saveServer = async () => {
         serverData.type = form.value.type;
         serverData.name = form.value.name;
         if (serverData.type === "stdio") {
-            serverData.command = form.value.command;
-            serverData.args = form.value.args.split(" ").filter(Boolean);
+            const argsFromField = form.value.args.split(" ").filter(Boolean);
+            if (argsFromField.length === 0) {
+                const parsed = splitCommandLine(form.value.command);
+                serverData.command = parsed.command;
+                serverData.args = parsed.args;
+            } else {
+                serverData.command = form.value.command;
+                serverData.args = argsFromField;
+            }
             try {
                 serverData.env = form.value.env
                     ? JSON.parse(form.value.env)
@@ -631,120 +712,149 @@ onMounted(async () => {
         </div>
 
         <div class="grid gap-4">
-            <div
-                v-for="server in mcpStore.servers"
-                :key="server.id"
-                class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden"
+            <VueDraggableNext
+                :list="mcpStore.servers"
+                item-key="id"
+                group="mcp-tools"
+                handle=".drag-handle"
+                @end="onSortEnd"
             >
-                <div class="p-4 flex items-center justify-between">
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <h3 class="font-semibold text-lg">
-                                {{ server.name }}
-                            </h3>
-                            <span
-                                :class="[
-                                    'px-2 py-0.5 rounded text-xs',
-                                    getServerStateClass(server),
-                                ]"
-                            >
-                                {{ getServerStateLabel(server) }}
-                            </span>
+                <template v-for="server in mcpStore.servers">
+                    <div
+                        class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden mb-5"
+                    >
+                        <div class="p-4 flex items-center justify-between">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <div
+                                        class="drag-handle text-muted-foreground cursor-grab active:cursor-grabbing select-none"
+                                        :class="[
+                                            togglingServerIds.size > 0 ||
+                                            testingServerIds.size > 0
+                                                ? 'opacity-40 cursor-not-allowed'
+                                                : '',
+                                        ]"
+                                        title="拖拽排序"
+                                        @click.stop
+                                    >
+                                        <GripVertical class="w-4 h-4" />
+                                    </div>
+                                    <h3 class="font-semibold text-lg">
+                                        {{ server.name }}
+                                    </h3>
+                                    <span
+                                        :class="[
+                                            'px-2 py-0.5 rounded text-xs',
+                                            getServerStateClass(server),
+                                        ]"
+                                    >
+                                        {{ getServerStateLabel(server) }}
+                                    </span>
+                                </div>
+                                <p class="text-sm text-muted-foreground mt-1">
+                                    <span v-if="server.type === 'stdio'">
+                                        {{ server.command }}
+                                        {{ server.args.join(" ") }}
+                                    </span>
+                                    <span v-else-if="server.type === 'http'">
+                                        {{ server.url }}
+                                    </span>
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    @click="toggleServer(server)"
+                                    :disabled="isServerBusy(server.id)"
+                                >
+                                    <Loader2
+                                        v-if="togglingServerIds.has(server.id)"
+                                        class="w-4 h-4 mr-1 animate-spin"
+                                    />
+                                    <span
+                                        v-if="togglingServerIds.has(server.id)"
+                                    >
+                                        {{
+                                            toggleActionLabel[server.id] ===
+                                            "disable"
+                                                ? "禁用中"
+                                                : "启用中"
+                                        }}
+                                    </span>
+                                    <span v-else>
+                                        {{ server.enabled ? "禁用" : "启用" }}
+                                    </span>
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    @click="testServer(server)"
+                                    :disabled="isServerBusy(server.id)"
+                                >
+                                    <Loader2
+                                        v-if="testingServerIds.has(server.id)"
+                                        class="w-4 h-4 mr-1 animate-spin"
+                                    />
+                                    <Activity v-else class="w-4 h-4 mr-1" />
+                                    {{
+                                        testingServerIds.has(server.id)
+                                            ? "测试中"
+                                            : "测试"
+                                    }}
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    @click="openEditDialog(server)"
+                                    :disabled="isServerBusy(server.id)"
+                                >
+                                    <Edit class="w-4 h-4" />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    class="text-destructive hover:text-destructive"
+                                    @click="deleteServer(server.id)"
+                                    :disabled="isServerBusy(server.id)"
+                                >
+                                    <Trash2 class="w-4 h-4" />
+                                </Button>
+                                <Button
+                                    v-if="
+                                        mcpStore.serverCapabilities[server.id]
+                                    "
+                                    variant="ghost"
+                                    size="icon"
+                                    @click="toggleServerExpansion(server.id)"
+                                    :disabled="isServerBusy(server.id)"
+                                >
+                                    <component
+                                        :is="
+                                            expandedServers.has(server.id)
+                                                ? ChevronUp
+                                                : ChevronDown
+                                        "
+                                        class="w-4 h-4"
+                                    />
+                                </Button>
+                            </div>
                         </div>
-                        <p class="text-sm text-muted-foreground mt-1">
-                            <span v-if="server.type === 'stdio'">
-                                {{ server.command }} {{ server.args.join(" ") }}
-                            </span>
-                            <span v-else-if="server.type === 'http'">
-                                {{ server.url }}
-                            </span>
-                        </p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            @click="toggleServer(server)"
-                            :disabled="isServerBusy(server.id)"
-                        >
-                            <Loader2
-                                v-if="togglingServerIds.has(server.id)"
-                                class="w-4 h-4 mr-1 animate-spin"
-                            />
-                            <span v-if="togglingServerIds.has(server.id)">
-                                {{
-                                    toggleActionLabel[server.id] === "disable"
-                                        ? "禁用中"
-                                        : "启用中"
-                                }}
-                            </span>
-                            <span v-else>
-                                {{ server.enabled ? "禁用" : "启用" }}
-                            </span>
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            @click="testServer(server)"
-                            :disabled="isServerBusy(server.id)"
-                        >
-                            <Loader2
-                                v-if="testingServerIds.has(server.id)"
-                                class="w-4 h-4 mr-1 animate-spin"
-                            />
-                            <Activity v-else class="w-4 h-4 mr-1" />
-                            {{
-                                testingServerIds.has(server.id)
-                                    ? "测试中"
-                                    : "测试"
-                            }}
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            @click="openEditDialog(server)"
-                            :disabled="isServerBusy(server.id)"
-                        >
-                            <Edit class="w-4 h-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            class="text-destructive hover:text-destructive"
-                            @click="deleteServer(server.id)"
-                            :disabled="isServerBusy(server.id)"
-                        >
-                            <Trash2 class="w-4 h-4" />
-                        </Button>
-                        <Button
-                            v-if="mcpStore.serverCapabilities[server.id]"
-                            variant="ghost"
-                            size="icon"
-                            @click="toggleServerExpansion(server.id)"
-                            :disabled="isServerBusy(server.id)"
-                        >
-                            <component
-                                :is="
-                                    expandedServers.has(server.id)
-                                        ? ChevronUp
-                                        : ChevronDown
-                                "
-                                class="w-4 h-4"
-                            />
-                        </Button>
-                    </div>
-                </div>
 
-                <!-- Expanded Details -->
-                <McpCapabilityView
-                    v-if="
-                        expandedServers.has(server.id) &&
-                        mcpStore.serverCapabilities[server.id]
-                    "
-                    :server-id="server.id"
-                    :capabilities="mcpStore.serverCapabilities[server.id]"
-                />
-            </div>
+                        <!-- Expanded Details -->
+                        <McpCapabilityView
+                            v-if="
+                                expandedServers.has(server.id) &&
+                                mcpStore.serverCapabilities[server.id]
+                            "
+                            :server-id="server.id"
+                            :capabilities="
+                                mcpStore.serverCapabilities[server.id]
+                            "
+                        />
+                    </div>
+                </template>
+            </VueDraggableNext>
 
             <div
                 v-if="mcpStore.servers.length === 0"

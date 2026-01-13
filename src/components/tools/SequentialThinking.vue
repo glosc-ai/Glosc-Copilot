@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { CodeBlock } from "@/components/ai-elements/code-block";
+import MemoizedMarkdown from "@/components/ai-elements/message/MemoizedMarkdown.vue";
 import { cn } from "@/lib/utils";
 
 type SequentialThinkingStructured = {
@@ -36,6 +37,8 @@ const props = defineProps<{
 
 const rawOpen = ref(false);
 const paramsRawOpen = ref(false);
+const detailsOpen = ref(false);
+const paramsOpen = ref(false);
 
 function tryParseJson(value: unknown): unknown {
     if (typeof value !== "string") return value;
@@ -113,7 +116,7 @@ function scrubThoughtDeep(value: unknown, depth = 0): unknown {
     const next: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(obj)) {
         if (key === "thought") {
-            next[key] = "（已隐藏：推理细节不在 UI 中直接展示）";
+            next[key] = "（已脱敏：请查看上方“Thought/思考内容”区域）";
             continue;
         }
         next[key] = scrubThoughtDeep(val, depth + 1);
@@ -147,6 +150,27 @@ const scrubbedParamsJson = computed(() => {
 
 const seq = computed<SequentialThinkingStructured | null>(() => {
     return extractStructured(parsedOutput.value);
+});
+
+const thoughtText = computed<string | null>(() => {
+    const s = seq.value;
+    if (s && typeof s.thought === "string") return s.thought;
+
+    const p = params.value;
+    if (p && typeof p.thought === "string") return p.thought;
+
+    const o: any = parsedOutput.value as any;
+    if (o && typeof o === "object") {
+        if (typeof o.thought === "string") return o.thought;
+        if (typeof o?.structuredContent?.thought === "string")
+            return o.structuredContent.thought;
+    }
+
+    return null;
+});
+
+const hasThought = computed(() => {
+    return typeof thoughtText.value === "string" && thoughtText.value.trim();
 });
 
 const progressValue = computed(() => {
@@ -205,110 +229,6 @@ function yn(value: unknown) {
 
         <template v-else>
             <div class="space-y-2">
-                <h5
-                    class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
-                >
-                    Parameters
-                </h5>
-
-                <div
-                    class="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-muted/50 p-3 text-sm"
-                >
-                    <template v-if="params">
-                        <div class="text-muted-foreground">步骤</div>
-                        <div>
-                            {{ params.thoughtNumber }} /
-                            {{ params.totalThoughts }}
-                        </div>
-
-                        <div class="text-muted-foreground">需要下一步</div>
-                        <div>{{ yn(params.nextThoughtNeeded) }}</div>
-
-                        <div class="text-muted-foreground">是否修正</div>
-                        <div>
-                            <span v-if="typeof params.isRevision === 'boolean'">
-                                {{ yn(params.isRevision) }}
-                            </span>
-                            <span v-else class="text-muted-foreground"
-                                >未知</span
-                            >
-                            <span
-                                v-if="
-                                    params.isRevision && params.revisesThought
-                                "
-                                class="text-muted-foreground"
-                            >
-                                （修正第 {{ params.revisesThought }} 步）
-                            </span>
-                        </div>
-
-                        <div class="text-muted-foreground">分支</div>
-                        <div>
-                            <template
-                                v-if="
-                                    (Array.isArray(params.branches) &&
-                                        params.branches.length > 0) ||
-                                    params.branchId ||
-                                    params.branchFromThought
-                                "
-                            >
-                                <span v-if="Array.isArray(params.branches)">
-                                    {{ params.branches.length }} 条
-                                </span>
-                                <span
-                                    v-else-if="
-                                        params.branchId ||
-                                        params.branchFromThought
-                                    "
-                                >
-                                    {{ params.branchId || "未命名" }}
-                                </span>
-                                <span
-                                    v-if="params.branchFromThought"
-                                    class="text-muted-foreground"
-                                >
-                                    （从第
-                                    {{ params.branchFromThought }} 步分支）
-                                </span>
-                            </template>
-                            <span v-else class="text-muted-foreground">无</span>
-                        </div>
-
-                        <div class="text-muted-foreground">思考内容</div>
-                        <div class="text-muted-foreground">
-                            <span v-if="typeof params.thought === 'string'">
-                                已隐藏（避免在 UI 中直接展示推理细节）
-                            </span>
-                            <span v-else>本次参数未包含 thought</span>
-                        </div>
-                    </template>
-                    <template v-else>
-                        <div class="col-span-2 text-muted-foreground">
-                            参数不符合 sequentialthinking 结构，已提供脱敏 Raw。
-                        </div>
-                    </template>
-                </div>
-
-                <Collapsible v-model:open="paramsRawOpen" class="space-y-2">
-                    <div class="flex items-center justify-between gap-3">
-                        <h6
-                            class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
-                        >
-                            Parameters Raw (Scrubbed)
-                        </h6>
-                        <CollapsibleTrigger as-child>
-                            <Button variant="ghost" size="sm">
-                                {{ paramsRawOpen ? "收起" : "展开" }}
-                            </Button>
-                        </CollapsibleTrigger>
-                    </div>
-                    <CollapsibleContent>
-                        <CodeBlock :code="scrubbedParamsJson" language="json" />
-                    </CollapsibleContent>
-                </Collapsible>
-            </div>
-
-            <div class="space-y-2">
                 <div class="flex items-center justify-between gap-3 text-sm">
                     <div class="font-medium">本步：{{ stepKind }}</div>
                     <div v-if="seq" class="text-muted-foreground">
@@ -320,91 +240,255 @@ function yn(value: unknown) {
                 <Progress :modelValue="progressValue" />
             </div>
 
-            <div
-                class="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-muted/50 p-3 text-sm"
-            >
-                <template v-if="seq">
-                    <div class="text-muted-foreground">需要下一步</div>
-                    <div>{{ yn(seq.nextThoughtNeeded) }}</div>
-
-                    <div class="text-muted-foreground">需要更多思考</div>
-                    <div>
-                        <span
-                            v-if="typeof seq.needsMoreThoughts === 'boolean'"
-                            >{{ yn(seq.needsMoreThoughts) }}</span
-                        >
-                        <span v-else class="text-muted-foreground">未知</span>
+            <div class="space-y-2">
+                <h5 class="font-medium text-sm">Thought</h5>
+                <div class="rounded-md bg-muted/50 p-3">
+                    <MemoizedMarkdown
+                        v-if="hasThought"
+                        :id="`sequential-thinking-thought-${seq?.thoughtNumber ?? 0}`"
+                        :content="thoughtText || ''"
+                        class="text-sm"
+                    />
+                    <div v-else class="text-sm text-muted-foreground">
+                        本次输出未包含 thought。
                     </div>
-
-                    <div class="text-muted-foreground">是否修正</div>
-                    <div>
-                        <span v-if="typeof seq.isRevision === 'boolean'">{{
-                            yn(seq.isRevision)
-                        }}</span>
-                        <span v-else class="text-muted-foreground">未知</span>
-                        <span
-                            v-if="seq.isRevision && seq.revisesThought"
-                            class="text-muted-foreground"
-                        >
-                            （修正第 {{ seq.revisesThought }} 步）
-                        </span>
-                    </div>
-
-                    <div class="text-muted-foreground">分支</div>
-                    <div>
-                        <template
-                            v-if="
-                                (Array.isArray(seq.branches) &&
-                                    seq.branches.length > 0) ||
-                                seq.branchId ||
-                                seq.branchFromThought
-                            "
-                        >
-                            <span v-if="Array.isArray(seq.branches)">
-                                {{ seq.branches.length }} 条
-                            </span>
-                            <span
-                                v-else-if="
-                                    seq.branchId || seq.branchFromThought
-                                "
-                            >
-                                {{ seq.branchId || "未命名" }}
-                            </span>
-                            <span
-                                v-if="seq.branchFromThought"
-                                class="text-muted-foreground"
-                            >
-                                （从第 {{ seq.branchFromThought }} 步分支）
-                            </span>
-                        </template>
-                        <span v-else class="text-muted-foreground"> 无 </span>
-                    </div>
-
-                    <div class="text-muted-foreground">历史长度</div>
-                    <div>
-                        <span
-                            v-if="typeof seq.thoughtHistoryLength === 'number'"
-                        >
-                            {{ seq.thoughtHistoryLength }}
-                        </span>
-                        <span v-else class="text-muted-foreground">未知</span>
-                    </div>
-
-                    <div class="text-muted-foreground">思考内容</div>
-                    <div class="text-muted-foreground">
-                        <span v-if="typeof seq.thought === 'string'">
-                            已隐藏（避免在 UI 中直接展示推理细节）
-                        </span>
-                        <span v-else> 本次输出未包含 thought </span>
-                    </div>
-                </template>
-                <template v-else>
-                    <div class="col-span-2 text-muted-foreground">
-                        输出不符合 sequentialthinking
-                        结构，已显示脱敏后的原始数据。
-                    </div>
-                </template>
+                </div>
             </div>
+
+            <Collapsible v-model:open="detailsOpen" class="space-y-2">
+                <div class="flex items-center justify-between gap-3">
+                    <h5
+                        class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
+                    >
+                        Details
+                    </h5>
+                    <CollapsibleTrigger as-child>
+                        <Button variant="ghost" size="sm">
+                            {{ detailsOpen ? "收起" : "展开" }}
+                        </Button>
+                    </CollapsibleTrigger>
+                </div>
+                <CollapsibleContent>
+                    <div
+                        class="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-muted/50 p-3 text-sm"
+                    >
+                        <template v-if="seq">
+                            <div class="text-muted-foreground">需要下一步</div>
+                            <div>{{ yn(seq.nextThoughtNeeded) }}</div>
+
+                            <div class="text-muted-foreground">
+                                需要更多思考
+                            </div>
+                            <div>
+                                <span
+                                    v-if="
+                                        typeof seq.needsMoreThoughts ===
+                                        'boolean'
+                                    "
+                                    >{{ yn(seq.needsMoreThoughts) }}</span
+                                >
+                                <span v-else class="text-muted-foreground"
+                                    >未知</span
+                                >
+                            </div>
+
+                            <div class="text-muted-foreground">是否修正</div>
+                            <div>
+                                <span
+                                    v-if="typeof seq.isRevision === 'boolean'"
+                                    >{{ yn(seq.isRevision) }}</span
+                                >
+                                <span v-else class="text-muted-foreground"
+                                    >未知</span
+                                >
+                                <span
+                                    v-if="seq.isRevision && seq.revisesThought"
+                                    class="text-muted-foreground"
+                                >
+                                    （修正第 {{ seq.revisesThought }} 步）
+                                </span>
+                            </div>
+
+                            <div class="text-muted-foreground">分支</div>
+                            <div>
+                                <template
+                                    v-if="
+                                        (Array.isArray(seq.branches) &&
+                                            seq.branches.length > 0) ||
+                                        seq.branchId ||
+                                        seq.branchFromThought
+                                    "
+                                >
+                                    <span v-if="Array.isArray(seq.branches)">
+                                        {{ seq.branches.length }} 条
+                                    </span>
+                                    <span
+                                        v-else-if="
+                                            seq.branchId ||
+                                            seq.branchFromThought
+                                        "
+                                    >
+                                        {{ seq.branchId || "未命名" }}
+                                    </span>
+                                    <span
+                                        v-if="seq.branchFromThought"
+                                        class="text-muted-foreground"
+                                    >
+                                        （从第
+                                        {{ seq.branchFromThought }} 步分支）
+                                    </span>
+                                </template>
+                                <span v-else class="text-muted-foreground">
+                                    无
+                                </span>
+                            </div>
+
+                            <div class="text-muted-foreground">历史长度</div>
+                            <div>
+                                <span
+                                    v-if="
+                                        typeof seq.thoughtHistoryLength ===
+                                        'number'
+                                    "
+                                >
+                                    {{ seq.thoughtHistoryLength }}
+                                </span>
+                                <span v-else class="text-muted-foreground"
+                                    >未知</span
+                                >
+                            </div>
+                        </template>
+                        <template v-else>
+                            <div class="col-span-2 text-muted-foreground">
+                                输出不符合 sequentialthinking 结构。
+                            </div>
+                        </template>
+                    </div>
+                </CollapsibleContent>
+            </Collapsible>
+
+            <Collapsible v-model:open="paramsOpen" class="space-y-2">
+                <div class="flex items-center justify-between gap-3">
+                    <h5
+                        class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
+                    >
+                        Parameters
+                    </h5>
+                    <CollapsibleTrigger as-child>
+                        <Button variant="ghost" size="sm">
+                            {{ paramsOpen ? "收起" : "展开" }}
+                        </Button>
+                    </CollapsibleTrigger>
+                </div>
+                <CollapsibleContent>
+                    <div
+                        class="grid grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-muted/50 p-3 text-sm"
+                    >
+                        <template v-if="params">
+                            <div class="text-muted-foreground">步骤</div>
+                            <div>
+                                {{ params.thoughtNumber }} /
+                                {{ params.totalThoughts }}
+                            </div>
+
+                            <div class="text-muted-foreground">需要下一步</div>
+                            <div>{{ yn(params.nextThoughtNeeded) }}</div>
+
+                            <div class="text-muted-foreground">是否修正</div>
+                            <div>
+                                <span
+                                    v-if="
+                                        typeof params.isRevision === 'boolean'
+                                    "
+                                >
+                                    {{ yn(params.isRevision) }}
+                                </span>
+                                <span v-else class="text-muted-foreground"
+                                    >未知</span
+                                >
+                                <span
+                                    v-if="
+                                        params.isRevision &&
+                                        params.revisesThought
+                                    "
+                                    class="text-muted-foreground"
+                                >
+                                    （修正第 {{ params.revisesThought }} 步）
+                                </span>
+                            </div>
+
+                            <div class="text-muted-foreground">分支</div>
+                            <div>
+                                <template
+                                    v-if="
+                                        (Array.isArray(params.branches) &&
+                                            params.branches.length > 0) ||
+                                        params.branchId ||
+                                        params.branchFromThought
+                                    "
+                                >
+                                    <span v-if="Array.isArray(params.branches)">
+                                        {{ params.branches.length }} 条
+                                    </span>
+                                    <span
+                                        v-else-if="
+                                            params.branchId ||
+                                            params.branchFromThought
+                                        "
+                                    >
+                                        {{ params.branchId || "未命名" }}
+                                    </span>
+                                    <span
+                                        v-if="params.branchFromThought"
+                                        class="text-muted-foreground"
+                                    >
+                                        （从第
+                                        {{ params.branchFromThought }} 步分支）
+                                    </span>
+                                </template>
+                                <span v-else class="text-muted-foreground"
+                                    >无</span
+                                >
+                            </div>
+
+                            <div class="text-muted-foreground">thought</div>
+                            <div class="text-muted-foreground">
+                                <span v-if="typeof params.thought === 'string'">
+                                    见上方 Thought
+                                </span>
+                                <span v-else>本次参数未包含 thought</span>
+                            </div>
+                        </template>
+                        <template v-else>
+                            <div class="col-span-2 text-muted-foreground">
+                                参数不符合 sequentialthinking 结构，已提供脱敏
+                                Raw。
+                            </div>
+                        </template>
+                    </div>
+
+                    <Collapsible v-model:open="paramsRawOpen" class="space-y-2">
+                        <div class="flex items-center justify-between gap-3">
+                            <h6
+                                class="font-medium text-muted-foreground text-xs uppercase tracking-wide"
+                            >
+                                Parameters Raw (Scrubbed)
+                            </h6>
+                            <CollapsibleTrigger as-child>
+                                <Button variant="ghost" size="sm">
+                                    {{ paramsRawOpen ? "收起" : "展开" }}
+                                </Button>
+                            </CollapsibleTrigger>
+                        </div>
+                        <CollapsibleContent>
+                            <CodeBlock
+                                :code="scrubbedParamsJson"
+                                language="json"
+                            />
+                        </CollapsibleContent>
+                    </Collapsible>
+                </CollapsibleContent>
+            </Collapsible>
 
             <Collapsible v-model:open="rawOpen" class="space-y-2">
                 <div class="flex items-center justify-between gap-3">

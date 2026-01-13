@@ -1,5 +1,6 @@
 import { Command, Child } from "@tauri-apps/plugin-shell";
-import { resolveResource } from "@tauri-apps/api/path";
+import { resolveResource, dirname, basename } from "@tauri-apps/api/path";
+// import path from "path-browserify";
 
 const utf8Decoder = new TextDecoder("utf-8");
 
@@ -25,6 +26,57 @@ function ensurePythonUnbuffered(args: string[]): string[] {
     // MCP over stdio relies on timely line delivery; Python buffering can break that.
     if (args.some((a) => a === "-u" || a.startsWith("-u"))) return args;
     return ["-u", ...args];
+}
+
+function splitCommandLine(commandLine: string): {
+    command: string;
+    args: string[];
+} {
+    const text = commandLine.trim();
+    if (!text) return { command: "", args: [] };
+
+    const args: string[] = [];
+    let current = "";
+    let inSingle = false;
+    let inDouble = false;
+
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+
+        if (ch === "\\" && i + 1 < text.length && inDouble) {
+            // Common escape pattern inside double-quotes
+            const next = text[i + 1];
+            if (next === '"' || next === "\\") {
+                current += next;
+                i++;
+                continue;
+            }
+        }
+
+        if (ch === "'" && !inDouble) {
+            inSingle = !inSingle;
+            continue;
+        }
+        if (ch === '"' && !inSingle) {
+            inDouble = !inDouble;
+            continue;
+        }
+
+        if (!inSingle && !inDouble && /\s/.test(ch)) {
+            if (current.length > 0) {
+                args.push(current);
+                current = "";
+            }
+            continue;
+        }
+
+        current += ch;
+    }
+
+    if (current.length > 0) args.push(current);
+
+    const [command, ...rest] = args;
+    return { command: command ?? "", args: rest };
 }
 
 class ReadBuffer {
@@ -102,7 +154,15 @@ export class TauriStdioTransport {
 
         try {
             let cmd: any;
-            const { command, args = [], env, cwd } = this._serverParams;
+            let { command, args = [], env, cwd } = this._serverParams;
+            if ((!args || args.length === 0) && /\s/.test(command.trim())) {
+                const parsed = splitCommandLine(command);
+                if (parsed.command) {
+                    command = parsed.command;
+                    args = parsed.args;
+                }
+            }
+
             const normalized = normalizeCommand(command);
             // If env is empty, pass undefined to inherit from parent process
             const cmdEnv = env && Object.keys(env).length > 0 ? env : undefined;
@@ -130,11 +190,19 @@ export class TauriStdioTransport {
                 // Prefer an embedded Python sidecar when available.
                 // If your bundle does not include it, fallback to system python.
                 const pythonArgs = ensurePythonUnbuffered(args);
+
                 try {
-                    cmd = Command.sidecar("binaries/python", pythonArgs, {
-                        cwd,
-                        env: cmdEnv,
-                    });
+                    const file_dirname = await dirname(args[0]);
+                    const file_basename = await basename(args[0]);
+
+                    cmd = Command.sidecar(
+                        "binaries/uv",
+                        ["--directory", file_dirname, "run", file_basename],
+                        {
+                            cwd,
+                            env: cmdEnv,
+                        }
+                    );
                 } catch {
                     cmd = Command.create(command, pythonArgs, {
                         cwd,

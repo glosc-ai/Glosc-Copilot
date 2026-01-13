@@ -52,7 +52,7 @@ const close = () => appWindow.close();
         </div>
     </div>
 </template>
-<style scoped>
+<style scoped lang="less">
 .title-bar-dragger {
     -webkit-app-region: drag;
     user-select: none;

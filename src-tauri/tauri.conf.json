@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "glosc-copilot",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "aoe.top.glosc-copilot",
   "build": {
     "beforeDevCommand": "yarn dev",
@@ -15,7 +15,8 @@
         "title": "glosc-copilot",
         "width": 1280,
         "height": 720,
-        "decorations": false
+        "decorations": false,
+        "dragDropEnabled": false
       }
     ],
     "withGlobalTauri": true,

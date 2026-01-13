@@ -1,26 +1,49 @@
 <script lang="ts" setup>
-import { xai } from "@ai-sdk/xai";
+import { VueDraggableNext } from "vue-draggable-next";
 
-const text = ref("");
+const dragIndex = ref(-1);
 
-async function test() {
-    const xaiTools = {
-        web_search: xai.tools.webSearch(),
-        x_search: xai.tools.xSearch(),
-        code_execution: xai.tools.codeExecution(),
-    };
-    console.log({ xaiTools });
+const list = ref([
+    {
+        name: "John",
+        id: 1,
+    },
+    {
+        name: "Joao",
+        id: 2,
+    },
+    {
+        name: "Jean",
+        id: 3,
+    },
+    {
+        name: "Gerard",
+        id: 4,
+    },
+]);
+
+function dragover(e: any) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
 }
 </script>
 <template>
-    <div>
-        <Button @click="test">测试</Button>
-        <div>{{ text }}</div>
+    <div class="lex justify-center">
+        <VueDraggableNext
+            :list="list"
+            item-key="id"
+            handle=".drag-handle"
+            @move="dragover"
+        >
+            <div
+                class="list-group-item m-1 p-3 rounded-md text-center cursor-pointer"
+                v-for="(item, index) in list"
+                :key="item.id"
+            >
+                <span class="drag-handle">⋮⋮</span>
+                {{ item.name }}
+            </div>
+        </VueDraggableNext>
     </div>
 </template>
-<script lang="ts">
-export default {
-    name: "text",
-};
-</script>
 <style lang="less" scoped></style>
