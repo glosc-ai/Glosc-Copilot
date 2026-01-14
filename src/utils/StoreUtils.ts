@@ -95,6 +95,34 @@ export class StoreUtils {
     }
 
     /**
+     * 批量设置并一次性保存（迁移/多键更新时显著减少 IO）
+     */
+    async setMany(
+        entries: Array<{ key: string; value: any; encrypt?: boolean }>,
+        defaultEncrypt: boolean = true
+    ) {
+        const store = await this.ensureStore();
+        for (const entry of entries) {
+            if (!entry?.key) continue;
+            const encrypt = entry.encrypt ?? defaultEncrypt;
+            const jsonString =
+                typeof entry.value === "string"
+                    ? entry.value
+                    : JSON.stringify(entry.value);
+
+            let valueToStore: string;
+            if (encrypt) {
+                valueToStore = Cryption.encryptData(jsonString, this.key);
+            } else {
+                valueToStore = "PLAIN:" + jsonString;
+            }
+
+            await store.set(entry.key, valueToStore);
+        }
+        await store.save();
+    }
+
+    /**
      * 删除值并保存
      * @param key 键
      * @returns 是否删除成功
@@ -104,6 +132,20 @@ export class StoreUtils {
         const result = await store.delete(key);
         await store.save();
         return result;
+    }
+
+    /**
+     * 批量删除并一次性保存
+     */
+    async deleteMany(keys: string[]) {
+        const store = await this.ensureStore();
+        const results: boolean[] = [];
+        for (const key of keys) {
+            if (!key) continue;
+            results.push(await store.delete(key));
+        }
+        await store.save();
+        return results;
     }
 
     /**

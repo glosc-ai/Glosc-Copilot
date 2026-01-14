@@ -216,6 +216,46 @@ const status = computed<ChatStatus>(() => chat.status);
 const messages = computed<UIMessage[]>(() => chat.messages);
 const error = computed(() => chat.error);
 
+// 为每条消息记录“首次出现时间”（按会话隔离），避免延迟 sync 导致时间戳不准确
+const messageTimestamps = shallowRef<Map<string, number>>(new Map());
+const messageTimestampKey = (conversationId: string, messageId: string) =>
+    `${conversationId}::${messageId}`;
+const getOrSetMessageTimestamp = (
+    conversationId: string,
+    messageId: string,
+    fallbackTimestamp?: number
+) => {
+    const key = messageTimestampKey(conversationId, messageId);
+    const existing = messageTimestamps.value.get(key);
+    if (typeof existing === "number" && Number.isFinite(existing)) {
+        return existing;
+    }
+    const next =
+        typeof fallbackTimestamp === "number" &&
+        Number.isFinite(fallbackTimestamp)
+            ? fallbackTimestamp
+            : Date.now();
+    messageTimestamps.value.set(key, next);
+    return next;
+};
+
+const formatTimestamp = (ts: number) => {
+    const d = new Date(ts);
+    const pad2 = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(
+        d.getDate()
+    )} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+};
+
+const getMessageTimestampText = (messageId: string) => {
+    const conversationId = activeKey.value;
+    if (!conversationId || !messageId) return "";
+    const key = messageTimestampKey(conversationId, messageId);
+    const ts = messageTimestamps.value.get(key);
+    if (typeof ts !== "number" || !Number.isFinite(ts)) return "";
+    return formatTimestamp(ts);
+};
+
 // Prevent duplicate sends caused by rapid consecutive submits before `chat.status` updates.
 const sendLock = ref(false);
 const isChatBusy = computed(
@@ -394,26 +434,41 @@ function syncChatToStoreFor(conversationId: string) {
             id: m.id,
             role: m.role as any,
             content: textContent,
-            timestamp: old ? old.timestamp : Date.now(),
+            timestamp: getOrSetMessageTimestamp(
+                conversationId,
+                m.id,
+                old?.timestamp
+            ),
             parts: m.parts,
             reasoning: old?.reasoning,
         };
     });
 
     conversation.messages = updatedMessages;
-    conversation.updatedAt = Date.now();
+    const lastMessageTimestamp =
+        updatedMessages.length > 0
+            ? updatedMessages[updatedMessages.length - 1].timestamp
+            : Date.now();
+    conversation.updatedAt = lastMessageTimestamp;
 
     const item = chatStore.conversationsItems.find(
         (it) => it.key === conversationId
     );
-    if (item) item.timestamp = conversation.updatedAt;
+    if (item) {
+        item.timestamp = lastMessageTimestamp;
+        item.messageCount = updatedMessages.length;
+    }
 
-    chatStore.markPendingChanges();
+    chatStore.markPendingChanges(conversationId);
     chatStore.debouncedSave();
 }
 
 function applyConversationToChat(conversationId: string) {
     const conversation = conversations.value[conversationId];
+    // 回填历史消息的时间戳缓存（确保每条都能拿到独立时间）
+    for (const m of conversation?.messages || []) {
+        getOrSetMessageTimestamp(conversationId, m.id, m.timestamp);
+    }
     chat.messages = conversation
         ? conversation.messages.map((m) => ({
               id: m.id,
@@ -448,10 +503,13 @@ watch(
             return;
         }
 
-        applyConversationToChat(newKey);
+        void (async () => {
+            await chatStore.ensureConversationLoaded(newKey);
+            applyConversationToChat(newKey);
 
-        // 切换会话时重置总结标题生成标志
-        hasGeneratedSummaryTitle.value = false;
+            // 切换会话时重置总结标题生成标志
+            hasGeneratedSummaryTitle.value = false;
+        })();
     },
     { immediate: true }
 );
@@ -475,6 +533,12 @@ const scheduleSyncChatToStore = (delayMs = 200) => {
 watch(
     () => messages.value.length,
     () => {
+        // 为当前会话中新出现的消息记录时间戳
+        if (activeKey.value) {
+            for (const m of messages.value) {
+                getOrSetMessageTimestamp(activeKey.value, m.id);
+            }
+        }
         // 新消息进入（用户/助手占位）时，非流式情况下可以同步一次
         scheduleSyncChatToStore(0);
     }
@@ -1005,6 +1069,20 @@ watch(
                                         >
                                             <CopyIcon class="size-3" />
                                         </MessageAction>
+                                        <span
+                                            v-if="
+                                                getMessageTimestampText(
+                                                    message.id
+                                                )
+                                            "
+                                            class="ml-1 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity select-none"
+                                        >
+                                            {{
+                                                getMessageTimestampText(
+                                                    message.id
+                                                )
+                                            }}
+                                        </span>
                                     </MessageActions>
 
                                     <MessageActions
@@ -1057,6 +1135,21 @@ watch(
                                                 />
                                             </MessageAction>
                                         </template>
+
+                                        <span
+                                            v-if="
+                                                getMessageTimestampText(
+                                                    message.id
+                                                )
+                                            "
+                                            class="ml-1 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity select-none"
+                                        >
+                                            {{
+                                                getMessageTimestampText(
+                                                    message.id
+                                                )
+                                            }}
+                                        </span>
                                     </MessageActions>
                                 </template>
                             </MessageContent>

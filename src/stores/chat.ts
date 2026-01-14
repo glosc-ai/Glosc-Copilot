@@ -19,6 +19,8 @@ export const useChatStore = defineStore("chat", {
         webSearchEnabled: false,
         // 会话相关
         conversations: {} as Record<string, Conversation>,
+        // 是否已加载过会话内容（避免启动时把所有 messages 拉进来）
+        loadedConversationIds: {} as Record<string, boolean>,
         conversationsItems: [] as ConversationItem[],
         activeKey: "",
         attachedFiles: [] as AttachmentFile[],
@@ -34,6 +36,8 @@ export const useChatStore = defineStore("chat", {
         isInitialized: false,
         // 存储优化
         hasPendingChanges: false,
+        indexDirty: false,
+        pendingConversationIds: {} as Record<string, boolean>,
         saveTimer: null as any,
     }),
     getters: {
@@ -50,15 +54,8 @@ export const useChatStore = defineStore("chat", {
             yesterday.setDate(yesterday.getDate() - 1);
 
             state.conversationsItems.forEach((item) => {
-                // 获取最后一次会话时间（最后一条消息的时间）
-                const conversation = state.conversations[item.key];
-                const lastMessageTime =
-                    conversation?.messages?.length > 0
-                        ? conversation.messages[
-                              conversation.messages.length - 1
-                          ].timestamp
-                        : item.timestamp || 0;
-                const date = new Date(lastMessageTime);
+                // 启动时不加载完整会话内容，分组/排序只依赖索引元数据
+                const date = new Date(item.timestamp || 0);
                 let dateKey: string;
 
                 if (date >= today) {
@@ -87,16 +84,7 @@ export const useChatStore = defineStore("chat", {
 
             keys.forEach((key) => {
                 sortedGroups[key] = groups[key].sort((a, b) => {
-                    // 获取最后一次消息时间进行排序
-                    const getLastMessageTime = (item: ConversationItem) => {
-                        const conversation = state.conversations[item.key];
-                        return conversation?.messages?.length > 0
-                            ? conversation.messages[
-                                  conversation.messages.length - 1
-                              ].timestamp
-                            : item.timestamp || 0;
-                    };
-                    return getLastMessageTime(b) - getLastMessageTime(a);
+                    return (b.timestamp || 0) - (a.timestamp || 0);
                 });
             });
 
@@ -104,6 +92,13 @@ export const useChatStore = defineStore("chat", {
         },
     },
     actions: {
+        chatIndexKey() {
+            return "chat_index_v2";
+        },
+        chatConversationKey(id: string) {
+            return `chat_conv_v2:${id}`;
+        },
+
         // ============ WebSearch 开关（可选，全局） ============
         async loadWebSearchEnabled() {
             try {
@@ -233,40 +228,170 @@ export const useChatStore = defineStore("chat", {
         // ============ 会话管理 ============
         async loadConversations() {
             try {
-                const data = await storeUtils.get<{
+                // v2：先尝试仅加载会话索引（元数据）
+                const index = await storeUtils.get<{
+                    version: number;
+                    items: ConversationItem[];
+                    order?: string[];
+                }>(this.chatIndexKey());
+
+                if (
+                    index &&
+                    index.version === 2 &&
+                    Array.isArray(index.items)
+                ) {
+                    const order =
+                        Array.isArray(index.order) && index.order.length > 0
+                            ? index.order
+                            : index.items.map((it) => it.key);
+                    const map = new Map(index.items.map((it) => [it.key, it]));
+                    this.conversationsItems = order
+                        .map((id) => map.get(id))
+                        .filter(Boolean) as ConversationItem[];
+
+                    // 启动不加载 conversations 内容，避免读取海量 messages
+                    this.conversations = {};
+                    this.loadedConversationIds = {};
+                    return;
+                }
+
+                // v1 迁移：旧结构在 chat_data 中一次性存全量 messages
+                const legacy = await storeUtils.get<{
                     conversations: Record<string, Conversation>;
                     conversationsOrder: string[];
                 }>("chat_data");
 
-                if (data) {
-                    this.conversations = data.conversations || {};
-
-                    // 构建会话列表
+                if (legacy && legacy.conversations) {
+                    const legacyConversations = legacy.conversations || {};
                     const hasPersistedOrder =
-                        Array.isArray(data.conversationsOrder) &&
-                        data.conversationsOrder.length > 0;
+                        Array.isArray(legacy.conversationsOrder) &&
+                        legacy.conversationsOrder.length > 0;
                     const order = hasPersistedOrder
-                        ? data.conversationsOrder
-                        : Object.keys(this.conversations);
+                        ? legacy.conversationsOrder
+                        : Object.keys(legacyConversations);
 
-                    const items = order
-                        .filter((id) => this.conversations[id])
+                    const items: ConversationItem[] = order
+                        .filter((id) => legacyConversations[id])
                         .map((id) => ({
                             key: id,
-                            label: this.conversations[id].title,
-                            timestamp: this.conversations[id].updatedAt,
+                            label: legacyConversations[id].title,
+                            timestamp: legacyConversations[id].updatedAt,
+                            messageCount:
+                                legacyConversations[id].messages?.length ?? 0,
                         }));
 
-                    // 仅在没有保存过排序时，默认按时间排序
                     this.conversationsItems = hasPersistedOrder
                         ? items
                         : items.sort(
                               (a, b) => (b.timestamp || 0) - (a.timestamp || 0)
                           );
+
+                    // 分片保存：每个会话单独一个 key + 索引 key
+                    const entries: Array<{
+                        key: string;
+                        value: any;
+                        encrypt?: boolean;
+                    }> = [];
+                    for (const [id, conv] of Object.entries(
+                        legacyConversations
+                    )) {
+                        if (!id || !conv) continue;
+                        entries.push({
+                            key: this.chatConversationKey(id),
+                            value: conv,
+                        });
+                    }
+                    entries.push({
+                        key: this.chatIndexKey(),
+                        value: {
+                            version: 2,
+                            items: this.conversationsItems,
+                            order: this.conversationsItems.map((it) => it.key),
+                        },
+                    });
+
+                    await storeUtils.setMany(entries);
+                    // 删除旧 key，避免后续启动继续读大对象
+                    await storeUtils.delete("chat_data");
+
+                    // 迁移完成后，不把全量 conversations 留在内存
+                    this.conversations = {};
+                    this.loadedConversationIds = {};
+                    return;
                 }
+
+                // 全新：没有任何数据
+                this.conversations = {};
+                this.loadedConversationIds = {};
+                this.conversationsItems = [];
+                await this.createNewConversation(false);
             } catch (error) {
                 console.error("加载会话失败:", error);
             }
+        },
+
+        async ensureConversationLoaded(id: string) {
+            if (!id) return;
+            if (this.loadedConversationIds[id] && this.conversations[id])
+                return;
+
+            try {
+                const conv = await storeUtils.get<Conversation>(
+                    this.chatConversationKey(id)
+                );
+                if (conv) {
+                    const item = this.conversationsItems.find(
+                        (it) => it.key === id
+                    );
+                    if (item?.label && conv.title !== item.label) {
+                        conv.title = item.label;
+                        this.pendingConversationIds = {
+                            ...this.pendingConversationIds,
+                            [id]: true,
+                        };
+                        this.hasPendingChanges = true;
+                    }
+                    if (
+                        typeof item?.timestamp === "number" &&
+                        Number.isFinite(item.timestamp) &&
+                        item.timestamp > (conv.updatedAt || 0)
+                    ) {
+                        conv.updatedAt = item.timestamp;
+                        this.pendingConversationIds = {
+                            ...this.pendingConversationIds,
+                            [id]: true,
+                        };
+                        this.hasPendingChanges = true;
+                    }
+                    this.conversations[id] = conv;
+                    this.loadedConversationIds[id] = true;
+                    return;
+                }
+            } catch (error) {
+                console.warn("加载会话内容失败:", id, error);
+            }
+
+            // 找不到时，创建一个最小占位（避免 UI 崩溃）
+            const item = this.conversationsItems.find((it) => it.key === id);
+            const now = Date.now();
+            this.conversations[id] = {
+                id,
+                title: item?.label || "新对话",
+                messages: [],
+                createdAt: item?.timestamp || now,
+                updatedAt: item?.timestamp || now,
+                modelId: this.selectedModel?.id,
+            };
+            this.loadedConversationIds[id] = true;
+        },
+
+        async selectConversation(id: string) {
+            if (!id) {
+                this.activeKey = "";
+                return;
+            }
+            await this.ensureConversationLoaded(id);
+            this.activeKey = id;
         },
 
         /**
@@ -297,14 +422,12 @@ export const useChatStore = defineStore("chat", {
             if (!title) return false;
 
             conversation.title = title;
-            conversation.updatedAt = Date.now();
 
             const item = this.conversationsItems.find(
                 (it) => it.key === conversationId
             );
             if (item) {
                 item.label = title;
-                item.timestamp = conversation.updatedAt;
             }
 
             return true;
@@ -330,25 +453,81 @@ export const useChatStore = defineStore("chat", {
             next.splice(insertIndex, 0, moved);
             this.conversationsItems = next;
 
-            await this.saveConversations();
+            this.hasPendingChanges = true;
+            this.indexDirty = true;
+            await this.persistPending(true);
         },
 
         async saveConversations() {
-            try {
-                const order = this.conversationsItems.map((item) => item.key);
-                await storeUtils.set("chat_data", {
-                    conversations: this.conversations,
-                    conversationsOrder: order,
-                });
-                this.hasPendingChanges = false;
-            } catch (error) {
-                console.error("保存会话失败:", error);
-            }
+            // 兼容旧调用点：实际改为保存索引 + 待保存会话分片
+            await this.persistPending(true);
         },
 
         // 标记有待保存的更改
-        markPendingChanges() {
+        markPendingChanges(conversationId?: string) {
             this.hasPendingChanges = true;
+            this.indexDirty = true;
+            const id = conversationId || this.activeKey;
+            if (id) {
+                this.pendingConversationIds = {
+                    ...this.pendingConversationIds,
+                    [id]: true,
+                };
+            }
+        },
+
+        async persistPending(immediate = false) {
+            try {
+                if (!this.hasPendingChanges && !this.indexDirty) return;
+
+                const entries: Array<{
+                    key: string;
+                    value: any;
+                    encrypt?: boolean;
+                }> = [];
+
+                // 索引（小对象）
+                if (this.indexDirty) {
+                    entries.push({
+                        key: this.chatIndexKey(),
+                        value: {
+                            version: 2,
+                            items: this.conversationsItems,
+                            order: this.conversationsItems.map((it) => it.key),
+                        },
+                    });
+                }
+
+                // 会话分片（仅保存脏的会话）
+                for (const [id, dirty] of Object.entries(
+                    this.pendingConversationIds
+                )) {
+                    if (!dirty) continue;
+                    const conv = this.conversations[id];
+                    if (!conv) continue;
+                    if (!this.loadedConversationIds[id]) continue;
+                    entries.push({
+                        key: this.chatConversationKey(id),
+                        value: conv,
+                    });
+                }
+
+                if (entries.length === 0) {
+                    this.hasPendingChanges = false;
+                    this.indexDirty = false;
+                    this.pendingConversationIds = {};
+                    return;
+                }
+
+                await storeUtils.setMany(entries);
+
+                this.hasPendingChanges = false;
+                this.indexDirty = false;
+                this.pendingConversationIds = {};
+            } catch (error) {
+                console.error("保存会话失败:", error);
+                if (immediate) throw error;
+            }
         },
 
         // 防抖保存（延迟保存，避免频繁写入）
@@ -358,12 +537,10 @@ export const useChatStore = defineStore("chat", {
             }
 
             if (immediate) {
-                this.saveConversations();
+                void this.persistPending(true);
             } else {
                 this.saveTimer = setTimeout(() => {
-                    if (this.hasPendingChanges) {
-                        this.saveConversations();
-                    }
+                    void this.persistPending();
                 }, 1000); // 1秒后保存
             }
         },
@@ -374,14 +551,15 @@ export const useChatStore = defineStore("chat", {
                 clearTimeout(this.saveTimer);
                 this.saveTimer = null;
             }
-            if (this.hasPendingChanges) {
-                await this.saveConversations();
-            }
+            await this.persistPending(true);
         },
 
-        async createNewConversation() {
+        async createNewConversation(activate = true) {
             const emptyKey = this.findEmptyConversation();
             if (emptyKey) {
+                if (activate) {
+                    await this.selectConversation(emptyKey);
+                }
                 return emptyKey;
             }
             // 创建新的
@@ -400,14 +578,24 @@ export const useChatStore = defineStore("chat", {
             };
 
             this.conversations[id] = newConversation;
+            this.loadedConversationIds[id] = true;
             this.conversationsItems.unshift({
                 key: id,
                 label: newConversation.title,
                 timestamp: now,
+                messageCount: 0,
             });
 
-            this.activeKey = id;
-            await this.saveConversations();
+            if (activate) {
+                this.activeKey = id;
+            }
+            this.indexDirty = true;
+            this.pendingConversationIds = {
+                ...this.pendingConversationIds,
+                [id]: true,
+            };
+            this.hasPendingChanges = true;
+            await this.persistPending(true);
 
             return id;
         },
@@ -415,20 +603,27 @@ export const useChatStore = defineStore("chat", {
         async deleteConversation(id: string) {
             try {
                 delete this.conversations[id];
+                delete this.loadedConversationIds[id];
                 this.conversationsItems = this.conversationsItems.filter(
                     (item) => item.key !== id
                 );
 
+                this.indexDirty = true;
+
                 // 如果删除的是当前会话，切换到第一个
                 if (this.activeKey === id) {
                     if (this.conversationsItems.length > 0) {
-                        this.activeKey = this.conversationsItems[0].key;
+                        await this.selectConversation(
+                            this.conversationsItems[0].key
+                        );
                     } else {
                         await this.createNewConversation();
                     }
                 }
 
-                await this.saveConversations();
+                await storeUtils.delete(this.chatConversationKey(id));
+                this.markPendingChanges();
+                await this.persistPending(true);
             } catch (error) {
                 console.error("删除会话失败:", error);
             }
@@ -436,19 +631,26 @@ export const useChatStore = defineStore("chat", {
 
         async renameConversation(id: string, newTitle: string) {
             try {
-                if (this.conversations[id]) {
+                if (this.loadedConversationIds[id] && this.conversations[id]) {
                     this.conversations[id].title = newTitle;
-                    this.conversations[id].updatedAt = Date.now();
-
-                    const item = this.conversationsItems.find(
-                        (item) => item.key === id
-                    );
-                    if (item) {
-                        item.label = newTitle;
-                    }
-
-                    await this.saveConversations();
+                    this.pendingConversationIds = {
+                        ...this.pendingConversationIds,
+                        [id]: true,
+                    };
+                    this.hasPendingChanges = true;
                 }
+
+                const item = this.conversationsItems.find(
+                    (item) => item.key === id
+                );
+                if (item) {
+                    item.label = newTitle;
+                }
+
+                this.indexDirty = true;
+                this.hasPendingChanges = true;
+
+                await this.persistPending(true);
             } catch (error) {
                 console.error("重命名会话失败:", error);
             }
@@ -577,7 +779,15 @@ export const useChatStore = defineStore("chat", {
                 };
 
                 conversation.messages.push(newMessage);
-                conversation.updatedAt = Date.now();
+                conversation.updatedAt = newMessage.timestamp;
+
+                const item = this.conversationsItems.find(
+                    (it) => it.key === conversationId
+                );
+                if (item) {
+                    item.timestamp = newMessage.timestamp;
+                    item.messageCount = conversation.messages.length;
+                }
 
                 // 如果是第一条用户消息，自动生成标题并立即保存
                 if (
@@ -588,7 +798,7 @@ export const useChatStore = defineStore("chat", {
                     await this.autoGenerateTitle(conversationId);
                 } else {
                     // 标记有待保存的更改
-                    this.markPendingChanges();
+                    this.markPendingChanges(conversationId);
                     // 如果需要立即保存（比如用户消息），则立即保存，否则防抖保存
                     if (saveImmediately) {
                         this.debouncedSave(true);
@@ -616,10 +826,24 @@ export const useChatStore = defineStore("chat", {
                 );
                 if (msg) {
                     Object.assign(msg, updates);
-                    conversation.updatedAt = Date.now();
+                    const last =
+                        conversation.messages.length > 0
+                            ? conversation.messages[
+                                  conversation.messages.length - 1
+                              ].timestamp
+                            : Date.now();
+                    conversation.updatedAt = last;
+
+                    const item = this.conversationsItems.find(
+                        (it) => it.key === conversationId
+                    );
+                    if (item) {
+                        item.timestamp = last;
+                        item.messageCount = conversation.messages.length;
+                    }
 
                     // 标记有待保存的更改
-                    this.markPendingChanges();
+                    this.markPendingChanges(conversationId);
                     // 根据需要决定是否立即保存
                     if (saveImmediately) {
                         this.debouncedSave(true);
@@ -632,12 +856,9 @@ export const useChatStore = defineStore("chat", {
 
         // ============ UI 交互 ============
         findEmptyConversation(): string | null {
-            for (const [key, conversation] of Object.entries(
-                this.conversations
-            )) {
-                if (conversation.messages.length === 0) {
-                    return key;
-                }
+            // 使用索引元数据判断，避免扫描/加载全量会话
+            for (const item of this.conversationsItems) {
+                if (item.messageCount === 0) return item.key;
             }
             return null;
         },
@@ -648,7 +869,7 @@ export const useChatStore = defineStore("chat", {
         },
 
         onConversationClick(key: string) {
-            this.activeKey = key;
+            void this.selectConversation(key);
         },
 
         handleFileChange(files: AttachmentFile[]) {

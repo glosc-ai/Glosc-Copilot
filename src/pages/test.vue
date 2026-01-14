@@ -1,8 +1,6 @@
 <script lang="ts" setup>
 import { VueDraggableNext } from "vue-draggable-next";
 
-const dragIndex = ref(-1);
-
 const list = ref([
     {
         name: "John",
@@ -37,7 +35,7 @@ function dragover(e: any) {
         >
             <div
                 class="list-group-item m-1 p-3 rounded-md text-center cursor-pointer"
-                v-for="(item, index) in list"
+                v-for="item in list"
                 :key="item.id"
             >
                 <span class="drag-handle">⋮⋮</span>

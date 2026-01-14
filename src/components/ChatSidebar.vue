@@ -2,7 +2,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-    Plus,
     MessageSquare,
     Trash2,
     Pencil,
@@ -50,14 +49,15 @@ const toggleGroup = (groupKey: string) => {
     collapsedGroups.value[groupKey] = !collapsedGroups.value[groupKey];
 };
 
-// 初始化分组折叠状态（默认展开）
+// 初始化分组折叠状态（默认仅展开“今天”）
 watch(
     groupedConversations,
     (newGroups) => {
         const newCollapsed: Record<string, boolean> = {};
         Object.keys(newGroups).forEach((key) => {
             if (!(key in collapsedGroups.value)) {
-                newCollapsed[key] = false; // 默认展开
+                // 默认折叠非当天的历史（今天展开，其它折叠）
+                newCollapsed[key] = key !== "今天";
             } else {
                 newCollapsed[key] = collapsedGroups.value[key];
             }
@@ -103,12 +103,8 @@ watch(sidebarWidth, (newWidth) => {
     localStorage.setItem("chatSidebarWidth", newWidth.toString());
 });
 
-const createNewChat = async () => {
-    await chatStore.createNewConversation();
-};
-
 const selectChat = (key: string) => {
-    activeKey.value = key;
+    void chatStore.selectConversation(key);
 };
 
 const deleteChat = async (key: string, event: Event) => {

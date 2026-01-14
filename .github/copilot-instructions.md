@@ -27,6 +27,8 @@
 - UI stack is mixed but consistent:
     - Tailwind v4 + shadcn-vue primitives in `src/components/ui/**`
     - Element Plus is enabled and auto-resolved (`ElementPlusResolver`) for components/messages.
+- Codebase is primarily in **Chinese**: comments, UI text, and variable names use Chinese (e.g., `会话相关` for conversation-related).
+- Tokenization uses `@lenml/tokenizers` with Claude config for message counting (`src/components/ChatArea.vue`).
 
 ## Persistence & settings
 
