@@ -789,7 +789,7 @@ watch(
 </script>
 
 <template>
-    <div class="relative pl-5 pr-5 size-full h-full p-6">
+    <div class="relative pl-5 pr-5 size-full h-full">
         <div class="flex h-full flex-col">
             <Conversation class="h-full">
                 <ConversationContent>

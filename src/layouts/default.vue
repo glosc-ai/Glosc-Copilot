@@ -2,6 +2,7 @@
 <template>
     <div class="pt-10">
         <TitleBar />
+        <McpManagerDialog />
         <router-view />
     </div>
 </template>
