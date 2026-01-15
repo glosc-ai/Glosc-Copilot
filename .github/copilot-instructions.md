@@ -5,7 +5,7 @@
 - Desktop app built with **Tauri v2 (Rust)** + **Vue 3 + Vite + TypeScript**.
 - UI routes are **file-based** via `unplugin-vue-router`: add pages in `src/pages/*.vue` and layouts in `src/layouts/*.vue` (wired by `vite-plugin-vue-layouts`). Router uses `createMemoryHistory()` in `src/router/index.ts` (fits Tauri; avoid switching history mode casually).
 - Core domains:
-    - Chat UI + persistence: `src/components/ChatArea.vue`, `src/stores/chat.ts`
+    - Chat UI (using @tdesign-vue-next/chat) + persistence: `src/components/ChatArea.vue`, `src/stores/chat.ts`
     - MCP integration (tools/resources/prompts): `src/stores/mcp.ts`, `src/utils/McpUtils.ts`, `src/utils/TauriStdioTransport.ts`
     - Model/image backend calls (Vercel AI Gateway style): `src/utils/ChatUtils.ts`, `src/utils/ModelApi.ts`, `src/utils/ImageApi.ts`
 
@@ -26,7 +26,7 @@
 - Treat generated typing files as read-only: `auto-imports.d.ts`, `components.d.ts`, `typed-router.d.ts`.
 - UI stack is mixed but consistent:
     - Tailwind v4 + shadcn-vue primitives in `src/components/ui/**`
-    - Element Plus is enabled and auto-resolved (`ElementPlusResolver`) for components/messages.
+    - Element Plus and Reka UI are enabled and auto-resolved (`ElementPlusResolver`) for components/messages.
 - Codebase is primarily in **Chinese**: comments, UI text, and variable names use Chinese (e.g., `会话相关` for conversation-related).
 - Tokenization uses `@lenml/tokenizers` with Claude config for message counting (`src/components/ChatArea.vue`).
 

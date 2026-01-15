@@ -27,5 +27,4 @@ dist-ssr
 # 自动引入
 /*.d.ts
 
-/src-tauri/resources/npm
 /docs
