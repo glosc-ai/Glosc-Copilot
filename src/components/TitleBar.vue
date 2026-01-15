@@ -12,6 +12,12 @@ import {
     ExternalLink,
 } from "lucide-vue-next";
 import { computed, ref, onMounted } from "vue";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const appWindow = getCurrentWindow();
 const chatStore = useChatStore();
@@ -75,8 +81,25 @@ const balanceText = computed(() => {
     const wallet = authStore.user?.wallet;
     if (!wallet) return "";
     const total = formatUsd(wallet.totalCents);
-    const free = formatUsd(wallet.freeChatCents);
-    return `${total} (包含${free}免费)`;
+    return total;
+});
+
+const balanceTip = computed(() => {
+    const wallet = authStore.user?.wallet;
+    if (!wallet) return [] as string[];
+    const lines: string[] = [];
+    const freeCents = wallet.freeChatCents ?? 0;
+    const cashCents = wallet.cashCents ?? 0;
+    if (freeCents > 0) {
+        lines.push(`免费 ${formatUsd(freeCents)}`);
+    }
+    if (cashCents > 0) {
+        lines.push(`付费 ${formatUsd(cashCents)}`);
+    }
+    if (freeCents > 0 && cashCents > 0) {
+        lines.push(`合计 ${formatUsd(freeCents + cashCents)}`);
+    }
+    return lines;
 });
 </script>
 
@@ -153,7 +176,7 @@ const balanceText = computed(() => {
                             alt="avatar"
                         />
                         <UserRound v-else class="w-4 h-4" />
-                        <span class="ml-2 max-w-[140px] truncate">
+                        <span class="ml-2 max-w-35 truncate">
                             {{ authStore.displayName }}
                         </span>
                     </Button>
@@ -169,12 +192,31 @@ const balanceText = computed(() => {
                         >
                             {{ authStore.user?.email }}
                         </div>
-                        <div
-                            v-if="balanceText"
-                            class="text-xs text-muted-foreground"
-                        >
-                            余额：{{ balanceText }}
-                        </div>
+                        <TooltipProvider v-if="balanceText">
+                            <div class="text-xs text-muted-foreground">
+                                余额：
+                                <Tooltip v-if="balanceTip.length">
+                                    <TooltipTrigger as-child>
+                                        <span
+                                            class="cursor-help underline decoration-dotted"
+                                        >
+                                            {{ balanceText }}
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <div class="space-y-1">
+                                            <div
+                                                v-for="line in balanceTip"
+                                                :key="line"
+                                            >
+                                                {{ line }}
+                                            </div>
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                                <span v-else>{{ balanceText }}</span>
+                            </div>
+                        </TooltipProvider>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem @click="refreshUser">

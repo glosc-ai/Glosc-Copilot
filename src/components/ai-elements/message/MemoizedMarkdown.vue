@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from "vue";
 import { computed, ref, watch } from "vue";
-import MarkdownIt from "markdown-it";
 import { cn } from "@/lib/utils";
+import { createMarkdownParser } from "@/utils/MarkdownIt";
 import { useThrottleFn } from "@vueuse/core";
 
 interface Props {
@@ -36,11 +36,7 @@ watch(
     { immediate: true }
 );
 
-const mdParser = new MarkdownIt({
-    html: false,
-    linkify: true,
-    breaks: true,
-});
+const mdParser = createMarkdownParser();
 
 function parseMarkdownIntoBlocks(markdown: string): string[] {
     if (!markdown) return [""];
