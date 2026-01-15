@@ -10,6 +10,12 @@ export type AuthUserPublic = {
     avatarUrl?: string;
     microsoftOid?: string;
     appleSub?: string;
+    wallet?: {
+        totalCents: number;
+        freeChatCents: number;
+        cashCents: number;
+        updatedAt?: string;
+    };
 };
 
 type DesktopAuthStartResponse = {
@@ -133,7 +139,7 @@ export const useAuthStore = defineStore("auth", {
                 this.token = this.token || token || null;
                 this.user = this.user || user || null;
 
-                if (this.token && !this.user) {
+                if (this.token) {
                     await this.refreshUser();
                 }
             } catch (e: any) {

@@ -11,7 +11,7 @@ import {
     RefreshCcw,
     ExternalLink,
 } from "lucide-vue-next";
-import { ref, onMounted } from "vue";
+import { computed, ref, onMounted } from "vue";
 
 const appWindow = getCurrentWindow();
 const chatStore = useChatStore();
@@ -59,6 +59,25 @@ const refreshUser = async () => {
 const openAccount = () => {
     authStore.openAccountPage();
 };
+
+const formatUsd = (cents?: number | null) => {
+    const safe =
+        typeof cents === "number" && Number.isFinite(cents) ? cents : 0;
+    const value = Math.max(0, Math.trunc(safe)) / 100;
+    const text = value
+        .toFixed(2)
+        .replace(/\.00$/, "")
+        .replace(/(\.\d)0$/, "$1");
+    return `$${text}`;
+};
+
+const balanceText = computed(() => {
+    const wallet = authStore.user?.wallet;
+    if (!wallet) return "";
+    const total = formatUsd(wallet.totalCents);
+    const free = formatUsd(wallet.freeChatCents);
+    return `${total} (包含${free}免费)`;
+});
 </script>
 
 <template>
@@ -149,6 +168,12 @@ const openAccount = () => {
                             class="text-xs text-muted-foreground"
                         >
                             {{ authStore.user?.email }}
+                        </div>
+                        <div
+                            v-if="balanceText"
+                            class="text-xs text-muted-foreground"
+                        >
+                            余额：{{ balanceText }}
                         </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
