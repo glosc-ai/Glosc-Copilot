@@ -44,6 +44,7 @@ import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat";
 import { storeToRefs } from "pinia";
 import { useMcpStore } from "@/stores/mcp";
+import { useAuthStore } from "@/stores/auth";
 import { useRouter } from "vue-router";
 
 const props = withDefaults(
@@ -70,6 +71,7 @@ const {
 } = storeToRefs(chatStore);
 const mcpStore = useMcpStore();
 const { servers } = storeToRefs(mcpStore);
+const authStore = useAuthStore();
 const router = useRouter();
 
 const hasEnabledServers = computed(() => servers.value.some((s) => s.enabled));
@@ -332,6 +334,13 @@ async function sendChatMessage(
     files?: any[]
 ) {
     if (isChatBusy.value) return;
+
+    if (!authStore.isLoggedIn) {
+        ElMessage.warning("请先登录后使用会话");
+        void authStore.startLogin();
+        return;
+    }
+
     sendLock.value = true;
     const tools = await mcpStore.getCachedTools();
     clientToolsRef.value = tools;
@@ -385,6 +394,13 @@ function cancelEditUserMessage() {
 
 async function resendUserMessage(message: UIMessage) {
     if (status.value === "streaming" || status.value === "submitted") return;
+
+    if (!authStore.isLoggedIn) {
+        ElMessage.warning("请先登录后使用会话");
+        void authStore.startLogin();
+        return;
+    }
+
     const text = getUserMessageText(message);
     const files = message.parts.filter((part) => part.type === "file") as any[];
     if (!truncateChatToMessage(message.id)) return;
@@ -393,6 +409,13 @@ async function resendUserMessage(message: UIMessage) {
 
 async function confirmEditAndResendUserMessage() {
     if (status.value === "streaming" || status.value === "submitted") return;
+
+    if (!authStore.isLoggedIn) {
+        ElMessage.warning("请先登录后使用会话");
+        void authStore.startLogin();
+        return;
+    }
+
     const nextText = editingUserMessageText.value.trim();
     const messageId = editingUserMessageId.value;
     if (!messageId || !nextText) return;
@@ -597,6 +620,12 @@ async function handleSubmit(message: PromptInputMessage) {
     if (!hasText && !hasAttachments) return;
     if (isChatBusy.value) return;
 
+    if (!authStore.isLoggedIn) {
+        ElMessage.warning("请先登录后使用会话");
+        void authStore.startLogin();
+        return;
+    }
+
     try {
         sendLock.value = true;
         // Use cached tools to avoid reloading on each message
@@ -650,7 +679,8 @@ const submitDisabled = computed(
     () =>
         !hasPendingInput.value ||
         isChatBusy.value ||
-        promptInput.isLoading.value
+        promptInput.isLoading.value ||
+        !authStore.isLoggedIn
 );
 
 function getSourceUrlParts(message: UIMessage) {
@@ -694,6 +724,11 @@ async function copyToClipboard(text: string) {
 }
 
 async function handleRegenerate() {
+    if (!authStore.isLoggedIn) {
+        ElMessage.warning("请先登录后使用会话");
+        void authStore.startLogin();
+        return;
+    }
     const tools = await mcpStore.getCachedTools();
     clientToolsRef.value = tools;
     chat.regenerate({
@@ -1177,6 +1212,18 @@ watch(
                 class="mx-auto mb-2 max-w-3xl rounded-md bg-destructive/10 px-4 py-2 text-sm text-destructive"
             >
                 Error: {{ error.message }}
+            </div>
+
+            <div
+                v-if="!authStore.isLoggedIn"
+                class="mx-auto mb-2 flex max-w-3xl items-center justify-between gap-3 rounded-md bg-secondary/40 px-4 py-2 text-sm"
+            >
+                <div class="text-muted-foreground">
+                    请先登录后使用会话（消息会以你的账号身份请求 API）
+                </div>
+                <Button size="sm" @click="authStore.startLogin()">
+                    去登录
+                </Button>
             </div>
 
             <PromptInput class="mb-8" global-drop multiple>

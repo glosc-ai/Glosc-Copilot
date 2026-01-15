@@ -1,16 +1,28 @@
 <script setup lang="ts">
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, Square, X, Maximize2 } from "lucide-vue-next";
+import {
+    Minus,
+    Square,
+    X,
+    Maximize2,
+    UserRound,
+    LogIn,
+    LogOut,
+    RefreshCcw,
+    ExternalLink,
+} from "lucide-vue-next";
 import { ref, onMounted } from "vue";
 
 const appWindow = getCurrentWindow();
 const chatStore = useChatStore();
 const uiStore = useUiStore();
+const authStore = useAuthStore();
 
 const isMaximized = ref(false);
 
 onMounted(async () => {
     isMaximized.value = await appWindow.isMaximized();
+    authStore.init().catch(() => {});
     // Listen for resize events to update state if needed,
     // but for simplicity we'll just toggle state on click
 });
@@ -28,6 +40,24 @@ const createNewChat = () => {
 
 const openMcpManager = () => {
     uiStore.openMcpManager();
+};
+
+const handleLogin = async () => {
+    await authStore.startLogin();
+};
+
+const handleLogout = async () => {
+    await authStore.logout();
+    ElMessage.success("已退出登录");
+};
+
+const refreshUser = async () => {
+    await authStore.refreshUser();
+    ElMessage.success("已刷新用户信息");
+};
+
+const openAccount = () => {
+    authStore.openAccountPage();
 };
 </script>
 
@@ -83,7 +113,72 @@ const openMcpManager = () => {
             </div>
         </div>
         <div class="title-bar-dragger"></div>
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-1 no-drag">
+            <Button
+                v-if="!authStore.isLoggedIn"
+                variant="ghost"
+                size="sm"
+                class="h-8 px-2"
+                @click="handleLogin"
+            >
+                <LogIn class="w-4 h-4" />
+                <span class="ml-2">登录</span>
+            </Button>
+            <DropdownMenu v-else>
+                <DropdownMenuTrigger as-child>
+                    <Button variant="ghost" size="sm" class="h-8 px-2">
+                        <img
+                            v-if="authStore.user?.avatarUrl"
+                            :src="authStore.user?.avatarUrl"
+                            class="w-5 h-5 rounded-full"
+                            alt="avatar"
+                        />
+                        <UserRound v-else class="w-4 h-4" />
+                        <span class="ml-2 max-w-[140px] truncate">
+                            {{ authStore.displayName }}
+                        </span>
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent class="w-56" align="end">
+                    <DropdownMenuLabel class="space-y-1">
+                        <div class="text-sm font-medium">
+                            {{ authStore.displayName }}
+                        </div>
+                        <div
+                            v-if="authStore.user?.email"
+                            class="text-xs text-muted-foreground"
+                        >
+                            {{ authStore.user?.email }}
+                        </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem @click="refreshUser">
+                        <RefreshCcw class="w-4 h-4 mr-2" />
+                        刷新用户信息
+                    </DropdownMenuItem>
+                    <DropdownMenuItem @click="openAccount">
+                        <ExternalLink class="w-4 h-4 mr-2" />
+                        打开账户页
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem @click="handleLogout">
+                        <LogOut class="w-4 h-4 mr-2" />
+                        退出登录
+                    </DropdownMenuItem>
+                    <!-- <template v-else>
+                        <DropdownMenuItem>
+                            <LogIn class="w-4 h-4 mr-2" />
+                            打开网页登录
+                        </DropdownMenuItem>
+                        <DropdownMenuItem disabled>
+                            <span class="text-xs text-muted-foreground">
+                                登录后会自动同步到桌面端
+                            </span>
+                        </DropdownMenuItem>
+                    </template> -->
+                </DropdownMenuContent>
+            </DropdownMenu>
+
             <button
                 @click="minimize"
                 class="p-2 hover:bg-accent rounded-md transition-colors"
@@ -114,5 +209,9 @@ const openMcpManager = () => {
 .title-bar-dragger {
     -webkit-app-region: drag;
     user-select: none;
+}
+
+.no-drag {
+    -webkit-app-region: no-drag;
 }
 </style>

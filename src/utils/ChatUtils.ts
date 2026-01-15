@@ -8,6 +8,7 @@ import {
     ToolSet,
 } from "ai";
 import { Chat } from "@ai-sdk/vue";
+import { useAuthStore } from "@/stores/auth";
 
 export class ChatUtils {
     private static host =
@@ -112,9 +113,45 @@ export class ChatUtils {
 
     public static getChat(options: CreateChatClientOptions = {}) {
         const apiPath = options.apiPath || "/api/chat";
+        const authStore = useAuthStore();
         const chat = new Chat({
             transport: new DefaultChatTransport({
                 api: `${this.host}${apiPath}`,
+                fetch: async (input, init) => {
+                    const res = await fetch(input, init);
+                    if (res.status === 401 || res.status === 403) {
+                        // token likely expired/revoked
+                        try {
+                            await authStore.logout();
+                        } catch {
+                            // ignore
+                        }
+                    }
+                    return res;
+                },
+                prepareSendMessagesRequest: (options) => {
+                    // 该 hook 的返回值会覆盖 SDK 默认构造的请求体。
+                    // 因此必须把 messages/id/trigger/messageId 一并写回，否则后端会收不到 messages。
+                    const token = authStore.token;
+                    const headers = new Headers(options.headers || undefined);
+                    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+                    const body = {
+                        ...(options.body ?? {}),
+                        id: options.id,
+                        messages: options.messages,
+                        trigger: options.trigger,
+                        messageId: options.messageId,
+                    };
+
+                    return { headers, body };
+                },
+                prepareReconnectToStreamRequest: (options) => {
+                    const token = authStore.token;
+                    const headers = new Headers(options.headers || undefined);
+                    if (token) headers.set("Authorization", `Bearer ${token}`);
+                    return { headers };
+                },
             }),
             sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
             onToolCall: async ({ toolCall }) => {

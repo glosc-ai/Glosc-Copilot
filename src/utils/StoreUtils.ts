@@ -62,7 +62,12 @@ export class StoreUtils {
 
         try {
             const decrypted = Cryption.decryptData(data, this.key);
-            return JSON.parse(decrypted) as T;
+            try {
+                return JSON.parse(decrypted) as T;
+            } catch {
+                // Backward-compatible: older values might store raw strings
+                return decrypted as unknown as T;
+            }
         } catch (error) {
             console.warn(
                 `Failed to decrypt or parse data for key: ${key}`,
@@ -80,8 +85,7 @@ export class StoreUtils {
      */
     async set(key: string, value: any, encrypt: boolean = true) {
         const store = await this.ensureStore();
-        const jsonString =
-            typeof value === "string" ? value : JSON.stringify(value);
+        const jsonString = JSON.stringify(value);
 
         let valueToStore: string;
         if (encrypt) {
@@ -105,10 +109,7 @@ export class StoreUtils {
         for (const entry of entries) {
             if (!entry?.key) continue;
             const encrypt = entry.encrypt ?? defaultEncrypt;
-            const jsonString =
-                typeof entry.value === "string"
-                    ? entry.value
-                    : JSON.stringify(entry.value);
+            const jsonString = JSON.stringify(entry.value);
 
             let valueToStore: string;
             if (encrypt) {

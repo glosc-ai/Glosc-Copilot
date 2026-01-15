@@ -1,4 +1,10 @@
-<script lang="ts" setup></script>
+<script lang="ts" setup>
+const authStore = useAuthStore();
+
+onMounted(() => {
+    authStore.init().catch(() => {});
+});
+</script>
 <template>
     <div class="pt-10">
         <TitleBar />
