@@ -51,6 +51,11 @@ const loadedOnce = ref(false);
 
 const storeToolBrowserOpen = ref(false);
 
+// When ElementPlus MessageBox is shown, clicks happen outside of the Reka Dialog
+// content tree, which can be interpreted as an outside-interaction and dismiss
+// the manager dialog. We gate outside-dismiss while MessageBox is open.
+const messageBoxOpen = ref(false);
+
 // Add/Edit dialog state
 const isDialogOpen = ref(false);
 const editingServer = ref<McpServer | null>(null);
@@ -597,6 +602,7 @@ const saveServer = async () => {
 
 const deleteServer = async (id: string) => {
     try {
+        messageBoxOpen.value = true;
         await ElMessageBox.confirm("确定要删除此服务器吗？", "警告", {
             confirmButtonText: "删除",
             cancelButtonText: "取消",
@@ -605,6 +611,14 @@ const deleteServer = async (id: string) => {
         await mcpStore.removeServer(id);
     } catch {
         // Cancelled
+    } finally {
+        messageBoxOpen.value = false;
+    }
+};
+
+const preventManagerDismissOnOutside = (event: Event) => {
+    if (messageBoxOpen.value && !event.defaultPrevented) {
+        event.preventDefault();
     }
 };
 
@@ -721,7 +735,11 @@ watch(
 
 <template>
     <Dialog v-model:open="uiStore.mcpManagerOpen">
-        <DialogContent class="w-[90vw] md:max-w-225 h-[85vh] flex flex-col">
+        <DialogContent
+            class="w-[90vw] md:max-w-225 h-[85vh] flex flex-col"
+            @pointer-down-outside="preventManagerDismissOnOutside"
+            @interact-outside="preventManagerDismissOnOutside"
+        >
             <DialogHeader>
                 <div class="flex items-center justify-between gap-3">
                     <div>

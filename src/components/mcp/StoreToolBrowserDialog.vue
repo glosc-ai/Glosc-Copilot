@@ -308,7 +308,7 @@ function close() {
 
                 <div
                     v-else-if="activeTab === 'browse'"
-                    class="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                    class="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
                 >
                     <div
                         v-for="p in items"
@@ -486,7 +486,7 @@ function close() {
 
                     <div
                         v-else
-                        class="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                        class="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
                     >
                         <div
                             v-for="p in filteredLibraryItems"

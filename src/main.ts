@@ -209,8 +209,18 @@ async function setupProdDevtoolsHotkey() {
 
 setupProdDevtoolsHotkey();
 
-// 配置 CORSFetch
-(window as any).CORSFetch.config({
-    include: [/^https?:\/\//i], // 处理所有 HTTP 请求（默认）
-    exclude: ["https://www.glosc.ai", "http://localhost:3000"], // 跳过 CORS 绕过
-});
+// 配置 CORSFetch（仅在 Tauri 环境生效）
+// 用于绕过浏览器 CORS 限制（例如 Store 下载重定向到 R2 时）。
+const corsFetch = (window as any).CORSFetch;
+if (corsFetch?.config) {
+    corsFetch.config({
+        // 仅拦截“下载插件压缩包”相关请求；其它（例如 https://www.glosc.ai 的常规 API）保持走浏览器原生 fetch。
+        include: [
+            // Store 下载接口（可能是本地开发的 http://localhost:3000，也可能是线上域名）
+            /^https?:\/\/[^/]+\/api\/store\/plugins\/[^/]+\/versions\/[^/]+\/download(\?.*)?$/i,
+            // R2 产物直链（Store 会 302/307 到这里）
+            /^https?:\/\/r2\.glosc\.ai\//i,
+        ],
+        exclude: [],
+    });
+}
