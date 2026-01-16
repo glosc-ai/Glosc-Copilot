@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 
 import AiSessionPlaceholder from "@/components/workspace/AiSessionPlaceholder.vue";
 import MonacoEditorPane from "@/components/workspace/MonacoEditorPane.vue";
+import WorkspaceConsolePanel from "@/components/workspace/WorkspaceConsolePanel.vue";
 import WorkspaceTreeItem from "@/components/workspace/WorkspaceTreeItem.vue";
 
 import { open } from "@tauri-apps/plugin-dialog";
@@ -46,6 +47,54 @@ const expandedDirs = ref<Set<string>>(new Set());
 const childrenByPath = ref<Record<string, TreeNode[]>>({});
 const loadingDirs = ref<Set<string>>(new Set());
 const dirLoadError = ref<string | null>(null);
+
+// layout state
+const leftPaneWidth = ref<number>(288);
+const rightPaneWidth = ref<number>(320);
+const consoleHeight = ref<number>(220);
+const consoleVisible = ref<boolean>(true);
+
+function clamp(n: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, n));
+}
+
+type DragKind = "left" | "right" | "console";
+
+function startDrag(kind: DragKind, e: MouseEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startLeft = leftPaneWidth.value;
+    const startRight = rightPaneWidth.value;
+    const startConsole = consoleHeight.value;
+
+    const prevUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
+
+    const onMove = (ev: MouseEvent) => {
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+
+        // rough bounds; avoid over-engineering layout math
+        if (kind === "left") {
+            leftPaneWidth.value = clamp(startLeft + dx, 200, 520);
+        } else if (kind === "right") {
+            rightPaneWidth.value = clamp(startRight - dx, 220, 520);
+        } else if (kind === "console") {
+            // drag up -> bigger console; drag down -> smaller
+            consoleHeight.value = clamp(startConsole - dy, 120, 520);
+        }
+    };
+
+    const onUp = () => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        document.body.style.userSelect = prevUserSelect;
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+}
 
 const isDirExpanded = (dirPath: string) => expandedDirs.value.has(dirPath);
 
@@ -181,20 +230,93 @@ function getNodeIcon(node: TreeNode) {
 }
 
 function languageFromPath(filePath: string) {
-    const lower = filePath.toLowerCase();
-    if (lower.endsWith(".ts")) return "typescript";
-    if (lower.endsWith(".tsx")) return "typescript";
-    if (lower.endsWith(".js")) return "javascript";
-    if (lower.endsWith(".jsx")) return "javascript";
-    if (lower.endsWith(".vue")) return "html";
-    if (lower.endsWith(".json")) return "json";
-    if (lower.endsWith(".css")) return "css";
-    if (lower.endsWith(".scss")) return "scss";
-    if (lower.endsWith(".less")) return "less";
-    if (lower.endsWith(".md")) return "markdown";
-    if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "yaml";
-    if (lower.endsWith(".rs")) return "rust";
-    return "plaintext";
+    const lower = (filePath || "").toLowerCase();
+    const fileName = lower.split(/[\\/]/).pop() || lower;
+
+    // Special filenames (no extension)
+    if (fileName === "dockerfile") return "dockerfile";
+    if (fileName === "makefile") return "makefile";
+    if (fileName === "caddyfile") return "plaintext";
+
+    // dotfiles
+    if (fileName === ".gitignore") return "plaintext";
+    if (fileName === ".gitattributes") return "plaintext";
+    if (fileName === ".editorconfig") return "ini";
+    if (fileName === ".env" || fileName.startsWith(".env.")) return "dotenv";
+
+    const ext = getFileExtension(fileName);
+    const map: Record<string, string> = {
+        // Web
+        ts: "typescript",
+        tsx: "typescript",
+        js: "javascript",
+        jsx: "javascript",
+        mjs: "javascript",
+        cjs: "javascript",
+        vue: "html",
+        html: "html",
+        htm: "html",
+        css: "css",
+        scss: "scss",
+        sass: "scss",
+        less: "less",
+
+        // Data / configs
+        json: "json",
+        jsonc: "json",
+        md: "markdown",
+        markdown: "markdown",
+        yaml: "yaml",
+        yml: "yaml",
+        toml: "toml",
+        ini: "ini",
+        conf: "plaintext",
+        cfg: "plaintext",
+        env: "dotenv",
+        xml: "xml",
+        svg: "xml",
+
+        // Backend / scripts
+        rs: "rust",
+        py: "python",
+        pyw: "python",
+        go: "go",
+        java: "java",
+        kt: "kotlin",
+        kts: "kotlin",
+        cs: "csharp",
+        php: "php",
+        rb: "ruby",
+        swift: "swift",
+
+        // C/C++
+        c: "c",
+        h: "c",
+        cc: "cpp",
+        cpp: "cpp",
+        cxx: "cpp",
+        hpp: "cpp",
+        hxx: "cpp",
+
+        // Shell
+        sh: "shell",
+        bash: "shell",
+        zsh: "shell",
+        fish: "shell",
+        ps1: "powershell",
+
+        // DB
+        sql: "sql",
+
+        // Misc
+        graphql: "graphql",
+        gql: "graphql",
+        proto: "protobuf",
+        log: "plaintext",
+        txt: "plaintext",
+    };
+
+    return map[ext] || "plaintext";
 }
 
 const activeLanguage = computed(() =>
@@ -338,7 +460,10 @@ watch(
     >
         <div class="flex flex-1 overflow-hidden">
             <!-- 左侧：工作区文件树 -->
-            <aside class="w-72 shrink-0 border-r bg-muted/10">
+            <aside
+                class="shrink-0 border-r bg-muted/10"
+                :style="{ width: leftPaneWidth + 'px' }"
+            >
                 <div class="p-3 border-b flex items-center gap-2">
                     <Button size="sm" class="gap-2" @click="createWorkspace">
                         <Plus class="w-4 h-4" />
@@ -395,8 +520,14 @@ watch(
                 </div>
             </aside>
 
-            <!-- 中间：编辑器 -->
-            <main class="flex-1 min-w-0 flex flex-col">
+            <!-- 竖向拖拽条（左/中） -->
+            <div
+                class="w-1 shrink-0 cursor-col-resize bg-border/50 hover:bg-border"
+                @mousedown="startDrag('left', $event)"
+            />
+
+            <!-- 中间：编辑器 + 控制台 -->
+            <main class="flex-1 min-w-0 flex flex-col overflow-hidden">
                 <div class="px-4 py-2 border-b flex items-center gap-2">
                     <div class="min-w-0 flex-1">
                         <div class="text-sm font-medium truncate">
@@ -418,24 +549,59 @@ watch(
                         <Save class="w-4 h-4" />
                         保存 (Ctrl+S)
                     </Button>
+
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        class="gap-2"
+                        @click="consoleVisible = !consoleVisible"
+                    >
+                        {{ consoleVisible ? "隐藏控制台" : "显示控制台" }}
+                    </Button>
                 </div>
 
                 <div v-if="fileLoadError" class="p-3 text-sm text-destructive">
                     {{ fileLoadError }}
                 </div>
 
-                <div class="flex-1 min-h-0">
-                    <MonacoEditorPane
-                        :value="editorValue"
-                        :language="activeLanguage"
-                        @update:value="updateEditorValue"
-                        @save="saveActiveFile"
-                    />
+                <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
+                    <div class="flex-1 min-h-0">
+                        <MonacoEditorPane
+                            :value="editorValue"
+                            :language="activeLanguage"
+                            @update:value="updateEditorValue"
+                            @save="saveActiveFile"
+                        />
+                    </div>
+
+                    <template v-if="consoleVisible">
+                        <!-- 横向拖拽条（编辑器/控制台） -->
+                        <div
+                            class="h-1 cursor-row-resize bg-border/50 hover:bg-border"
+                            @mousedown="startDrag('console', $event)"
+                        />
+
+                        <div
+                            class="shrink-0 border-t bg-muted/5"
+                            :style="{ height: consoleHeight + 'px' }"
+                        >
+                            <WorkspaceConsolePanel :cwd="workspaceRoot" />
+                        </div>
+                    </template>
                 </div>
             </main>
 
+            <!-- 竖向拖拽条（中/右） -->
+            <div
+                class="w-1 shrink-0 cursor-col-resize bg-border/50 hover:bg-border"
+                @mousedown="startDrag('right', $event)"
+            />
+
             <!-- 右侧：AI 会话（占位） -->
-            <aside class="w-80 shrink-0 border-l bg-muted/10">
+            <aside
+                class="shrink-0 border-l bg-muted/10"
+                :style="{ width: rightPaneWidth + 'px' }"
+            >
                 <AiSessionPlaceholder />
             </aside>
         </div>

@@ -12,10 +12,21 @@ import {
 const props = defineProps<{
     serverId: string;
     capabilities: any;
+    initialTab?: "tools" | "resources" | "templates";
 }>();
 
-const activeTab = ref<"tools" | "resources" | "templates">("tools");
+const activeTab = ref<"tools" | "resources" | "templates">(
+    props.initialTab || "tools"
+);
 const expandedToolSchemas = ref<Set<string>>(new Set());
+
+watch(
+    () => props.initialTab,
+    (tab) => {
+        if (!tab) return;
+        activeTab.value = tab;
+    }
+);
 
 const toggleToolSchema = (toolKey: string) => {
     const key = `${props.serverId}-${toolKey}`;

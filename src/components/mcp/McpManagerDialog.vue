@@ -6,11 +6,18 @@ import {
     Activity,
     Code,
     FileText,
-    ChevronDown,
-    ChevronUp,
     Loader2,
     GripVertical,
+    ExternalLink,
+    RefreshCw,
+    Star,
+    MoreVertical,
 } from "lucide-vue-next";
+
+import { openUrl } from "@tauri-apps/plugin-opener";
+
+import { GloscStoreApi } from "@/utils/GloscStoreApi";
+import { updateStoreTool } from "@/utils/StoreToolInstaller";
 
 import { VueDraggableNext } from "vue-draggable-next";
 
@@ -46,6 +53,7 @@ import {
 
 const uiStore = useUiStore();
 const mcpStore = useMcpStore();
+const authStore = useAuthStore();
 
 const loadedOnce = ref(false);
 
@@ -66,17 +74,87 @@ const onSortEnd = async () => {
     await mcpStore.saveServers();
 };
 
-// Expanded capability views
-const expandedServers = ref<Set<string>>(new Set());
-
 // Per-server action loading states
 const togglingServerIds = ref<Set<string>>(new Set());
 const testingServerIds = ref<Set<string>>(new Set());
+const updatingServerIds = ref<Set<string>>(new Set());
 const toggleActionLabel = ref<Record<string, "enable" | "disable">>({});
 
 const isServerBusy = (serverId: string) =>
     togglingServerIds.value.has(serverId) ||
-    testingServerIds.value.has(serverId);
+    testingServerIds.value.has(serverId) ||
+    updatingServerIds.value.has(serverId);
+
+const getStoreSlug = (server: McpServer) =>
+    server.type === "stdio" ? (server.env?.GLOSC_STORE_SLUG as any) : null;
+
+const isStoreInstalledServer = (server: McpServer) =>
+    Boolean(getStoreSlug(server));
+
+const getStoreKind = (server: McpServer) =>
+    server.type === "stdio" ? (server.env?.GLOSC_STORE_KIND as any) : null;
+
+const getStoreVersion = (server: McpServer) =>
+    server.type === "stdio" ? (server.env?.GLOSC_STORE_VERSION as any) : null;
+
+const getStoreDescription = (server: McpServer) => {
+    if (server.type !== "stdio") return null;
+    const raw = server.env?.GLOSC_STORE_DESCRIPTION;
+    const text = String(raw || "").trim();
+    return text || null;
+};
+
+const getStoreDetailUrl = (slug: string) =>
+    `${GloscStoreApi.host()}/store/plugins/${encodeURIComponent(slug)}`;
+
+const openExternalUrl = async (url: string) => {
+    if (!url) return;
+    try {
+        if (!(window as any).__TAURI_INTERNALS__) {
+            window.open(url, "_blank", "noopener,noreferrer");
+            return;
+        }
+        await openUrl(url);
+    } catch {
+        ElMessage.error("无法打开页面");
+    }
+};
+
+const openStoreDetailByServer = async (server: McpServer, anchor?: string) => {
+    const slug = String(getStoreSlug(server) || "").trim();
+    if (!slug) return;
+    const base = getStoreDetailUrl(slug);
+    const url = anchor ? `${base}${anchor}` : base;
+    await openExternalUrl(url);
+};
+
+// Capability dialog state
+const capabilityDialogOpen = ref(false);
+const capabilityDialogServerId = ref<string | null>(null);
+const capabilityDialogInitialTab = ref<"tools" | "resources" | "templates">(
+    "tools"
+);
+
+const capabilityDialogServer = computed(() => {
+    const id = capabilityDialogServerId.value;
+    if (!id) return null;
+    return mcpStore.servers.find((s) => s.id === id) || null;
+});
+
+const capabilityDialogCaps = computed(() => {
+    const id = capabilityDialogServerId.value;
+    if (!id) return null;
+    return mcpStore.serverCapabilities[id] || null;
+});
+
+const openCapabilityDialog = (
+    serverId: string,
+    tab: "tools" | "resources" | "templates"
+) => {
+    capabilityDialogServerId.value = serverId;
+    capabilityDialogInitialTab.value = tab;
+    capabilityDialogOpen.value = true;
+};
 
 const getServerState = (server: McpServer) => {
     const cap = mcpStore.serverCapabilities[server.id];
@@ -638,9 +716,6 @@ const toggleServer = async (server: McpServer) => {
         if (!nextEnabled) {
             // Hide previous capability results when disabled
             mcpStore.setServerCapability(server.id, null);
-            const newSet = new Set(expandedServers.value);
-            newSet.delete(server.id);
-            expandedServers.value = newSet;
             return;
         }
 
@@ -650,9 +725,6 @@ const toggleServer = async (server: McpServer) => {
             enabled: true,
         } as McpServer);
         mcpStore.setServerCapability(server.id, caps);
-        const newSet = new Set(expandedServers.value);
-        newSet.add(server.id);
-        expandedServers.value = newSet;
     } catch (e: any) {
         ElMessage.error(
             `${server.enabled ? "禁用" : "启用"} ${server.name} 失败: ${
@@ -670,16 +742,6 @@ const toggleServer = async (server: McpServer) => {
     }
 };
 
-const toggleServerExpansion = (serverId: string) => {
-    const newSet = new Set(expandedServers.value);
-    if (newSet.has(serverId)) {
-        newSet.delete(serverId);
-    } else {
-        newSet.add(serverId);
-    }
-    expandedServers.value = newSet;
-};
-
 const testServer = async (server: McpServer) => {
     if (isServerBusy(server.id)) return;
     testingServerIds.value = new Set(testingServerIds.value).add(server.id);
@@ -688,10 +750,6 @@ const testServer = async (server: McpServer) => {
         if (result.success) {
             ElMessage.success(`连接 ${server.name} 成功`);
             mcpStore.setServerCapability(server.id, result);
-            // Auto expand on success
-            const newSet = new Set(expandedServers.value);
-            newSet.add(server.id);
-            expandedServers.value = newSet;
         } else {
             ElMessage.error(`连接 ${server.name} 失败: ${result.error}`);
             mcpStore.setServerCapability(server.id, {
@@ -709,6 +767,54 @@ const testServer = async (server: McpServer) => {
         const next = new Set(testingServerIds.value);
         next.delete(server.id);
         testingServerIds.value = next;
+    }
+};
+
+const updateStoreInstalledServer = async (server: McpServer) => {
+    if (isServerBusy(server.id)) return;
+    if (!isStoreInstalledServer(server)) return;
+
+    updatingServerIds.value = new Set(updatingServerIds.value).add(server.id);
+    try {
+        await authStore.init();
+
+        const kind = String(getStoreKind(server) || "");
+        if (kind === "file" && (!authStore.isLoggedIn || !authStore.token)) {
+            ElMessage.warning("更新需要登录 Glosc Store");
+            await authStore.startLogin();
+            return;
+        }
+
+        const res = await updateStoreTool({
+            server,
+            authToken: authStore.token,
+            mcpStore,
+        });
+
+        if (!res.updated) {
+            ElMessage.success("已是最新版本");
+        } else {
+            ElMessage.success(`已更新到 ${res.version}`);
+        }
+
+        // If enabled, restart + refresh capability snapshot.
+        const updated = mcpStore.servers.find((s) => s.id === server.id);
+        if (updated && updated.enabled) {
+            try {
+                await McpUtils.stopServer(updated.id);
+            } catch {
+                // ignore
+            }
+            await McpUtils.startServer(updated);
+            const caps = await McpUtils.getActiveCapabilities(updated);
+            mcpStore.setServerCapability(updated.id, caps);
+        }
+    } catch (e: any) {
+        ElMessage.error(`更新失败：${e?.message || String(e)}`);
+    } finally {
+        const next = new Set(updatingServerIds.value);
+        next.delete(server.id);
+        updatingServerIds.value = next;
     }
 };
 
@@ -776,201 +882,357 @@ watch(
             />
 
             <div class="flex-1 overflow-y-auto pr-1">
-                <div class="grid gap-4">
-                    <VueDraggableNext
-                        :list="mcpStore.servers"
-                        item-key="id"
-                        group="mcp-tools"
-                        handle=".drag-handle"
-                        @end="onSortEnd"
+                <VueDraggableNext
+                    :list="mcpStore.servers"
+                    item-key="id"
+                    group="mcp-tools"
+                    handle=".drag-handle"
+                    tag="div"
+                    class="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+                    @end="onSortEnd"
+                >
+                    <template
+                        v-for="server in mcpStore.servers"
+                        :key="server.id"
                     >
-                        <template v-for="server in mcpStore.servers">
-                            <div
-                                class="border rounded-lg bg-card text-card-foreground shadow-sm overflow-hidden"
-                            >
-                                <div
-                                    class="p-4 flex items-center justify-between"
-                                >
-                                    <div>
-                                        <div class="flex items-center gap-2">
-                                            <div
-                                                class="drag-handle text-muted-foreground cursor-grab active:cursor-grabbing select-none"
-                                                :class="[
-                                                    togglingServerIds.size >
-                                                        0 ||
-                                                    testingServerIds.size > 0
-                                                        ? 'opacity-40 cursor-not-allowed'
-                                                        : '',
-                                                ]"
-                                                title="拖拽排序"
-                                                @click.stop
-                                            >
-                                                <GripVertical class="w-4 h-4" />
-                                            </div>
-                                            <h3 class="font-semibold text-lg">
-                                                {{ server.name }}
-                                            </h3>
-                                            <span
-                                                :class="[
-                                                    'px-2 py-0.5 rounded text-xs',
-                                                    getServerStateClass(server),
-                                                ]"
-                                            >
-                                                {{
-                                                    getServerStateLabel(server)
-                                                }}
-                                            </span>
+                        <div
+                            class="border rounded-lg bg-card text-card-foreground shadow-sm p-4 flex flex-col"
+                        >
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0 flex-1">
+                                    <div
+                                        class="flex items-center gap-2 flex-wrap"
+                                    >
+                                        <div
+                                            class="drag-handle text-muted-foreground cursor-grab active:cursor-grabbing select-none"
+                                            :class="[
+                                                togglingServerIds.size > 0 ||
+                                                testingServerIds.size > 0 ||
+                                                updatingServerIds.size > 0
+                                                    ? 'opacity-40 cursor-not-allowed'
+                                                    : '',
+                                            ]"
+                                            title="拖拽排序"
+                                            @click.stop
+                                        >
+                                            <GripVertical class="w-4 h-4" />
                                         </div>
-                                        <p
-                                            class="text-sm text-muted-foreground mt-1"
-                                        >
-                                            <span
-                                                v-if="server.type === 'stdio'"
-                                            >
-                                                {{ server.command }}
-                                                {{ server.args.join(" ") }}
-                                            </span>
-                                            <span
-                                                v-else-if="
-                                                    server.type === 'http'
-                                                "
-                                            >
-                                                {{ server.url }}
-                                            </span>
-                                        </p>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            @click="toggleServer(server)"
-                                            :disabled="isServerBusy(server.id)"
-                                        >
-                                            <Loader2
-                                                v-if="
-                                                    togglingServerIds.has(
-                                                        server.id
-                                                    )
-                                                "
-                                                class="w-4 h-4 mr-1 animate-spin"
-                                            />
-                                            <span
-                                                v-if="
-                                                    togglingServerIds.has(
-                                                        server.id
-                                                    )
-                                                "
-                                            >
-                                                {{
-                                                    toggleActionLabel[
-                                                        server.id
-                                                    ] === "disable"
-                                                        ? "禁用中"
-                                                        : "启用中"
-                                                }}
-                                            </span>
-                                            <span v-else>
-                                                {{
-                                                    server.enabled
-                                                        ? "禁用"
-                                                        : "启用"
-                                                }}
-                                            </span>
-                                        </Button>
 
+                                        <div
+                                            class="font-semibold truncate max-w-full"
+                                        >
+                                            {{ server.name }}
+                                        </div>
+
+                                        <span
+                                            :class="[
+                                                'px-2 py-0.5 rounded text-xs',
+                                                getServerStateClass(server),
+                                            ]"
+                                        >
+                                            {{ getServerStateLabel(server) }}
+                                        </span>
+
+                                        <Badge
+                                            v-if="
+                                                isStoreInstalledServer(server)
+                                            "
+                                            variant="outline"
+                                        >
+                                            Glosc Store
+                                        </Badge>
+                                        <Badge
+                                            v-if="
+                                                isStoreInstalledServer(
+                                                    server
+                                                ) && getStoreVersion(server)
+                                            "
+                                            variant="secondary"
+                                        >
+                                            v{{ getStoreVersion(server) }}
+                                        </Badge>
+                                        <Badge
+                                            v-if="
+                                                isStoreInstalledServer(
+                                                    server
+                                                ) && getStoreKind(server)
+                                            "
+                                            variant="outline"
+                                        >
+                                            {{ getStoreKind(server) }}
+                                        </Badge>
+                                    </div>
+
+                                    <div
+                                        class="text-sm text-muted-foreground mt-2 line-clamp-3"
+                                    >
+                                        <span
+                                            v-if="
+                                                isStoreInstalledServer(server)
+                                            "
+                                        >
+                                            {{
+                                                getStoreDescription(server) ||
+                                                "暂无描述"
+                                            }}
+                                        </span>
+                                        <span v-else>暂无描述</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div
+                                class="mt-3 flex flex-wrap items-center justify-end gap-2"
+                            >
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    @click="toggleServer(server)"
+                                    :disabled="isServerBusy(server.id)"
+                                >
+                                    <Loader2
+                                        v-if="togglingServerIds.has(server.id)"
+                                        class="w-4 h-4 mr-1 animate-spin"
+                                    />
+                                    <span
+                                        v-if="togglingServerIds.has(server.id)"
+                                    >
+                                        {{
+                                            toggleActionLabel[server.id] ===
+                                            "disable"
+                                                ? "禁用中"
+                                                : "启用中"
+                                        }}
+                                    </span>
+                                    <span v-else>
+                                        {{ server.enabled ? "禁用" : "启用" }}
+                                    </span>
+                                </Button>
+
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    @click="testServer(server)"
+                                    :disabled="isServerBusy(server.id)"
+                                >
+                                    <Loader2
+                                        v-if="testingServerIds.has(server.id)"
+                                        class="w-4 h-4 mr-1 animate-spin"
+                                    />
+                                    <Activity v-else class="w-4 h-4 mr-1" />
+                                    {{
+                                        testingServerIds.has(server.id)
+                                            ? "测试中"
+                                            : "测试"
+                                    }}
+                                </Button>
+
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger as-child>
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            @click="testServer(server)"
                                             :disabled="isServerBusy(server.id)"
                                         >
-                                            <Loader2
-                                                v-if="
-                                                    testingServerIds.has(
-                                                        server.id
-                                                    )
-                                                "
-                                                class="w-4 h-4 mr-1 animate-spin"
-                                            />
-                                            <Activity
-                                                v-else
+                                            <MoreVertical
                                                 class="w-4 h-4 mr-1"
                                             />
-                                            {{
-                                                testingServerIds.has(server.id)
-                                                    ? "测试中"
-                                                    : "测试"
-                                            }}
+                                            更多
                                         </Button>
-
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            @click="openEditDialog(server)"
-                                            :disabled="isServerBusy(server.id)"
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                        align="end"
+                                        class="w-48"
+                                    >
+                                        <DropdownMenuLabel
+                                            >能力</DropdownMenuLabel
                                         >
-                                            <Edit class="w-4 h-4" />
-                                        </Button>
-
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            class="text-destructive hover:text-destructive"
-                                            @click="deleteServer(server.id)"
-                                            :disabled="isServerBusy(server.id)"
-                                        >
-                                            <Trash2 class="w-4 h-4" />
-                                        </Button>
-
-                                        <Button
-                                            v-if="
-                                                mcpStore.serverCapabilities[
+                                        <DropdownMenuItem
+                                            :disabled="
+                                                !mcpStore.serverCapabilities[
                                                     server.id
                                                 ]
                                             "
-                                            variant="ghost"
-                                            size="icon"
-                                            @click="
-                                                toggleServerExpansion(server.id)
+                                            @select="
+                                                openCapabilityDialog(
+                                                    server.id,
+                                                    'tools'
+                                                )
                                             "
-                                            :disabled="isServerBusy(server.id)"
                                         >
-                                            <component
-                                                :is="
-                                                    expandedServers.has(
+                                            Tools
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            :disabled="
+                                                !mcpStore.serverCapabilities[
+                                                    server.id
+                                                ]
+                                            "
+                                            @select="
+                                                openCapabilityDialog(
+                                                    server.id,
+                                                    'resources'
+                                                )
+                                            "
+                                        >
+                                            Resources
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            :disabled="
+                                                !mcpStore.serverCapabilities[
+                                                    server.id
+                                                ]
+                                            "
+                                            @select="
+                                                openCapabilityDialog(
+                                                    server.id,
+                                                    'templates'
+                                                )
+                                            "
+                                        >
+                                            Templates
+                                        </DropdownMenuItem>
+
+                                        <DropdownMenuSeparator />
+
+                                        <DropdownMenuLabel
+                                            >管理</DropdownMenuLabel
+                                        >
+                                        <DropdownMenuItem
+                                            :disabled="isServerBusy(server.id)"
+                                            @select="openEditDialog(server)"
+                                        >
+                                            <Edit class="w-4 h-4" />
+                                            编辑
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            class="text-destructive focus:text-destructive"
+                                            :disabled="isServerBusy(server.id)"
+                                            @select="deleteServer(server.id)"
+                                        >
+                                            <Trash2 class="w-4 h-4" />
+                                            删除
+                                        </DropdownMenuItem>
+
+                                        <DropdownMenuSeparator />
+
+                                        <DropdownMenuLabel
+                                            >Glosc Store</DropdownMenuLabel
+                                        >
+                                        <DropdownMenuItem
+                                            :disabled="
+                                                !isStoreInstalledServer(server)
+                                            "
+                                            @select="
+                                                openStoreDetailByServer(server)
+                                            "
+                                        >
+                                            <ExternalLink class="w-4 h-4" />
+                                            打开
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            :disabled="
+                                                !isStoreInstalledServer(
+                                                    server
+                                                ) ||
+                                                updatingServerIds.has(server.id)
+                                            "
+                                            @select="
+                                                updateStoreInstalledServer(
+                                                    server
+                                                )
+                                            "
+                                        >
+                                            <Loader2
+                                                v-if="
+                                                    updatingServerIds.has(
                                                         server.id
                                                     )
-                                                        ? ChevronUp
-                                                        : ChevronDown
                                                 "
-                                                class="w-4 h-4"
+                                                class="w-4 h-4 animate-spin"
                                             />
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                <McpCapabilityView
-                                    v-if="
-                                        expandedServers.has(server.id) &&
-                                        mcpStore.serverCapabilities[server.id]
-                                    "
-                                    :server-id="server.id"
-                                    :capabilities="
-                                        mcpStore.serverCapabilities[server.id]
-                                    "
-                                />
+                                            <RefreshCw v-else class="w-4 h-4" />
+                                            {{
+                                                updatingServerIds.has(server.id)
+                                                    ? "更新中"
+                                                    : "更新"
+                                            }}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            :disabled="
+                                                !isStoreInstalledServer(server)
+                                            "
+                                            @select="
+                                                openStoreDetailByServer(
+                                                    server,
+                                                    '#rating'
+                                                )
+                                            "
+                                        >
+                                            <Star class="w-4 h-4" />
+                                            评价
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
-                        </template>
-                    </VueDraggableNext>
+                        </div>
+                    </template>
+                </VueDraggableNext>
 
-                    <div
-                        v-if="mcpStore.servers.length === 0"
-                        class="text-center py-12 text-muted-foreground"
-                    >
-                        未配置工具。点击“添加工具”开始使用。
-                    </div>
+                <div
+                    v-if="mcpStore.servers.length === 0"
+                    class="text-center py-12 text-muted-foreground"
+                >
+                    未配置工具。点击“添加工具”开始使用。
                 </div>
             </div>
+
+            <!-- Capability dialog (nested) -->
+            <Dialog v-model:open="capabilityDialogOpen">
+                <DialogContent
+                    class="w-[90vw] md:max-w-225 h-[85vh] flex flex-col"
+                >
+                    <DialogHeader>
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <DialogTitle>
+                                    {{
+                                        capabilityDialogServer?.name ||
+                                        "能力详情"
+                                    }}
+                                </DialogTitle>
+                                <DialogDescription>
+                                    Tools / Resources /
+                                    Templates（以弹窗形式查看）。
+                                </DialogDescription>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <Button
+                                    variant="ghost"
+                                    @click="capabilityDialogOpen = false"
+                                >
+                                    关闭
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogHeader>
+
+                    <div class="flex-1 overflow-y-auto">
+                        <div
+                            v-if="!capabilityDialogCaps"
+                            class="text-sm text-muted-foreground p-4"
+                        >
+                            暂无能力信息，请先点击“测试”或启用服务器后自动刷新。
+                        </div>
+                        <McpCapabilityView
+                            v-else
+                            :server-id="String(capabilityDialogServerId)"
+                            :capabilities="capabilityDialogCaps"
+                            :initial-tab="capabilityDialogInitialTab"
+                        />
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             <!-- Add/Edit dialog (nested) -->
             <Dialog v-model:open="isDialogOpen">

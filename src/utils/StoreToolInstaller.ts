@@ -6,6 +6,7 @@ import { mkdir, writeFile, readFile, exists } from "@tauri-apps/plugin-fs";
 
 import type { StorePlugin } from "@/utils/GloscStoreApi";
 import { GloscStoreApi } from "@/utils/GloscStoreApi";
+import type { McpServer } from "@/utils/interface";
 
 type ToolConfig = {
     name?: string;
@@ -85,6 +86,17 @@ function pickToolName(toolConfig: ToolConfig | null, plugin: StorePlugin) {
         String(toolConfig?.name || "").trim() ||
         String(plugin.name || "").trim() ||
         plugin.slug;
+    return raw;
+}
+
+function pickToolDescription(
+    toolConfig: ToolConfig | null,
+    plugin: StorePlugin
+) {
+    const raw =
+        String(toolConfig?.description || "").trim() ||
+        String(plugin.summary || "").trim() ||
+        String(plugin.description || "").trim();
     return raw;
 }
 
@@ -231,6 +243,7 @@ export async function installStoreTool(params: {
                 GLOSC_STORE_KIND: "package",
                 GLOSC_STORE_MANAGER: plugin.source.manager,
                 GLOSC_STORE_PACKAGE: plugin.source.name,
+                GLOSC_STORE_DESCRIPTION: pickToolDescription(null, plugin),
             },
             enabled: !!params.autoEnable,
         });
@@ -316,6 +329,7 @@ export async function installStoreTool(params: {
         const extraArgs = toolConfig?.mcp?.args || [];
 
         const serverName = pickToolName(toolConfig, plugin);
+        const serverDescription = pickToolDescription(toolConfig, plugin);
 
         if (runtime === "python") {
             await mcpStore.addServer({
@@ -330,6 +344,7 @@ export async function installStoreTool(params: {
                     GLOSC_STORE_KIND: "file",
                     GLOSC_STORE_VERSION: latest.version,
                     GLOSC_TOOL_DIR: installDir,
+                    GLOSC_STORE_DESCRIPTION: serverDescription,
                 },
                 enabled: !!params.autoEnable,
             });
@@ -347,6 +362,7 @@ export async function installStoreTool(params: {
                     GLOSC_STORE_KIND: "file",
                     GLOSC_STORE_VERSION: latest.version,
                     GLOSC_TOOL_DIR: installDir,
+                    GLOSC_STORE_DESCRIPTION: serverDescription,
                 },
                 enabled: !!params.autoEnable,
             });
@@ -356,4 +372,144 @@ export async function installStoreTool(params: {
     }
 
     throw new Error("暂不支持该 source 类型安装");
+}
+
+export async function updateStoreTool(params: {
+    server: McpServer;
+    authToken: string | null;
+    mcpStore: ReturnType<typeof useMcpStore>;
+}) {
+    const { server, authToken, mcpStore } = params;
+
+    if (server.type !== "stdio") {
+        throw new Error("仅支持更新 stdio 类型工具");
+    }
+
+    const slug = server.env?.GLOSC_STORE_SLUG;
+    const kind = server.env?.GLOSC_STORE_KIND;
+    if (!slug) {
+        throw new Error("该工具不是从 Glosc Store 安装的");
+    }
+
+    // Package 类型通常由 npx/uvx 解析最新版本（或由工具链缓存控制）。这里仅对 file 版本做更新。
+    if (kind !== "file") {
+        return {
+            ok: true as const,
+            updated: false as const,
+            reason: "package 类型无需客户端更新（可通过刷新能力验证生效）",
+        };
+    }
+
+    if (!authToken) {
+        throw new Error("请先登录，再更新需要下载的工具");
+    }
+
+    const [plugin, versions] = await Promise.all([
+        GloscStoreApi.getPlugin(String(slug)),
+        GloscStoreApi.getVersions(String(slug)),
+    ]);
+
+    const latest = versions.items?.[0];
+    if (!latest?.version) {
+        throw new Error("该工具暂无可用版本");
+    }
+
+    const current = String(server.env?.GLOSC_STORE_VERSION || "").trim();
+    if (current && current === latest.version) {
+        return {
+            ok: true as const,
+            updated: false as const,
+            version: current,
+            latest: latest.version,
+        };
+    }
+
+    const zipBytes = await GloscStoreApi.downloadVersion({
+        slug: String(slug),
+        version: latest.version,
+        token: authToken,
+    });
+
+    const root = await appDataDir();
+    const toolsDir = await join(root, "glosc-tools");
+    const installDir = await join(toolsDir, String(slug), latest.version);
+
+    await ensureDir(await join(toolsDir, String(slug)));
+    await ensureDir(installDir);
+
+    const files = unzipSync(zipBytes);
+    const entries = Object.entries(files);
+
+    for (const [rawPath, data] of entries) {
+        const rel = normalizeRelPath(rawPath);
+        if (!rel) continue;
+        if (rel.endsWith("/")) {
+            await ensureDir(await join(installDir, rel));
+            continue;
+        }
+
+        const target = await join(installDir, rel);
+        const parent = target.replace(/[\\/][^\\/]+$/, "");
+        if (parent && parent !== target) {
+            await ensureDir(parent);
+        }
+
+        await writeFile(target, data);
+    }
+
+    // config.yml (optional)
+    let toolConfig: ToolConfig | null = null;
+    const configPath = await join(installDir, "config.yml");
+    if (await exists(configPath)) {
+        const raw = await readFile(configPath);
+        const text = new TextDecoder("utf-8").decode(raw);
+        toolConfig = (YAML.parse(text) || null) as ToolConfig | null;
+        if (toolConfig) validateToolConfig(toolConfig);
+    }
+
+    const guessed = await guessEntryFromFilesystem({ installDir, plugin });
+    const runtime = toolConfig?.mcp?.runtime || guessed.runtime;
+    const entryRel = normalizeRelPath(toolConfig?.mcp?.entry || guessed.entry);
+    const cwdRel = normalizeRelPath(toolConfig?.mcp?.cwd || "");
+
+    const entryAbs = await validateToolLayout({
+        installDir,
+        runtime,
+        entryRel,
+        cwdRel,
+    });
+    const cwd = cwdRel ? await join(installDir, cwdRel) : installDir;
+    const toolEnv = toolConfig?.mcp?.env || {};
+    const extraArgs = toolConfig?.mcp?.args || [];
+
+    const serverName = pickToolName(toolConfig, plugin) || server.name;
+    const serverDescription = pickToolDescription(toolConfig, plugin);
+
+    const mergedEnv: Record<string, string> = {
+        ...(server.env || {}),
+        ...toolEnv,
+        GLOSC_STORE_SLUG: String(slug),
+        GLOSC_STORE_KIND: "file",
+        GLOSC_STORE_VERSION: latest.version,
+        GLOSC_TOOL_DIR: installDir,
+        GLOSC_STORE_DESCRIPTION: serverDescription,
+    };
+
+    const command = runtime === "python" ? "python" : "node";
+
+    await mcpStore.updateServer(server.id, {
+        name: serverName,
+        command,
+        args: [entryAbs, ...extraArgs],
+        cwd,
+        env: mergedEnv,
+    });
+
+    return {
+        ok: true as const,
+        updated: true as const,
+        version: latest.version,
+        previous: current || null,
+        installDir,
+    };
 }
