@@ -46,10 +46,12 @@
     "codemirror": "^6.0.2",
     "crypto-js": "^4.2.0",
     "element-plus": "^2.12.0",
+    "fflate": "^0.8.2",
     "github-markdown-css": "^5.8.1",
     "katex": "^0.16.27",
     "lucide-vue-next": "^0.562.0",
     "markdown-it": "^14.1.0",
+    "monaco-editor": "^0.55.1",
     "motion-v": "^1.7.4",
     "nanoid": "^5.1.6",
     "openai": "^6.10.0",
@@ -68,6 +70,7 @@
     "vue-draggable-next": "^2.3.0",
     "vue-router": "4",
     "vue-stick-to-bottom": "^0.1.0",
+    "yaml": "^2.8.2",
     "zod": "^4.1.13"
   },
   "devDependencies": {

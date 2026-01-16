@@ -1,0 +1,359 @@
+import { unzipSync } from "fflate";
+import YAML from "yaml";
+
+import { appDataDir, join } from "@tauri-apps/api/path";
+import { mkdir, writeFile, readFile, exists } from "@tauri-apps/plugin-fs";
+
+import type { StorePlugin } from "@/utils/GloscStoreApi";
+import { GloscStoreApi } from "@/utils/GloscStoreApi";
+
+type ToolConfig = {
+    name?: string;
+    description?: string;
+    icon?: string;
+    language?: string;
+    author?: string;
+    mcp?: {
+        runtime?: "python" | "node";
+        entry?: string;
+        cwd?: string;
+        env?: Record<string, string>;
+        args?: string[];
+    };
+};
+
+function validateToolConfig(toolConfig: ToolConfig) {
+    if (!toolConfig || typeof toolConfig !== "object") return;
+
+    const mcp = toolConfig.mcp;
+    if (mcp === undefined) return;
+    if (!mcp || typeof mcp !== "object") {
+        throw new Error("config.yml 字段类型错误：mcp 期望对象");
+    }
+
+    if (mcp.runtime && mcp.runtime !== "python" && mcp.runtime !== "node") {
+        throw new Error(
+            "config.yml 字段无效：mcp.runtime 必须为 python 或 node"
+        );
+    }
+    if (mcp.entry !== undefined && typeof mcp.entry !== "string") {
+        throw new Error("config.yml 字段类型错误：mcp.entry 期望字符串");
+    }
+    if (mcp.cwd !== undefined && typeof mcp.cwd !== "string") {
+        throw new Error("config.yml 字段类型错误：mcp.cwd 期望字符串");
+    }
+    if (mcp.args !== undefined) {
+        if (
+            !Array.isArray(mcp.args) ||
+            mcp.args.some((x) => typeof x !== "string")
+        ) {
+            throw new Error("config.yml 字段类型错误：mcp.args 期望 string[]");
+        }
+    }
+    if (mcp.env !== undefined) {
+        if (!mcp.env || typeof mcp.env !== "object" || Array.isArray(mcp.env)) {
+            throw new Error(
+                "config.yml 字段类型错误：mcp.env 期望 Record<string, string>"
+            );
+        }
+        for (const [k, v] of Object.entries(mcp.env)) {
+            if (typeof v !== "string") {
+                throw new Error(
+                    `config.yml 字段类型错误：mcp.env.${k} 期望 string`
+                );
+            }
+        }
+    }
+}
+
+async function ensureDir(path: string) {
+    const ok = await exists(path);
+    if (ok) return;
+    await mkdir(path, { recursive: true });
+}
+
+function normalizeRelPath(p: string) {
+    return String(p || "")
+        .replace(/\\/g, "/")
+        .replace(/^\/+/, "")
+        .replace(/\.\.(\/|$)/g, "")
+        .trim();
+}
+
+function pickToolName(toolConfig: ToolConfig | null, plugin: StorePlugin) {
+    const raw =
+        String(toolConfig?.name || "").trim() ||
+        String(plugin.name || "").trim() ||
+        plugin.slug;
+    return raw;
+}
+
+async function guessEntryFromFilesystem(params: {
+    installDir: string;
+    plugin: StorePlugin;
+}): Promise<{ runtime: "python" | "node"; entry: string }> {
+    // Prefer concrete files if present.
+    const py = "src/python/main.py";
+    const js = "src/TypeScript/main.js";
+
+    if (await exists(await join(params.installDir, py))) {
+        return { runtime: "python", entry: py };
+    }
+    if (await exists(await join(params.installDir, js))) {
+        return { runtime: "node", entry: js };
+    }
+
+    // Fallback to convention by plugin.source.language.
+    return guessEntryFromConvention(params.plugin);
+}
+
+async function validateToolLayout(params: {
+    installDir: string;
+    runtime: "python" | "node";
+    entryRel: string;
+    cwdRel: string;
+}): Promise<string> {
+    const entryAbsPrimary = await join(params.installDir, params.entryRel);
+    let entryAbs = entryAbsPrimary;
+
+    if (!(await exists(entryAbsPrimary))) {
+        if (params.cwdRel) {
+            const entryAbsAlt = await join(
+                params.installDir,
+                params.cwdRel,
+                params.entryRel
+            );
+            if (await exists(entryAbsAlt)) {
+                entryAbs = entryAbsAlt;
+            } else {
+                throw new Error(
+                    `工具入口不存在：${params.entryRel}（已尝试：${params.entryRel} 和 ${normalizeRelPath(`${params.cwdRel}/${params.entryRel}`)}；请检查包内文件或 config.yml 的 mcp.entry/mcp.cwd）`
+                );
+            }
+        } else {
+            throw new Error(
+                `工具入口不存在：${params.entryRel}（请检查包内文件或 config.yml 的 mcp.entry）`
+            );
+        }
+    }
+
+    if (params.runtime === "python") {
+        // Soft validations: if present, it helps confirm layout.
+        const pyproject =
+            (await exists(
+                await join(params.installDir, "src/python/pyproject.toml")
+            )) ||
+            (await exists(await join(params.installDir, "pyproject.toml")));
+        const requirements =
+            (await exists(
+                await join(params.installDir, "src/python/requirements.txt")
+            )) ||
+            (await exists(await join(params.installDir, "requirements.txt")));
+        if (!pyproject && !requirements) {
+            // Not fatal: allow pure-script tools.
+        }
+        return entryAbs;
+    }
+
+    // node
+    const pkgJson =
+        (await exists(
+            await join(params.installDir, "src/TypeScript/package.json")
+        )) || (await exists(await join(params.installDir, "package.json")));
+    if (!pkgJson) {
+        // Not fatal: allow single-file JS tools.
+    }
+    if (entryAbs.toLowerCase().endsWith(".ts")) {
+        throw new Error(
+            "当前仅支持运行 JavaScript 入口（.js）。TypeScript 入口（.ts）请先构建为 .js，或在 config.yml 指向 main.js。"
+        );
+    }
+
+    return entryAbs;
+}
+
+function guessEntryFromConvention(plugin: StorePlugin): {
+    runtime: "python" | "node";
+    entry: string;
+} {
+    const lang =
+        plugin.source && plugin.source.type === "file"
+            ? plugin.source.language
+            : "";
+
+    if (lang === "py") {
+        return { runtime: "python", entry: "src/python/main.py" };
+    }
+
+    // Prefer runnable JS for Node.
+    return { runtime: "node", entry: "src/TypeScript/main.js" };
+}
+
+export async function installStoreTool(params: {
+    plugin: StorePlugin;
+    authToken: string | null;
+    mcpStore: ReturnType<typeof useMcpStore>;
+    autoEnable?: boolean;
+}) {
+    const { plugin, authToken, mcpStore } = params;
+
+    if (!plugin.source) {
+        throw new Error("该工具缺少 source 配置，无法安装");
+    }
+
+    if (plugin.source.type === "package") {
+        if (
+            plugin.pricing?.type &&
+            plugin.pricing.type !== "free" &&
+            !authToken
+        ) {
+            throw new Error("该工具为付费项，请先登录再购买/安装");
+        }
+
+        if (authToken) {
+            // 同步“购买/加入库”（Store 目前仅支持 free；paid/subscription 会返回 501）
+            await GloscStoreApi.acquireToLibrary(plugin.slug, authToken);
+        }
+
+        const command = plugin.source.manager === "npx" ? "npx" : "uvx";
+        const args =
+            plugin.source.manager === "npx"
+                ? ["-y", plugin.source.name]
+                : [plugin.source.name];
+
+        await mcpStore.addServer({
+            type: "stdio",
+            name: plugin.name,
+            command,
+            args,
+            env: {
+                GLOSC_STORE_SLUG: plugin.slug,
+                GLOSC_STORE_KIND: "package",
+                GLOSC_STORE_MANAGER: plugin.source.manager,
+                GLOSC_STORE_PACKAGE: plugin.source.name,
+            },
+            enabled: !!params.autoEnable,
+        });
+
+        return { kind: "package" as const };
+    }
+
+    if (plugin.source.type === "file") {
+        if (!authToken) {
+            throw new Error("请先登录，再安装需要下载的工具");
+        }
+
+        // 购买/加入库：目前 Store 仅支持 free（paid/subscription 返回 501）
+        await GloscStoreApi.acquireToLibrary(plugin.slug, authToken);
+
+        const versions = await GloscStoreApi.getVersions(plugin.slug);
+        const latest = versions.items?.[0];
+        if (!latest?.version) {
+            throw new Error("该工具暂无可用版本");
+        }
+
+        const zipBytes = await GloscStoreApi.downloadVersion({
+            slug: plugin.slug,
+            version: latest.version,
+            token: authToken,
+        });
+
+        const root = await appDataDir();
+        const toolsDir = await join(root, "glosc-tools");
+        const installDir = await join(toolsDir, plugin.slug, latest.version);
+
+        await ensureDir(await join(toolsDir, plugin.slug));
+        await ensureDir(installDir);
+
+        const files = unzipSync(zipBytes);
+        const entries = Object.entries(files);
+
+        for (const [rawPath, data] of entries) {
+            const rel = normalizeRelPath(rawPath);
+            if (!rel) continue;
+            if (rel.endsWith("/")) {
+                await ensureDir(await join(installDir, rel));
+                continue;
+            }
+
+            const target = await join(installDir, rel);
+            // ensure parent exists
+            const parent = target.replace(/[\\/][^\\/]+$/, "");
+            if (parent && parent !== target) {
+                await ensureDir(parent);
+            }
+
+            await writeFile(target, data);
+        }
+
+        // config.yml (optional)
+        let toolConfig: ToolConfig | null = null;
+        const configPath = await join(installDir, "config.yml");
+        if (await exists(configPath)) {
+            const raw = await readFile(configPath);
+            const text = new TextDecoder("utf-8").decode(raw);
+            toolConfig = (YAML.parse(text) || null) as ToolConfig | null;
+            if (toolConfig) validateToolConfig(toolConfig);
+        }
+
+        console.log(toolConfig);
+
+        const guessed = await guessEntryFromFilesystem({ installDir, plugin });
+        const runtime = toolConfig?.mcp?.runtime || guessed.runtime;
+        const entryRel = normalizeRelPath(
+            toolConfig?.mcp?.entry || guessed.entry
+        );
+        const cwdRel = normalizeRelPath(toolConfig?.mcp?.cwd || "");
+
+        const entryAbs = await validateToolLayout({
+            installDir,
+            runtime,
+            entryRel,
+            cwdRel,
+        });
+        const cwd = cwdRel ? await join(installDir, cwdRel) : installDir;
+        const env = toolConfig?.mcp?.env || {};
+        const extraArgs = toolConfig?.mcp?.args || [];
+
+        const serverName = pickToolName(toolConfig, plugin);
+
+        if (runtime === "python") {
+            await mcpStore.addServer({
+                type: "stdio",
+                name: serverName,
+                command: "python",
+                args: [entryAbs, ...extraArgs],
+                cwd,
+                env: {
+                    ...env,
+                    GLOSC_STORE_SLUG: plugin.slug,
+                    GLOSC_STORE_KIND: "file",
+                    GLOSC_STORE_VERSION: latest.version,
+                    GLOSC_TOOL_DIR: installDir,
+                },
+                enabled: !!params.autoEnable,
+            });
+        } else {
+            // node
+            await mcpStore.addServer({
+                type: "stdio",
+                name: serverName,
+                command: "node",
+                args: [entryAbs, ...extraArgs],
+                cwd,
+                env: {
+                    ...env,
+                    GLOSC_STORE_SLUG: plugin.slug,
+                    GLOSC_STORE_KIND: "file",
+                    GLOSC_STORE_VERSION: latest.version,
+                    GLOSC_TOOL_DIR: installDir,
+                },
+                enabled: !!params.autoEnable,
+            });
+        }
+
+        return { kind: "file" as const, installDir, version: latest.version };
+    }
+
+    throw new Error("暂不支持该 source 类型安装");
+}

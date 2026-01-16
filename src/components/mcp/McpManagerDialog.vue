@@ -14,6 +14,8 @@ import {
 
 import { VueDraggableNext } from "vue-draggable-next";
 
+import { Codemirror } from "vue-codemirror";
+
 import { json, jsonLanguage } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
 import {
@@ -46,6 +48,8 @@ const uiStore = useUiStore();
 const mcpStore = useMcpStore();
 
 const loadedOnce = ref(false);
+
+const storeToolBrowserOpen = ref(false);
 
 // Add/Edit dialog state
 const isDialogOpen = ref(false);
@@ -727,6 +731,13 @@ watch(
                         </DialogDescription>
                     </div>
                     <div class="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            @click="storeToolBrowserOpen = true"
+                        >
+                            <Plus class="w-4 h-4 mr-2" />
+                            从 Glosc Store 添加
+                        </Button>
                         <Button variant="outline" @click="openAddDialog">
                             <Plus class="w-4 h-4 mr-2" />
                             添加工具
@@ -740,6 +751,11 @@ watch(
                     </div>
                 </div>
             </DialogHeader>
+
+            <StoreToolBrowserDialog
+                v-model:open="storeToolBrowserOpen"
+                @installed="() => mcpStore.checkConnections()"
+            />
 
             <div class="flex-1 overflow-y-auto pr-1">
                 <div class="grid gap-4">

@@ -79,6 +79,85 @@ function splitCommandLine(commandLine: string): {
     return { command: command ?? "", args: rest };
 }
 
+function repairPythonWindowsScriptArgs(
+    command: string,
+    args: string[]
+): string[] {
+    const normalized = normalizeCommand(command);
+    if (
+        normalized !== "python" &&
+        normalized !== "python3" &&
+        normalized !== "py"
+    ) {
+        return args;
+    }
+
+    // If using `-c` or `-m`, it's not a script path.
+    if (args.includes("-c") || args.includes("-m")) return args;
+
+    // Heuristic: when users provide a Windows path with spaces without quotes,
+    // our splitter will break it into multiple args. Re-join the script path
+    // by locating a .py/.pyw token and joining from the first non-flag token.
+    const scriptStart = args.findIndex(
+        (a) => a.length > 0 && !a.startsWith("-")
+    );
+    if (scriptStart === -1) return args;
+
+    const scriptEnd = args.findIndex(
+        (a, idx) => idx >= scriptStart && /\.pyw?$/i.test(a)
+    );
+    if (scriptEnd === -1) return args;
+
+    if (scriptEnd === scriptStart) return args;
+
+    const joinedScript = args.slice(scriptStart, scriptEnd + 1).join(" ");
+    return [
+        ...args.slice(0, scriptStart),
+        joinedScript,
+        ...args.slice(scriptEnd + 1),
+    ];
+}
+
+function isNodeCommand(command: string): boolean {
+    const normalized = normalizeCommand(command);
+    if (normalized === "node" || normalized === "node.exe") return true;
+    // Also allow absolute paths like C:\Program Files\nodejs\node.exe
+    return /(^|[\\/])node(\.exe)?$/i.test(command.trim());
+}
+
+function repairNodeWindowsScriptArgs(command: string, args: string[]): string[] {
+    if (!isNodeCommand(command)) return args;
+
+    // If using eval/print, it's not a script path.
+    const hasInlineCode = args.some((a) =>
+        ["-e", "-p", "--eval", "--print"].includes(a)
+    );
+    if (hasInlineCode) return args;
+
+    // Do not touch when user explicitly uses -c (not a Node flag) but keep future-proof.
+
+    // Heuristic: when users provide a Windows path with spaces without quotes,
+    // upstream may split it into multiple args. Re-join the script path by locating
+    // the first token that looks like a JS/TS entry file.
+    const scriptStart = args.findIndex(
+        (a) => a.length > 0 && !a.startsWith("-")
+    );
+    if (scriptStart === -1) return args;
+
+    const scriptEnd = args.findIndex(
+        (a, idx) => idx >= scriptStart && /\.(c|m)?jsx?$|\.tsx?$/i.test(a)
+    );
+    if (scriptEnd === -1) return args;
+    if (scriptEnd === scriptStart) return args;
+
+    const joinedScript = args.slice(scriptStart, scriptEnd + 1).join(" ");
+    return [
+        ...args.slice(0, scriptStart),
+        joinedScript,
+        ...args.slice(scriptEnd + 1),
+    ];
+}
+
 class ReadBuffer {
     private buffer: string = "";
 
@@ -155,6 +234,10 @@ export class TauriStdioTransport {
         try {
             let cmd: any;
             let { command, args = [], env, cwd } = this._serverParams;
+
+            // Normalize trivial whitespace early (avoids confusing logs like "node ").
+            command = command.trim();
+
             if ((!args || args.length === 0) && /\s/.test(command.trim())) {
                 const parsed = splitCommandLine(command);
                 if (parsed.command) {
@@ -162,6 +245,14 @@ export class TauriStdioTransport {
                     args = parsed.args;
                 }
             }
+
+            // Always repair python script path even when args are provided separately
+            // (e.g. UI split by spaces, resulting in ["...\\new", "tools\\main.py"]).
+            args = repairPythonWindowsScriptArgs(command, args);
+
+            // Also repair node script path on Windows when args were split by spaces.
+            // Example: ["E:\\...\\new", "tools\\dist\\index.js"] -> ["E:\\...\\new tools\\dist\\index.js"].
+            args = repairNodeWindowsScriptArgs(command, args);
 
             const normalized = normalizeCommand(command);
             // If env is empty, pass undefined to inherit from parent process
@@ -191,22 +282,43 @@ export class TauriStdioTransport {
                 // If your bundle does not include it, fallback to system python.
                 const pythonArgs = ensurePythonUnbuffered(args);
 
+                const pythonEnv: Record<string, string> | undefined = cmdEnv
+                    ? { ...cmdEnv, PYTHONUNBUFFERED: "1" }
+                    : { PYTHONUNBUFFERED: "1" };
+
                 try {
-                    const file_dirname = await dirname(args[0]);
-                    const file_basename = await basename(args[0]);
+                    const scriptPath = args[0];
+                    if (!scriptPath)
+                        throw new Error("Missing python script path");
+
+                    const file_dirname = await dirname(scriptPath);
+                    const file_basename = await basename(scriptPath);
+                    const scriptArgs = args.slice(1);
+                    // console.log([
+                    //     "--directory",
+                    //     file_dirname,
+                    //     "run",
+                    //     file_basename,
+                    // ]);
 
                     cmd = Command.sidecar(
                         "binaries/uv",
-                        ["--directory", file_dirname, "run", file_basename],
+                        [
+                            "--directory",
+                            file_dirname,
+                            "run",
+                            file_basename,
+                            ...scriptArgs,
+                        ],
                         {
                             cwd,
-                            env: cmdEnv,
+                            env: pythonEnv,
                         }
                     );
                 } catch {
                     cmd = Command.create(command, pythonArgs, {
                         cwd,
-                        env: cmdEnv,
+                        env: pythonEnv,
                     });
                 }
             } else if (normalized === "uvx") {

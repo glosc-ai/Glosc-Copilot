@@ -67,13 +67,40 @@ export const useMcpStore = defineStore("mcp", {
         async saveEnabled() {
             await storeUtils.set("mcp_enabled", this.mcpEnabled, false);
         },
-        async addServer(server: Omit<McpServer, "id">) {
+        async addServer(
+            server:
+                | Omit<Extract<McpServer, { type: "stdio" }>, "id">
+                | Omit<Extract<McpServer, { type: "http" }>, "id">
+        ) {
             const newServer = {
                 ...server,
                 id: crypto.randomUUID(),
             } as McpServer;
             this.servers.push(newServer);
             await this.saveServers();
+
+            // Adding a server changes tool availability.
+            this.invalidateToolsCache();
+
+            // If the server is added as enabled, start it immediately (parity with updateServer).
+            if (newServer.enabled) {
+                try {
+                    await McpUtils.startServer(newServer);
+                    const caps =
+                        await McpUtils.getActiveCapabilities(newServer);
+                    this.setServerCapability(newServer.id, caps);
+                } catch (e) {
+                    console.error(
+                        `Failed to start server ${newServer.name}`,
+                        e
+                    );
+                    this.setServerCapability(newServer.id, {
+                        success: false,
+                        error: (e as any)?.message || String(e),
+                    });
+                    await McpUtils.stopServer(newServer.id);
+                }
+            }
         },
         async updateServer(id: string, updates: Partial<McpServer>) {
             const index = this.servers.findIndex((s) => s.id === id);

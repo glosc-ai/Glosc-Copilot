@@ -1,20 +1,30 @@
 <script setup lang="ts">
-import ChatArea from "@/components/ChatArea.vue";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+
+import AiSessionPlaceholder from "@/components/workspace/AiSessionPlaceholder.vue";
+import MonacoEditorPane from "@/components/workspace/MonacoEditorPane.vue";
+import WorkspaceTreeItem from "@/components/workspace/WorkspaceTreeItem.vue";
 
 import { open } from "@tauri-apps/plugin-dialog";
-import { readDir } from "@tauri-apps/plugin-fs";
-import { Command, type Child } from "@tauri-apps/plugin-shell";
+import { readDir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+
+import { storeUtils } from "@/utils/StoreUtils";
 
 import {
-    ChevronDown,
-    ChevronRight,
+    File,
+    FileArchive,
+    FileAudio,
+    FileCode,
+    FileCog,
+    FileImage,
+    FileJson,
+    FileSpreadsheet,
     FileText,
+    FileVideo,
     Folder,
+    FolderOpen,
     Plus,
-    Terminal,
+    Save,
     Trash2,
 } from "lucide-vue-next";
 
@@ -25,15 +35,33 @@ type TreeNode = {
 };
 
 const workspaceRoot = ref<string | null>(null);
-const taskModeEnabled = ref(false);
+const activeFilePath = ref<string | null>(null);
+
+const editorValue = ref<string>("");
+const lastSavedValue = ref<string>("");
+const fileLoadError = ref<string | null>(null);
+const fileSaving = ref(false);
 
 const expandedDirs = ref<Set<string>>(new Set());
 const childrenByPath = ref<Record<string, TreeNode[]>>({});
 const loadingDirs = ref<Set<string>>(new Set());
 const dirLoadError = ref<string | null>(null);
 
-const isDirLoading = (dirPath: string) => loadingDirs.value.has(dirPath);
 const isDirExpanded = (dirPath: string) => expandedDirs.value.has(dirPath);
+
+const rootNodes = computed<TreeNode[]>(() => {
+    if (!workspaceRoot.value) return [];
+    return childrenByPath.value[workspaceRoot.value] || [];
+});
+
+const isDirty = computed(() => editorValue.value !== lastSavedValue.value);
+
+function joinPath(base: string, name: string) {
+    const useBackslash = base.includes("\\");
+    const sep = useBackslash ? "\\" : "/";
+    if (base.endsWith(sep)) return `${base}${name}`;
+    return `${base}${sep}${name}`;
+}
 
 async function loadDir(dirPath: string) {
     if (loadingDirs.value.has(dirPath)) return;
@@ -45,8 +73,13 @@ async function loadDir(dirPath: string) {
         const nodes: TreeNode[] = (entries || [])
             .map((e: any) => {
                 const name = e?.name ?? "";
-                const path = e?.path ?? (name ? `${dirPath}/${name}` : dirPath);
-                const isDir = Boolean(e?.isDir);
+                const path =
+                    e?.path ?? (name ? joinPath(dirPath, name) : dirPath);
+                const isDir = Boolean(
+                    e?.isDir ??
+                    e?.isDirectory ??
+                    (Array.isArray(e?.children) && e.children.length >= 0)
+                );
                 return { name, path, isDir };
             })
             .filter((n: any) => Boolean(n.name))
@@ -89,30 +122,145 @@ async function toggleDir(node: TreeNode) {
     }
 }
 
-type FlattenedNode = {
-    node: TreeNode;
-    depth: number;
-};
-
-function flatten(nodes: TreeNode[], depth: number): FlattenedNode[] {
-    const result: FlattenedNode[] = [];
-    for (const node of nodes) {
-        result.push({ node, depth });
-        if (node.isDir && expandedDirs.value.has(node.path)) {
-            const children = childrenByPath.value[node.path] || [];
-            result.push(...flatten(children, depth + 1));
-        }
-    }
-    return result;
+function getFileExtension(fileName: string) {
+    const name = (fileName || "").toLowerCase();
+    // dotfiles like .env / .gitignore
+    if (name.startsWith(".") && !name.includes(".", 1)) return name.slice(1);
+    const idx = name.lastIndexOf(".");
+    if (idx <= 0 || idx === name.length - 1) return "";
+    return name.slice(idx + 1);
 }
 
-const flattenedNodes = computed<FlattenedNode[]>(() => {
-    if (!workspaceRoot.value) return [];
-    const rootChildren = childrenByPath.value[workspaceRoot.value] || [];
-    return flatten(rootChildren, 0);
-});
+function getNodeIcon(node: TreeNode) {
+    if (node.isDir) {
+        return isDirExpanded(node.path) ? FolderOpen : Folder;
+    }
+
+    const ext = getFileExtension(node.name);
+    if (
+        [
+            "ts",
+            "tsx",
+            "js",
+            "jsx",
+            "vue",
+            "rs",
+            "py",
+            "go",
+            "java",
+            "c",
+            "cc",
+            "cpp",
+            "h",
+            "hpp",
+            "cs",
+            "php",
+            "rb",
+            "swift",
+            "kt",
+            "kts",
+            "sql",
+            "sh",
+            "bash",
+            "ps1",
+        ].includes(ext)
+    ) {
+        return FileCode;
+    }
+    if (["json", "jsonc"].includes(ext)) return FileJson;
+    if (["md", "txt", "log"].includes(ext)) return FileText;
+    if (["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"].includes(ext))
+        return FileImage;
+    if (["mp3", "wav", "flac", "m4a", "ogg"].includes(ext)) return FileAudio;
+    if (["mp4", "mov", "mkv", "webm"].includes(ext)) return FileVideo;
+    if (["zip", "rar", "7z", "tar", "gz", "bz2", "xz"].includes(ext))
+        return FileArchive;
+    if (["csv", "tsv", "xls", "xlsx"].includes(ext)) return FileSpreadsheet;
+    if (["yaml", "yml", "toml", "ini", "env"].includes(ext)) return FileCog;
+    return File;
+}
+
+function languageFromPath(filePath: string) {
+    const lower = filePath.toLowerCase();
+    if (lower.endsWith(".ts")) return "typescript";
+    if (lower.endsWith(".tsx")) return "typescript";
+    if (lower.endsWith(".js")) return "javascript";
+    if (lower.endsWith(".jsx")) return "javascript";
+    if (lower.endsWith(".vue")) return "html";
+    if (lower.endsWith(".json")) return "json";
+    if (lower.endsWith(".css")) return "css";
+    if (lower.endsWith(".scss")) return "scss";
+    if (lower.endsWith(".less")) return "less";
+    if (lower.endsWith(".md")) return "markdown";
+    if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "yaml";
+    if (lower.endsWith(".rs")) return "rust";
+    return "plaintext";
+}
+
+const activeLanguage = computed(() =>
+    activeFilePath.value ? languageFromPath(activeFilePath.value) : "plaintext"
+);
+
+async function openFile(node: TreeNode) {
+    if (node.isDir) {
+        await toggleDir(node);
+        return;
+    }
+
+    if (isDirty.value) {
+        const ok = window.confirm("当前文件有未保存的修改，确定要切换文件吗？");
+        if (!ok) return;
+    }
+
+    fileLoadError.value = null;
+    try {
+        const content = await readTextFile(node.path);
+        activeFilePath.value = node.path;
+        editorValue.value = content ?? "";
+        lastSavedValue.value = content ?? "";
+    } catch (e: any) {
+        fileLoadError.value =
+            e instanceof Error
+                ? e.message
+                : typeof e === "string"
+                  ? e
+                  : "读取文件失败";
+    }
+}
+
+async function saveActiveFile() {
+    if (!activeFilePath.value) return;
+    if (fileSaving.value) return;
+
+    fileSaving.value = true;
+    try {
+        await writeTextFile(activeFilePath.value, editorValue.value);
+        lastSavedValue.value = editorValue.value;
+    } catch (e: any) {
+        const msg =
+            e instanceof Error
+                ? e.message
+                : typeof e === "string"
+                  ? e
+                  : "保存失败";
+        window.alert(msg);
+    } finally {
+        fileSaving.value = false;
+    }
+}
+
+function updateEditorValue(v: string) {
+    editorValue.value = v;
+}
 
 async function createWorkspace() {
+    if (isDirty.value) {
+        const ok = window.confirm(
+            "当前文件有未保存的修改，确定要切换工作区吗？"
+        );
+        if (!ok) return;
+    }
+
     const selected = await open({
         directory: true,
         multiple: false,
@@ -128,10 +276,15 @@ async function createWorkspace() {
 
     childrenByPath.value = {};
     expandedDirs.value = new Set();
+    activeFilePath.value = null;
+    editorValue.value = "";
+    lastSavedValue.value = "";
+    fileLoadError.value = null;
+    dirLoadError.value = null;
     if (workspaceRoot.value) {
         expandedDirs.value = new Set([workspaceRoot.value]);
         await loadDir(workspaceRoot.value);
-        await restartTerminal();
+        await storeUtils.set("workspace_root", workspaceRoot.value);
     }
 }
 
@@ -140,121 +293,42 @@ function clearWorkspace() {
     childrenByPath.value = {};
     expandedDirs.value = new Set();
     dirLoadError.value = null;
-    stopTerminal();
+    activeFilePath.value = null;
+    editorValue.value = "";
+    lastSavedValue.value = "";
+    fileLoadError.value = null;
+    void storeUtils.delete("workspace_root");
 }
 
-// ===== 终端（简易） =====
-const terminalChild = shallowRef<Child | null>(null);
-const terminalLog = ref<string[]>([]);
-const terminalInput = ref<string>("");
-const terminalStarting = ref(false);
-
-function appendTerminal(text: string) {
-    if (!text) return;
-    const lines = text.replace(/\r\n/g, "\n").split("\n");
-    terminalLog.value = [...terminalLog.value, ...lines];
-}
-
-function stopTerminal() {
-    const child = terminalChild.value;
-    terminalChild.value = null;
-    if (child) {
-        void child.kill();
-    }
-}
-
-async function startTerminal() {
-    if (!workspaceRoot.value) return;
-    if (terminalChild.value || terminalStarting.value) return;
-
-    terminalStarting.value = true;
+onMounted(async () => {
+    const savedRoot = await storeUtils.get<string>("workspace_root");
+    if (!savedRoot) return;
+    workspaceRoot.value = savedRoot;
+    childrenByPath.value = {};
+    expandedDirs.value = new Set([savedRoot]);
     try {
-        const candidates: Array<{ cmd: string; args: string[] }> = [
-            { cmd: "pwsh", args: ["-NoLogo", "-NoExit", "-Command", "-"] },
-            {
-                cmd: "powershell",
-                args: ["-NoLogo", "-NoExit", "-Command", "-"],
-            },
-            { cmd: "cmd", args: ["/Q", "/K"] },
-        ];
-
-        let lastError: unknown = null;
-        for (const candidate of candidates) {
-            try {
-                const cmd = Command.create(candidate.cmd, candidate.args, {
-                    cwd: workspaceRoot.value,
-                });
-
-                cmd.stdout.on("data", (chunk: any) => {
-                    appendTerminal(String(chunk));
-                });
-                cmd.stderr.on("data", (chunk: any) => {
-                    appendTerminal(String(chunk));
-                });
-                cmd.on("close", () => {
-                    appendTerminal("\n[terminal] 已退出");
-                    terminalChild.value = null;
-                });
-
-                terminalChild.value = await cmd.spawn();
-                appendTerminal(`[terminal] 已启动: ${candidate.cmd}`);
-                lastError = null;
-                break;
-            } catch (e) {
-                lastError = e;
-            }
-        }
-
-        if (!terminalChild.value && lastError) {
-            appendTerminal(
-                "[terminal] 启动失败：" +
-                    (lastError instanceof Error
-                        ? lastError.message
-                        : String(lastError))
-            );
-        }
-    } finally {
-        terminalStarting.value = false;
+        await loadDir(savedRoot);
+    } catch {
+        // ignore
     }
-}
-
-async function restartTerminal() {
-    stopTerminal();
-    terminalLog.value = [];
-    terminalInput.value = "";
-    await startTerminal();
-}
-
-async function runTerminalCommand() {
-    const cmd = terminalInput.value.trim();
-    if (!cmd) return;
-    if (!terminalChild.value) {
-        await startTerminal();
-        if (!terminalChild.value) return;
-    }
-
-    appendTerminal(`> ${cmd}`);
-    terminalInput.value = "";
-    try {
-        await terminalChild.value.write(cmd + "\r\n");
-    } catch (e: any) {
-        appendTerminal(
-            "[terminal] 写入失败：" +
-                (e instanceof Error ? e.message : String(e))
-        );
-    }
-}
-
-function clearTerminalLog() {
-    terminalLog.value = [];
-}
-
-onBeforeUnmount(() => {
-    stopTerminal();
 });
 
-const chatApiPath = computed(() =>
-    taskModeEnabled.value ? "/api/agent" : "/api/chat"
+const route = useRoute();
+const router = useRouter();
+
+function clearPickQuery() {
+    const { pick, ...rest } = route.query as Record<string, any>;
+    void router.replace({ path: route.path, query: rest });
+}
+
+watch(
+    () => route.query.pick,
+    async (v) => {
+        if (!v) return;
+        await createWorkspace();
+        clearPickQuery();
+    },
+    { immediate: true }
 );
 </script>
 
@@ -263,12 +337,12 @@ const chatApiPath = computed(() =>
         class="flex flex-col h-[calc(100vh-40px)] overflow-hidden bg-background text-foreground"
     >
         <div class="flex flex-1 overflow-hidden">
-            <!-- 左侧：文件/文件夹列表 -->
+            <!-- 左侧：工作区文件树 -->
             <aside class="w-72 shrink-0 border-r bg-muted/10">
                 <div class="p-3 border-b flex items-center gap-2">
                     <Button size="sm" class="gap-2" @click="createWorkspace">
                         <Plus class="w-4 h-4" />
-                        新建工作区
+                        选择文件夹
                     </Button>
                     <Button
                         size="sm"
@@ -294,7 +368,7 @@ const chatApiPath = computed(() =>
                         v-if="!workspaceRoot"
                         class="p-2 text-sm text-muted-foreground"
                     >
-                        请先点击“新建工作区”选择文件夹。
+                        请选择一个文件夹作为工作区。
                     </div>
 
                     <div
@@ -305,145 +379,65 @@ const chatApiPath = computed(() =>
                     </div>
 
                     <div v-else class="space-y-1">
-                        <div
-                            v-for="item in flattenedNodes"
-                            :key="item.node.path"
-                            class="flex items-center gap-1 rounded px-2 py-1 text-sm hover:bg-accent/40 cursor-pointer"
-                            :style="{ paddingLeft: `${8 + item.depth * 14}px` }"
-                            @click="toggleDir(item.node)"
-                        >
-                            <span class="w-4 inline-flex justify-center">
-                                <template v-if="item.node.isDir">
-                                    <ChevronDown
-                                        v-if="isDirExpanded(item.node.path)"
-                                        class="w-4 h-4 text-muted-foreground"
-                                    />
-                                    <ChevronRight
-                                        v-else
-                                        class="w-4 h-4 text-muted-foreground"
-                                    />
-                                </template>
-                                <span v-else class="w-4"></span>
-                            </span>
-
-                            <Folder
-                                v-if="item.node.isDir"
-                                class="w-4 h-4 text-muted-foreground"
-                            />
-                            <FileText
-                                v-else
-                                class="w-4 h-4 text-muted-foreground"
-                            />
-
-                            <span class="truncate">{{ item.node.name }}</span>
-
-                            <span
-                                v-if="
-                                    item.node.isDir &&
-                                    isDirLoading(item.node.path)
-                                "
-                                class="ml-auto text-xs text-muted-foreground"
-                            >
-                                读取中…
-                            </span>
-                        </div>
+                        <WorkspaceTreeItem
+                            v-for="node in rootNodes"
+                            :key="node.path"
+                            :node="node"
+                            :depth="0"
+                            :expanded-dirs="expandedDirs"
+                            :children-by-path="childrenByPath"
+                            :loading-dirs="loadingDirs"
+                            :active-file-path="activeFilePath"
+                            :get-node-icon="getNodeIcon"
+                            :on-select="openFile"
+                        />
                     </div>
                 </div>
             </aside>
 
-            <!-- 右侧：上对话 / 下终端 -->
-            <main class="flex-1 min-w-0">
-                <div
-                    class="h-full grid grid-rows-[minmax(0,1fr)_minmax(0,260px)]"
-                >
-                    <section class="min-h-0 border-b">
-                        <div class="px-4 py-2 border-b flex items-center gap-2">
-                            <span class="text-sm font-medium">对话</span>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                class="ml-auto"
-                                :class="cn(taskModeEnabled ? 'bg-accent' : '')"
-                                @click="taskModeEnabled = !taskModeEnabled"
+            <!-- 中间：编辑器 -->
+            <main class="flex-1 min-w-0 flex flex-col">
+                <div class="px-4 py-2 border-b flex items-center gap-2">
+                    <div class="min-w-0 flex-1">
+                        <div class="text-sm font-medium truncate">
+                            {{ activeFilePath || "未打开文件" }}
+                            <span v-if="isDirty" class="text-muted-foreground"
+                                >（未保存）</span
                             >
-                                {{
-                                    taskModeEnabled
-                                        ? "任务模式：开 (/api/agent)"
-                                        : "任务模式：关 (/api/chat)"
-                                }}
-                            </Button>
                         </div>
-                        <div class="h-[calc(100%-41px)]">
-                            <ChatArea
-                                :key="chatApiPath"
-                                :api-path="chatApiPath"
-                            />
+                        <div class="text-xs text-muted-foreground">
+                            {{ activeLanguage }}
                         </div>
-                    </section>
+                    </div>
+                    <Button
+                        size="sm"
+                        class="gap-2"
+                        :disabled="!activeFilePath || !isDirty || fileSaving"
+                        @click="saveActiveFile"
+                    >
+                        <Save class="w-4 h-4" />
+                        保存 (Ctrl+S)
+                    </Button>
+                </div>
 
-                    <section class="min-h-0">
-                        <div class="px-4 py-2 border-b flex items-center gap-2">
-                            <Terminal class="w-4 h-4 text-muted-foreground" />
-                            <span class="text-sm font-medium">终端</span>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                class="ml-auto"
-                                :disabled="!workspaceRoot"
-                                @click="restartTerminal"
-                            >
-                                重启
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                @click="clearTerminalLog"
-                            >
-                                清屏
-                            </Button>
-                        </div>
+                <div v-if="fileLoadError" class="p-3 text-sm text-destructive">
+                    {{ fileLoadError }}
+                </div>
 
-                        <div class="h-[calc(100%-41px)] flex flex-col">
-                            <div
-                                class="flex-1 overflow-auto p-3 font-mono text-xs whitespace-pre-wrap"
-                            >
-                                <div
-                                    v-if="terminalLog.length === 0"
-                                    class="text-muted-foreground"
-                                >
-                                    {{
-                                        workspaceRoot
-                                            ? "终端未输出。输入命令并回车。"
-                                            : "未选择工作区，无法启动终端。"
-                                    }}
-                                </div>
-                                <div
-                                    v-for="(line, idx) in terminalLog"
-                                    :key="idx"
-                                >
-                                    {{ line }}
-                                </div>
-                            </div>
-
-                            <div class="border-t p-2 flex items-center gap-2">
-                                <Input
-                                    v-model="terminalInput"
-                                    placeholder="输入命令，回车执行"
-                                    :disabled="!workspaceRoot"
-                                    @keydown.enter.prevent="runTerminalCommand"
-                                />
-                                <Button
-                                    size="sm"
-                                    :disabled="!workspaceRoot"
-                                    @click="runTerminalCommand"
-                                >
-                                    运行
-                                </Button>
-                            </div>
-                        </div>
-                    </section>
+                <div class="flex-1 min-h-0">
+                    <MonacoEditorPane
+                        :value="editorValue"
+                        :language="activeLanguage"
+                        @update:value="updateEditorValue"
+                        @save="saveActiveFile"
+                    />
                 </div>
             </main>
+
+            <!-- 右侧：AI 会话（占位） -->
+            <aside class="w-80 shrink-0 border-l bg-muted/10">
+                <AiSessionPlaceholder />
+            </aside>
         </div>
     </div>
 </template>

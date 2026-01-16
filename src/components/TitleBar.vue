@@ -11,6 +11,7 @@ import {
     RefreshCcw,
     ExternalLink,
 } from "lucide-vue-next";
+import { DropdownMenuPortal } from "reka-ui";
 import { computed, ref, onMounted } from "vue";
 import {
     Tooltip,
@@ -23,6 +24,7 @@ const appWindow = getCurrentWindow();
 const chatStore = useChatStore();
 const uiStore = useUiStore();
 const authStore = useAuthStore();
+const router = useRouter();
 
 const isMaximized = ref(false);
 
@@ -64,6 +66,15 @@ const refreshUser = async () => {
 
 const openAccount = () => {
     authStore.openAccountPage();
+};
+
+const openWorkspaceFolder = async () => {
+    // 新建/打开工作区本质都是“选择一个文件夹作为根目录”
+    // 通过 query 参数触发 workspace 页面弹出选择框
+    await router.push({
+        path: "/workspace",
+        query: { pick: String(Date.now()) },
+    });
 };
 
 const formatUsd = (cents?: number | null) => {
@@ -127,10 +138,14 @@ const balanceTip = computed(() => {
                                 </DropdownMenuSubTrigger>
                                 <DropdownMenuPortal>
                                     <DropdownMenuSubContent>
-                                        <DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            @click="openWorkspaceFolder"
+                                        >
                                             新建工作区
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            @click="openWorkspaceFolder"
+                                        >
                                             打开工作区
                                         </DropdownMenuItem>
                                     </DropdownMenuSubContent>

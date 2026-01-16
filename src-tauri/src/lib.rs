@@ -28,6 +28,58 @@ fn is_dev_file_present() -> bool {
     false
 }
 
+#[cfg(target_os = "windows")]
+fn try_register_glosc_protocol() {
+    use std::process::Command;
+
+    let exe = match std::env::current_exe() {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    let exe = match exe.to_str() {
+        Some(s) if !s.is_empty() => s,
+        _ => return,
+    };
+
+    // Register for current user (no admin required):
+    // HKCU\Software\Classes\glosc\shell\open\command (Default) = "<exe>" "%1"
+    let command_value = format!("\"{}\" \"%1\"", exe);
+
+    let _ = Command::new("reg")
+        .args([
+            "add",
+            r"HKCU\Software\Classes\glosc",
+            "/ve",
+            "/d",
+            "URL:Glosc Protocol",
+            "/f",
+        ])
+        .status();
+
+    let _ = Command::new("reg")
+        .args([
+            "add",
+            r"HKCU\Software\Classes\glosc",
+            "/v",
+            "URL Protocol",
+            "/d",
+            "",
+            "/f",
+        ])
+        .status();
+
+    let _ = Command::new("reg")
+        .args([
+            "add",
+            r"HKCU\Software\Classes\glosc\shell\open\command",
+            "/ve",
+            "/d",
+            &command_value,
+            "/f",
+        ])
+        .status();
+}
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -51,9 +103,17 @@ fn open_devtools(
     Ok(())
 }
 
+#[tauri::command]
+fn get_cli_args() -> Vec<String> {
+    std::env::args().collect()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let debug_enabled = is_dev_file_present();
+
+    #[cfg(target_os = "windows")]
+    try_register_glosc_protocol();
 
     tauri::Builder::default()
         .manage(DebugState {
@@ -69,7 +129,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             is_debug_enabled,
-            open_devtools
+            open_devtools,
+            get_cli_args
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
