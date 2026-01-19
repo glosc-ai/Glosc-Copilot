@@ -430,7 +430,7 @@ export const useMeetingStore = defineStore("meeting", {
                 id: crypto.randomUUID(),
             };
 
-            if (position !== undefined && position >= 0 && position <= meeting.speakerQueue.length) {
+            if (position !== undefined && position >= 0 && position < meeting.speakerQueue.length) {
                 meeting.speakerQueue.splice(position, 0, newNode);
             } else {
                 meeting.speakerQueue.push(newNode);
@@ -506,6 +506,10 @@ export const useMeetingStore = defineStore("meeting", {
 
             if (meeting.currentSpeakerIndex !== undefined) {
                 meeting.currentSpeakerIndex++;
+                // 确保不超出队列范围
+                if (meeting.speakerQueue && meeting.currentSpeakerIndex >= meeting.speakerQueue.length) {
+                    meeting.currentSpeakerIndex = meeting.speakerQueue.length;
+                }
             }
             meeting.updatedAt = Date.now();
 

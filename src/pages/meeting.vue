@@ -46,11 +46,11 @@ function formatDate(timestamp: number) {
     yesterday.setDate(yesterday.getDate() - 1);
 
     if (date >= today) {
-        return `今天 ${date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
+        return `今天 ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
     } else if (date >= yesterday) {
-        return `昨天 ${date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
+        return `昨天 ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
     } else {
-        return date.toLocaleDateString("zh-CN", {
+        return date.toLocaleDateString(undefined, {
             year: "numeric",
             month: "2-digit",
             day: "2-digit",

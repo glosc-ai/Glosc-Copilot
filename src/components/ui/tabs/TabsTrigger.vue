@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { TabsTrigger, type TabsTriggerProps } from "reka-ui";
 import { cn } from "@/lib/utils";
 
