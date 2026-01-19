@@ -1,4 +1,5 @@
 <script setup lang="ts">
+<<<<<<< HEAD
 import { ref, computed, watch, nextTick, onUnmounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
@@ -12,17 +13,32 @@ import {
     FileText,
     Download,
 } from "lucide-vue-next";
+=======
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
+import { useMeetingStore } from "@/stores/meeting";
+import { storeToRefs } from "pinia";
+import { Button } from "@/components/ui/button";
+import { Play, Pause, StopCircle, Send } from "lucide-vue-next";
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 import MeetingChat from "./MeetingChat.vue";
 import SpeakerQueue from "./SpeakerQueue.vue";
 import RoleList from "./RoleList.vue";
 import { Textarea } from "@/components/ui/textarea";
+<<<<<<< HEAD
+=======
+import type { QueueNode } from "@/utils/meetingInterface";
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 
 const props = defineProps<{
     meetingId: string;
 }>();
 
 const meetingStore = useMeetingStore();
+<<<<<<< HEAD
 const { activeMeeting, currentStatus } = storeToRefs(meetingStore);
+=======
+const { activeMeeting, currentStatus, isGenerating } = storeToRefs(meetingStore);
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 
 const userInput = ref("");
 const chatRef = ref<InstanceType<typeof MeetingChat>>();
@@ -36,6 +52,7 @@ const canStart = computed(() => {
     );
 });
 
+<<<<<<< HEAD
 const canStartFromCurrent = computed(() => {
     return (
         currentStatus.value === "idle" &&
@@ -44,11 +61,14 @@ const canStartFromCurrent = computed(() => {
     );
 });
 
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 const canPause = computed(() => {
     return currentStatus.value === "running";
 });
 
 const canResume = computed(() => {
+<<<<<<< HEAD
     return (
         currentStatus.value === "paused" || currentStatus.value === "stopped"
     );
@@ -118,17 +138,29 @@ async function exportMeetingMarkdown() {
     }
 }
 
+=======
+    return currentStatus.value === "paused";
+});
+
+const canStop = computed(() => {
+    return currentStatus.value === "running" || currentStatus.value === "paused";
+});
+
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 async function startMeeting() {
     await meetingStore.startMeeting(props.meetingId);
     // 开始自动推进
     await processQueue();
 }
 
+<<<<<<< HEAD
 async function startMeetingFromCurrent() {
     await meetingStore.startMeetingFromCurrent(props.meetingId);
     await processQueue();
 }
 
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 async function pauseMeeting() {
     await meetingStore.pauseMeeting(props.meetingId);
     // 停止当前生成
@@ -145,6 +177,7 @@ async function resumeMeeting() {
 }
 
 async function stopMeeting() {
+<<<<<<< HEAD
     try {
         await ElMessageBox.confirm("确定要停止会议吗？", "提示", {
             type: "warning",
@@ -176,6 +209,14 @@ async function summarizeMeetingNow() {
         console.error("总结会议失败:", error);
     } finally {
         abortController.value = null;
+=======
+    if (confirm("确定要停止会议吗？")) {
+        await meetingStore.stopMeeting(props.meetingId);
+        if (abortController.value) {
+            abortController.value.abort();
+            abortController.value = null;
+        }
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
     }
 }
 
@@ -207,11 +248,15 @@ async function sendUserMessage() {
 async function processQueue() {
     while (currentStatus.value === "running") {
         const meeting = activeMeeting.value;
+<<<<<<< HEAD
         if (
             !meeting ||
             !meeting.speakerQueue ||
             meeting.speakerQueue.length === 0
         ) {
+=======
+        if (!meeting || !meeting.speakerQueue || meeting.speakerQueue.length === 0) {
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
             // 队列为空，暂停会议
             await meetingStore.pauseMeeting(props.meetingId);
             break;
@@ -220,10 +265,13 @@ async function processQueue() {
         const currentIndex = meeting.currentSpeakerIndex ?? 0;
         if (currentIndex >= meeting.speakerQueue.length) {
             // 已到队列末尾
+<<<<<<< HEAD
             if (meeting.autoCycle && meeting.speakerQueue.length > 0) {
                 await meetingStore.setCurrentSpeakerIndex(props.meetingId, 0);
                 continue;
             }
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
             await meetingStore.pauseMeeting(props.meetingId);
             break;
         }
@@ -239,6 +287,7 @@ async function processQueue() {
             break;
         } else if (currentNode.type === "task") {
             // 执行任务（如总结）
+<<<<<<< HEAD
             if (currentNode.taskType === "总结会议") {
                 if (chatRef.value) {
                     try {
@@ -251,6 +300,10 @@ async function processQueue() {
                     }
                 }
             }
+=======
+            // TODO: 实现任务执行逻辑
+            await meetingStore.advanceQueue(props.meetingId);
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
         }
 
         // 检查是否应该继续
@@ -276,10 +329,14 @@ async function generateRoleSpeech(roleId: string) {
 
         // 通过 chatRef 调用生成方法
         if (chatRef.value) {
+<<<<<<< HEAD
             await chatRef.value.generateRoleMessage(
                 role,
                 abortController.value,
             );
+=======
+            await chatRef.value.generateRoleMessage(role, abortController.value);
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
         }
     } catch (error: any) {
         if (error.name === "AbortError") {
@@ -329,6 +386,7 @@ onUnmounted(() => {
                         开始会议
                     </Button>
                     <Button
+<<<<<<< HEAD
                         v-if="canStartFromCurrent"
                         @click="startMeetingFromCurrent"
                         size="sm"
@@ -339,6 +397,8 @@ onUnmounted(() => {
                         从当前开始发言
                     </Button>
                     <Button
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                         v-if="canPause"
                         @click="pauseMeeting"
                         size="sm"
@@ -355,7 +415,11 @@ onUnmounted(() => {
                         class="gap-2"
                     >
                         <Play class="w-4 h-4" />
+<<<<<<< HEAD
                         {{ currentStatus === "stopped" ? "继续会议" : "继续" }}
+=======
+                        继续
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                     </Button>
                     <Button
                         v-if="canStop"
@@ -369,6 +433,7 @@ onUnmounted(() => {
                     </Button>
                 </div>
                 <div class="flex-1"></div>
+<<<<<<< HEAD
                 <div class="flex items-center gap-2">
                     <Button
                         size="sm"
@@ -400,6 +465,8 @@ onUnmounted(() => {
                         总结会议
                     </Button>
                 </div>
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                 <div class="text-sm">
                     <span
                         class="px-2 py-1 rounded-full text-xs font-medium"

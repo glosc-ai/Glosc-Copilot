@@ -1,8 +1,13 @@
 <script setup lang="ts">
+<<<<<<< HEAD
 import { computed, ref, onMounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { useChatStore } from "@/stores/chat";
 import { useMcpStore } from "@/stores/mcp";
+=======
+import { computed, ref } from "vue";
+import { useMeetingStore } from "@/stores/meeting";
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 import { storeToRefs } from "pinia";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +25,10 @@ import { Plus, Edit, Trash2, Play, Users } from "lucide-vue-next";
 import type { MeetingRole } from "@/utils/meetingInterface";
 import ModelSelectorPicker from "@/components/ModelSelectorPicker.vue";
 import type { ModelInfo } from "@/utils/interface";
+<<<<<<< HEAD
 import OpenAI from "openai";
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 
 const props = defineProps<{
     meetingId: string;
@@ -33,6 +41,7 @@ const emit = defineEmits<{
 const meetingStore = useMeetingStore();
 const { activeMeeting, availableModels } = storeToRefs(meetingStore);
 
+<<<<<<< HEAD
 const mcpStore = useMcpStore();
 
 const chatStore = useChatStore();
@@ -45,6 +54,8 @@ onMounted(() => {
     void mcpStore.init();
 });
 
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 // 会议基本信息编辑
 const editingTitle = ref(false);
 const editingTitleValue = ref("");
@@ -60,11 +71,15 @@ const roleForm = ref({
     modelId: "",
     systemPrompt: "",
     color: "",
+<<<<<<< HEAD
     enabledMcpServerIds: [] as string[],
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 });
 
 const isEditMode = computed(() => editingRoleId.value !== null);
 
+<<<<<<< HEAD
 // 智能输入：根据简短人设自动生成 system prompt
 const smartInputOpen = ref(false);
 const smartPersona = ref("");
@@ -143,6 +158,8 @@ async function generateSystemPrompt() {
     }
 }
 
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 function startEditTitle() {
     editingTitleValue.value = activeMeeting.value?.title || "";
     editingTitle.value = true;
@@ -150,10 +167,14 @@ function startEditTitle() {
 
 async function saveTitle() {
     if (editingTitleValue.value.trim()) {
+<<<<<<< HEAD
         await meetingStore.renameMeeting(
             props.meetingId,
             editingTitleValue.value.trim(),
         );
+=======
+        await meetingStore.renameMeeting(props.meetingId, editingTitleValue.value.trim());
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
     }
     editingTitle.value = false;
 }
@@ -168,10 +189,14 @@ function startEditSummary() {
 }
 
 async function saveSummary() {
+<<<<<<< HEAD
     await meetingStore.updateMeetingSummary(
         props.meetingId,
         editingSummaryValue.value,
     );
+=======
+    await meetingStore.updateMeetingSummary(props.meetingId, editingSummaryValue.value);
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
     editingSummary.value = false;
 }
 
@@ -187,9 +212,12 @@ function openAddRoleDialog() {
         modelId: availableModels.value[0]?.id || "",
         systemPrompt: "",
         color: meetingStore.getNextAvailableColor(props.meetingId),
+<<<<<<< HEAD
         enabledMcpServerIds: (mcpStore.servers || [])
             .filter((s) => s.enabled)
             .map((s) => s.id),
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
     };
     roleDialogOpen.value = true;
 }
@@ -202,15 +230,19 @@ function openEditRoleDialog(role: MeetingRole) {
         modelId: role.modelId,
         systemPrompt: role.systemPrompt,
         color: role.color || "",
+<<<<<<< HEAD
         enabledMcpServerIds: Array.isArray(role.enabledMcpServerIds)
             ? [...role.enabledMcpServerIds]
             : (mcpStore.servers || [])
                   .filter((s) => s.enabled)
                   .map((s) => s.id),
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
     };
     roleDialogOpen.value = true;
 }
 
+<<<<<<< HEAD
 function toggleRoleServer(serverId: string, checked: boolean) {
     const next = new Set(roleForm.value.enabledMcpServerIds || []);
     if (checked) next.add(serverId);
@@ -221,6 +253,11 @@ function toggleRoleServer(serverId: string, checked: boolean) {
 async function saveRole() {
     if (!roleForm.value.name.trim()) {
         ElMessage.warning("请输入角色名称");
+=======
+async function saveRole() {
+    if (!roleForm.value.name.trim()) {
+        alert("请输入角色名称");
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
         return;
     }
 
@@ -231,7 +268,10 @@ async function saveRole() {
             modelId: roleForm.value.modelId,
             systemPrompt: roleForm.value.systemPrompt,
             color: roleForm.value.color,
+<<<<<<< HEAD
             enabledMcpServerIds: roleForm.value.enabledMcpServerIds,
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
         });
     } else {
         await meetingStore.addRole(props.meetingId, {
@@ -240,7 +280,10 @@ async function saveRole() {
             modelId: roleForm.value.modelId,
             systemPrompt: roleForm.value.systemPrompt,
             color: roleForm.value.color,
+<<<<<<< HEAD
             enabledMcpServerIds: roleForm.value.enabledMcpServerIds,
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
         });
     }
 
@@ -248,6 +291,7 @@ async function saveRole() {
 }
 
 async function deleteRole(roleId: string) {
+<<<<<<< HEAD
     try {
         await ElMessageBox.confirm("确定要删除此角色吗？", "提示", {
             type: "warning",
@@ -259,16 +303,26 @@ async function deleteRole(roleId: string) {
     }
 
     await meetingStore.deleteRole(props.meetingId, roleId);
+=======
+    if (confirm("确定要删除此角色吗？")) {
+        await meetingStore.deleteRole(props.meetingId, roleId);
+    }
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 }
 
 function startMeeting() {
     if (!activeMeeting.value?.roles.length) {
+<<<<<<< HEAD
         ElMessage.warning("请至少添加一个角色");
+=======
+        alert("请至少添加一个角色");
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
         return;
     }
     emit("startMeeting");
 }
 
+<<<<<<< HEAD
 function onModelSelect(model: ModelInfo) {
     roleForm.value.modelId = model.id;
     chatStore.markModelUsed(model.id);
@@ -279,6 +333,16 @@ const selectedModel = computed(() => {
         availableModels.value.find((m) => m.id === roleForm.value.modelId) ||
         null
     );
+=======
+function onModelSelect(model: ModelInfo | null) {
+    if (model) {
+        roleForm.value.modelId = model.id;
+    }
+}
+
+const selectedModel = computed(() => {
+    return availableModels.value.find((m) => m.id === roleForm.value.modelId) || null;
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 });
 </script>
 
@@ -294,10 +358,14 @@ const selectedModel = computed(() => {
                     <!-- 会议名称 -->
                     <div>
                         <Label>会议名称</Label>
+<<<<<<< HEAD
                         <div
                             v-if="!editingTitle"
                             class="flex items-center gap-2 mt-1"
                         >
+=======
+                        <div v-if="!editingTitle" class="flex items-center gap-2 mt-1">
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                             <span class="text-lg font-semibold">
                                 {{ activeMeeting?.title }}
                             </span>
@@ -334,9 +402,13 @@ const selectedModel = computed(() => {
                             这段描述将作为全局上下文提供给所有AI角色
                         </p>
                         <div v-if="!editingSummary">
+<<<<<<< HEAD
                             <div
                                 class="p-3 bg-muted rounded-md whitespace-pre-wrap"
                             >
+=======
+                            <div class="p-3 bg-muted rounded-md whitespace-pre-wrap">
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                                 {{ activeMeeting?.summary }}
                             </div>
                             <Button
@@ -356,9 +428,13 @@ const selectedModel = computed(() => {
                                 placeholder="描述会议的主题、目标、背景信息..."
                             />
                             <div class="flex gap-2">
+<<<<<<< HEAD
                                 <Button size="sm" @click="saveSummary"
                                     >保存</Button
                                 >
+=======
+                                <Button size="sm" @click="saveSummary">保存</Button>
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                                 <Button
                                     size="sm"
                                     variant="outline"
@@ -402,9 +478,13 @@ const selectedModel = computed(() => {
                                 <div class="flex items-start gap-3">
                                     <div
                                         class="w-12 h-12 rounded-full flex items-center justify-center text-2xl shrink-0"
+<<<<<<< HEAD
                                         :style="{
                                             backgroundColor: role.color + '20',
                                         }"
+=======
+                                        :style="{ backgroundColor: role.color + '20' }"
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                                     >
                                         {{ role.avatar || "👤" }}
                                     </div>
@@ -412,18 +492,26 @@ const selectedModel = computed(() => {
                                         <h3 class="font-semibold truncate">
                                             {{ role.name }}
                                         </h3>
+<<<<<<< HEAD
                                         <p
                                             class="text-xs text-muted-foreground mt-1"
                                         >
+=======
+                                        <p class="text-xs text-muted-foreground mt-1">
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                                             模型: {{ role.modelId }}
                                         </p>
                                         <p
                                             class="text-sm mt-2 line-clamp-2 text-muted-foreground"
                                         >
+<<<<<<< HEAD
                                             {{
                                                 role.systemPrompt ||
                                                 "无角色设定"
                                             }}
+=======
+                                            {{ role.systemPrompt || "无角色设定" }}
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                                         </p>
                                     </div>
                                     <div class="flex gap-1">
@@ -502,6 +590,7 @@ const selectedModel = computed(() => {
                     <div>
                         <Label>使用模型 *</Label>
                         <ModelSelectorPicker
+<<<<<<< HEAD
                             :models="availableModels"
                             :selected-model="selectedModel"
                             :selected-model-id="roleForm.modelId"
@@ -511,10 +600,15 @@ const selectedModel = computed(() => {
                             @remove-recent="
                                 (id) => chatStore.removeRecentModel(id)
                             "
+=======
+                            :model-value="selectedModel"
+                            @update:model-value="onModelSelect"
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                             class="mt-1"
                         />
                     </div>
 
+<<<<<<< HEAD
                     <div class="space-y-2">
                         <Label>工具（按角色启用 MCP Server）</Label>
                         <p class="text-xs text-muted-foreground">
@@ -607,6 +701,13 @@ const selectedModel = computed(() => {
                             </div>
                         </div>
 
+=======
+                    <div>
+                        <Label>角色设定 (System Prompt)</Label>
+                        <p class="text-xs text-muted-foreground mt-1 mb-2">
+                            定义角色的人设、专业领域、说话风格、立场观点等
+                        </p>
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                         <Textarea
                             v-model="roleForm.systemPrompt"
                             rows="6"
@@ -616,7 +717,14 @@ const selectedModel = computed(() => {
                     </div>
                 </div>
                 <DialogFooter>
+<<<<<<< HEAD
                     <Button variant="outline" @click="roleDialogOpen = false">
+=======
+                    <Button
+                        variant="outline"
+                        @click="roleDialogOpen = false"
+                    >
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                         取消
                     </Button>
                     <Button @click="saveRole">

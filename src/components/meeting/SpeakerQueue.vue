@@ -1,4 +1,5 @@
 <script setup lang="ts">
+<<<<<<< HEAD
 import { computed } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
@@ -6,6 +7,15 @@ import { Button } from "@/components/ui/button";
 import { GripVertical, X, User, ListTodo } from "lucide-vue-next";
 import type { QueueNode } from "@/utils/meetingInterface";
 import { VueDraggableNext } from "vue-draggable-next";
+=======
+import { ref, computed } from "vue";
+import { useMeetingStore } from "@/stores/meeting";
+import { storeToRefs } from "pinia";
+import { Button } from "@/components/ui/button";
+import { Plus, GripVertical, X, User, ListTodo } from "lucide-vue-next";
+import type { QueueNode } from "@/utils/meetingInterface";
+import { VueDraggable } from "vue-draggable-next";
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 
 const props = defineProps<{
     meetingId: string;
@@ -68,6 +78,7 @@ async function removeFromQueue(nodeId: string) {
     await meetingStore.removeFromQueue(props.meetingId, nodeId);
 }
 
+<<<<<<< HEAD
 const currentSpeakerIndex = computed(
     () => activeMeeting.value?.currentSpeakerIndex ?? 0,
 );
@@ -75,6 +86,9 @@ const currentSpeakerIndex = computed(
 async function setCurrentIndex(index: number) {
     await meetingStore.setCurrentSpeakerIndex(props.meetingId, index);
 }
+=======
+const currentSpeakerIndex = computed(() => activeMeeting.value?.currentSpeakerIndex ?? 0);
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 </script>
 
 <template>
@@ -87,11 +101,15 @@ async function setCurrentIndex(index: number) {
         </div>
 
         <div class="flex-1 overflow-y-auto p-4 space-y-2">
+<<<<<<< HEAD
             <VueDraggableNext
                 v-model="queueNodes"
                 :animation="150"
                 handle=".drag-handle"
             >
+=======
+            <VueDraggable v-model="queueNodes" :animation="150" handle=".drag-handle">
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                 <div
                     v-for="(node, index) in queueNodes"
                     :key="node.id"
@@ -100,10 +118,13 @@ async function setCurrentIndex(index: number) {
                         'ring-2 ring-primary': index === currentSpeakerIndex,
                         'opacity-40': index < currentSpeakerIndex,
                     }"
+<<<<<<< HEAD
                     role="button"
                     tabindex="0"
                     @click="setCurrentIndex(index)"
                     @keydown.enter.prevent="setCurrentIndex(index)"
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                 >
                     <!-- 拖拽手柄 -->
                     <div class="drag-handle cursor-move text-muted-foreground">
@@ -111,9 +132,13 @@ async function setCurrentIndex(index: number) {
                     </div>
 
                     <!-- 序号 -->
+<<<<<<< HEAD
                     <div
                         class="text-xs text-muted-foreground w-6 text-center shrink-0"
                     >
+=======
+                    <div class="text-xs text-muted-foreground w-6 text-center shrink-0">
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                         {{ index + 1 }}
                     </div>
 
@@ -137,12 +162,20 @@ async function setCurrentIndex(index: number) {
                         variant="ghost"
                         size="sm"
                         class="shrink-0 opacity-0 group-hover:opacity-100"
+<<<<<<< HEAD
                         @click.stop="removeFromQueue(node.id)"
+=======
+                        @click="removeFromQueue(node.id)"
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                     >
                         <X class="w-3 h-3" />
                     </Button>
                 </div>
+<<<<<<< HEAD
             </VueDraggableNext>
+=======
+            </VueDraggable>
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 
             <div
                 v-if="!queueNodes.length"

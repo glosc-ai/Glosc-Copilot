@@ -23,10 +23,13 @@ const currentSpeakerId = computed(() => {
 
     return null;
 });
+<<<<<<< HEAD
 
 async function jumpToRole(roleId: string) {
     await meetingStore.jumpToRoleInQueue(props.meetingId, roleId);
 }
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 </script>
 
 <template>
@@ -46,17 +49,24 @@ async function jumpToRole(roleId: string) {
                 :class="{
                     'ring-2 ring-primary': currentSpeakerId === role.id,
                 }"
+<<<<<<< HEAD
                 role="button"
                 tabindex="0"
                 @click="jumpToRole(role.id)"
                 @keydown.enter.prevent="jumpToRole(role.id)"
+=======
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
             >
                 <div class="flex items-center gap-3">
                     <div
                         class="w-10 h-10 rounded-full flex items-center justify-center text-xl shrink-0"
+<<<<<<< HEAD
                         :style="{
                             backgroundColor: (role.color || '#6b7280') + '20',
                         }"
+=======
+                        :style="{ backgroundColor: (role.color || '#6b7280') + '20' }"
+>>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                     >
                         {{ role.avatar || "👤" }}
                     </div>
