@@ -216,6 +216,7 @@ export const useMeetingStore = defineStore("meeting", {
                 status: "idle",
                 speakerQueue: [],
                 autoAdvance: true,
+                autoCycle: false,
             };
             this.loadedMeetingIds[id] = true;
         },
@@ -235,6 +236,7 @@ export const useMeetingStore = defineStore("meeting", {
                 status: "idle",
                 speakerQueue: [],
                 autoAdvance: true,
+                autoCycle: false,
             };
 
             const item: MeetingItem = {
@@ -429,6 +431,13 @@ export const useMeetingStore = defineStore("meeting", {
         async addMessage(
             meetingId: string,
             message: Omit<MeetingMessage, "id" | "timestamp">,
+            options?: {
+                /**
+                 * 是否立即落盘。默认 true。
+                 * 流式生成时可传 false，结束后再统一保存。
+                 */
+                persist?: boolean;
+            },
         ) {
             await this.ensureMeetingLoaded(meetingId);
             const meeting = this.meetings[meetingId];
@@ -449,8 +458,11 @@ export const useMeetingStore = defineStore("meeting", {
                 item.timestamp = newMessage.timestamp;
             }
 
-            await storeUtils.set(this.meetingKey(meetingId), meeting, true);
-            await this.persistIndex();
+            const persist = options?.persist ?? true;
+            if (persist) {
+                await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+                await this.persistIndex();
+            }
 
             return newMessage.id;
         },
@@ -459,6 +471,13 @@ export const useMeetingStore = defineStore("meeting", {
             meetingId: string,
             messageId: string,
             updates: Partial<MeetingMessage>,
+            options?: {
+                /**
+                 * 是否立即落盘。默认 true。
+                 * 流式生成时可传 false，结束后再统一保存。
+                 */
+                persist?: boolean;
+            },
         ) {
             await this.ensureMeetingLoaded(meetingId);
             const meeting = this.meetings[meetingId];
@@ -470,7 +489,10 @@ export const useMeetingStore = defineStore("meeting", {
             Object.assign(msg, updates);
             meeting.updatedAt = Date.now();
 
-            await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+            const persist = options?.persist ?? true;
+            if (persist) {
+                await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+            }
         },
 
         async deleteMessage(meetingId: string, messageId: string) {
@@ -557,6 +579,75 @@ export const useMeetingStore = defineStore("meeting", {
 
             meeting.status = "running";
             meeting.currentSpeakerIndex = 0;
+            meeting.updatedAt = Date.now();
+
+            await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+        },
+
+        async startMeetingFromCurrent(meetingId: string) {
+            await this.ensureMeetingLoaded(meetingId);
+            const meeting = this.meetings[meetingId];
+            if (!meeting) return;
+
+            meeting.status = "running";
+            // 不重置 currentSpeakerIndex；若不存在则从 0 开始
+            if (meeting.currentSpeakerIndex === undefined) {
+                meeting.currentSpeakerIndex = 0;
+            }
+            meeting.updatedAt = Date.now();
+
+            await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+        },
+
+        async setCurrentSpeakerIndex(meetingId: string, index: number) {
+            await this.ensureMeetingLoaded(meetingId);
+            const meeting = this.meetings[meetingId];
+            if (!meeting) return;
+
+            const queueLen = meeting.speakerQueue?.length ?? 0;
+            const nextIndex = Math.max(
+                0,
+                Math.min(index, Math.max(0, queueLen)),
+            );
+            meeting.currentSpeakerIndex = nextIndex;
+            meeting.updatedAt = Date.now();
+
+            await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+        },
+
+        async jumpToRoleInQueue(meetingId: string, roleId: string) {
+            await this.ensureMeetingLoaded(meetingId);
+            const meeting = this.meetings[meetingId];
+            if (!meeting) return;
+
+            const queue = meeting.speakerQueue ?? [];
+            const idx = queue.findIndex(
+                (n) => n.type === "role" && n.roleId === roleId,
+            );
+            if (idx < 0) return;
+
+            meeting.currentSpeakerIndex = idx;
+            meeting.updatedAt = Date.now();
+            await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+        },
+
+        async setAutoCycle(meetingId: string, enabled: boolean) {
+            await this.ensureMeetingLoaded(meetingId);
+            const meeting = this.meetings[meetingId];
+            if (!meeting) return;
+
+            meeting.autoCycle = enabled;
+            meeting.updatedAt = Date.now();
+
+            await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+        },
+
+        async toggleAutoCycle(meetingId: string) {
+            await this.ensureMeetingLoaded(meetingId);
+            const meeting = this.meetings[meetingId];
+            if (!meeting) return;
+
+            meeting.autoCycle = !meeting.autoCycle;
             meeting.updatedAt = Date.now();
 
             await storeUtils.set(this.meetingKey(meetingId), meeting, true);

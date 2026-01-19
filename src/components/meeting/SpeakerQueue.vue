@@ -72,7 +72,9 @@ const currentSpeakerIndex = computed(
     () => activeMeeting.value?.currentSpeakerIndex ?? 0,
 );
 
-console.log(currentSpeakerIndex.value);
+async function setCurrentIndex(index: number) {
+    await meetingStore.setCurrentSpeakerIndex(props.meetingId, index);
+}
 </script>
 
 <template>
@@ -98,6 +100,10 @@ console.log(currentSpeakerIndex.value);
                         'ring-2 ring-primary': index === currentSpeakerIndex,
                         'opacity-40': index < currentSpeakerIndex,
                     }"
+                    role="button"
+                    tabindex="0"
+                    @click="setCurrentIndex(index)"
+                    @keydown.enter.prevent="setCurrentIndex(index)"
                 >
                     <!-- 拖拽手柄 -->
                     <div class="drag-handle cursor-move text-muted-foreground">
@@ -131,7 +137,7 @@ console.log(currentSpeakerIndex.value);
                         variant="ghost"
                         size="sm"
                         class="shrink-0 opacity-0 group-hover:opacity-100"
-                        @click="removeFromQueue(node.id)"
+                        @click.stop="removeFromQueue(node.id)"
                     >
                         <X class="w-3 h-3" />
                     </Button>

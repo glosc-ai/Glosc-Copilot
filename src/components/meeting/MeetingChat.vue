@@ -146,6 +146,191 @@ async function regenerateMessage(msg: MeetingMessage) {
     }
 }
 
+type StreamToMessageParams = {
+    model: string;
+    messages: UIMessage[];
+    abortController: AbortController;
+    messageId: string;
+};
+
+async function streamToMeetingMessage(params: StreamToMessageParams) {
+    const { model, messages, abortController, messageId } = params;
+
+    if (!authStore.isLoggedIn || !authStore.token) {
+        (window as any).ElMessage?.error?.("请先登录后再开始会议对话");
+        throw new Error("Unauthorized");
+    }
+
+    const host = import.meta.env.VITE_API_HOST || "http://localhost:3000";
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authStore.token}`,
+    };
+
+    const response = await fetch(`${host}/api/chat`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ model, messages, stream: true }),
+        signal: abortController.signal,
+    });
+
+    if (response.status === 401 || response.status === 403) {
+        try {
+            await authStore.logout();
+        } catch {
+            // ignore
+        }
+        (window as any).ElMessage?.error?.("登录已过期，请重新登录");
+        throw new Error("Unauthorized");
+    }
+
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    meetingStore.isGenerating = true;
+    meetingStore.generatingMessageId = messageId;
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let accumulatedContent = "";
+    let accumulatedReasoning = "";
+
+    const extractDelta = (json: any) => {
+        const textDelta: string | undefined =
+            json?.choices?.[0]?.delta?.content ??
+            json?.delta?.content ??
+            json?.textDelta ??
+            json?.contentDelta ??
+            json?.delta;
+
+        const reasoningDelta: string | undefined =
+            json?.reasoningDelta ??
+            json?.choices?.[0]?.delta?.reasoning ??
+            (json?.type === "reasoning-delta" ? json?.textDelta : undefined);
+
+        return { textDelta, reasoningDelta };
+    };
+
+    let flushTimer: number | null = null;
+    let lastFlushedContent = "";
+    let lastFlushedReasoning = "";
+    const scheduleFlush = () => {
+        if (flushTimer != null) return;
+        flushTimer = window.setTimeout(async () => {
+            flushTimer = null;
+            if (
+                accumulatedContent === lastFlushedContent &&
+                accumulatedReasoning === lastFlushedReasoning
+            )
+                return;
+
+            lastFlushedContent = accumulatedContent;
+            lastFlushedReasoning = accumulatedReasoning;
+            await meetingStore.updateMessage(
+                props.meetingId,
+                messageId,
+                {
+                    content: accumulatedContent,
+                    reasoning: accumulatedReasoning || undefined,
+                },
+                { persist: false },
+            );
+        }, 80);
+    };
+
+    if (reader) {
+        let buffer = "";
+
+        const handleDataLine = (data: string) => {
+            if (!data) return;
+            if (data === "[DONE]") return;
+
+            try {
+                const json = JSON.parse(data);
+                const { textDelta, reasoningDelta } = extractDelta(json);
+
+                if (typeof textDelta === "string" && textDelta.length > 0) {
+                    accumulatedContent += textDelta;
+                    scheduleFlush();
+                }
+                if (
+                    typeof reasoningDelta === "string" &&
+                    reasoningDelta.length > 0
+                ) {
+                    accumulatedReasoning += reasoningDelta;
+                    scheduleFlush();
+                }
+            } catch (e) {
+                if (!data.trim().startsWith("{")) {
+                    accumulatedContent += data;
+                    scheduleFlush();
+                    return;
+                }
+                console.warn("Failed to parse SSE data:", e);
+            }
+        };
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            let newlineIndex = buffer.indexOf("\n");
+            while (newlineIndex >= 0) {
+                const rawLine = buffer.slice(0, newlineIndex);
+                buffer = buffer.slice(newlineIndex + 1);
+
+                const line = rawLine.replace(/\r$/, "");
+                if (line.startsWith("data:")) {
+                    handleDataLine(line.slice(5).trimStart());
+                }
+
+                newlineIndex = buffer.indexOf("\n");
+            }
+        }
+
+        const tail = buffer.trim();
+        if (tail.startsWith("data:")) {
+            handleDataLine(tail.slice(5).trimStart());
+        }
+    }
+
+    if (flushTimer != null) {
+        window.clearTimeout(flushTimer);
+        flushTimer = null;
+    }
+    if (
+        accumulatedContent !== lastFlushedContent ||
+        accumulatedReasoning !== lastFlushedReasoning
+    ) {
+        await meetingStore.updateMessage(
+            props.meetingId,
+            messageId,
+            {
+                content: accumulatedContent,
+                reasoning: accumulatedReasoning || undefined,
+            },
+            { persist: false },
+        );
+    }
+
+    // 会话结束：一次性落盘（避免流式过程频繁写 store）
+    await meetingStore.updateMessage(
+        props.meetingId,
+        messageId,
+        {
+            content: accumulatedContent,
+            reasoning: accumulatedReasoning || undefined,
+            isGenerating: false,
+        },
+        { persist: true },
+    );
+    meetingStore.isGenerating = false;
+    meetingStore.generatingMessageId = null;
+}
+
 // 暴露给父组件的方法：生成角色消息
 async function generateRoleMessage(
     role: MeetingRole,
@@ -153,11 +338,6 @@ async function generateRoleMessage(
 ) {
     const meeting = activeMeeting.value;
     if (!meeting) return;
-
-    if (!authStore.isLoggedIn || !authStore.token) {
-        (window as any).ElMessage?.error?.("请先登录后再开始会议对话");
-        throw new Error("Unauthorized");
-    }
 
     // 构建上下文：全局摘要 + 历史消息
     const systemPrompt = `${meeting.summary}\n\n你的角色设定：\n${role.systemPrompt}`;
@@ -185,187 +365,29 @@ async function generateRoleMessage(
     ];
 
     // 创建占位消息
-    const messageId = await meetingStore.addMessage(props.meetingId, {
-        role: "assistant",
-        content: "",
-        speakerId: role.id,
-        speakerName: role.name,
-        speakerAvatar: role.avatar,
-        speakerColor: role.color,
-        isGenerating: true,
-    });
+    const messageId = await meetingStore.addMessage(
+        props.meetingId,
+        {
+            role: "assistant",
+            content: "",
+            speakerId: role.id,
+            speakerName: role.name,
+            speakerAvatar: role.avatar,
+            speakerColor: role.color,
+            isGenerating: true,
+        },
+        { persist: false },
+    );
 
     if (!messageId) return;
 
     try {
-        // 调用后端API生成消息
-        const host = import.meta.env.VITE_API_HOST || "http://localhost:3000";
-
-        const headers: Record<string, string> = {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${authStore.token}`,
-        };
-
-        const response = await fetch(`${host}/api/chat`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-                model: role.modelId,
-                messages,
-                stream: true,
-            }),
-            signal: abortController.signal,
+        await streamToMeetingMessage({
+            model: role.modelId,
+            messages,
+            abortController,
+            messageId,
         });
-
-        if (response.status === 401 || response.status === 403) {
-            try {
-                await authStore.logout();
-            } catch {
-                // ignore
-            }
-            (window as any).ElMessage?.error?.("登录已过期，请重新登录");
-            throw new Error("Unauthorized");
-        }
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        meetingStore.isGenerating = true;
-        meetingStore.generatingMessageId = messageId;
-
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        let accumulatedContent = "";
-        let accumulatedReasoning = "";
-
-        const extractDelta = (json: any) => {
-            // 兼容两类流式格式：
-            // 1) OpenAI 风格：{ choices: [{ delta: { content } }] }
-            // 2) Vercel AI SDK 风格：{ type: 'text-delta', textDelta: '...' }
-            const textDelta: string | undefined =
-                json?.choices?.[0]?.delta?.content ??
-                json?.delta?.content ??
-                json?.textDelta ??
-                json?.contentDelta ??
-                json?.delta;
-
-            const reasoningDelta: string | undefined =
-                json?.reasoningDelta ??
-                json?.choices?.[0]?.delta?.reasoning ??
-                (json?.type === "reasoning-delta"
-                    ? json?.textDelta
-                    : undefined);
-
-            return { textDelta, reasoningDelta };
-        };
-
-        // 会议 store 的 updateMessage 每次都会落盘，这里做节流，避免每个 chunk 写一次
-        let flushTimer: number | null = null;
-        let lastFlushedContent = "";
-        let lastFlushedReasoning = "";
-        const scheduleFlush = () => {
-            if (flushTimer != null) return;
-            flushTimer = window.setTimeout(async () => {
-                flushTimer = null;
-                if (
-                    accumulatedContent === lastFlushedContent &&
-                    accumulatedReasoning === lastFlushedReasoning
-                )
-                    return;
-
-                lastFlushedContent = accumulatedContent;
-                lastFlushedReasoning = accumulatedReasoning;
-                await meetingStore.updateMessage(props.meetingId, messageId, {
-                    content: accumulatedContent,
-                    reasoning: accumulatedReasoning || undefined,
-                });
-            }, 80);
-        };
-
-        if (reader) {
-            // 关键：SSE 的一行可能被切成多个 chunk，如果直接 split("\n") 会丢数据。
-            let buffer = "";
-
-            const handleDataLine = (data: string) => {
-                if (!data) return;
-                if (data === "[DONE]") return;
-
-                try {
-                    const json = JSON.parse(data);
-                    const { textDelta, reasoningDelta } = extractDelta(json);
-
-                    if (typeof textDelta === "string" && textDelta.length > 0) {
-                        accumulatedContent += textDelta;
-                        scheduleFlush();
-                    }
-                    if (
-                        typeof reasoningDelta === "string" &&
-                        reasoningDelta.length > 0
-                    ) {
-                        accumulatedReasoning += reasoningDelta;
-                        scheduleFlush();
-                    }
-                } catch (e) {
-                    // 有些后端可能发送纯文本（非 JSON），或者该行是 JSON 的半截（buffer 会在下一轮拼好）。
-                    // 这里对非 JSON 纯文本做兜底拼接，避免完全无输出。
-                    if (!data.trim().startsWith("{")) {
-                        accumulatedContent += data;
-                        scheduleFlush();
-                        return;
-                    }
-                    console.warn("Failed to parse SSE data:", e);
-                }
-            };
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-
-                let newlineIndex = buffer.indexOf("\n");
-                while (newlineIndex >= 0) {
-                    const rawLine = buffer.slice(0, newlineIndex);
-                    buffer = buffer.slice(newlineIndex + 1);
-
-                    const line = rawLine.replace(/\r$/, "");
-                    if (line.startsWith("data:")) {
-                        handleDataLine(line.slice(5).trimStart());
-                    }
-
-                    newlineIndex = buffer.indexOf("\n");
-                }
-            }
-
-            // flush 最后一段（可能没有换行）
-            const tail = buffer.trim();
-            if (tail.startsWith("data:")) {
-                handleDataLine(tail.slice(5).trimStart());
-            }
-        }
-
-        if (flushTimer != null) {
-            window.clearTimeout(flushTimer);
-            flushTimer = null;
-        }
-        // 最终强制落一次
-        if (
-            accumulatedContent !== lastFlushedContent ||
-            accumulatedReasoning !== lastFlushedReasoning
-        ) {
-            await meetingStore.updateMessage(props.meetingId, messageId, {
-                content: accumulatedContent,
-                reasoning: accumulatedReasoning || undefined,
-            });
-        }
-
-        // 标记生成完成
-        await meetingStore.updateMessage(props.meetingId, messageId, {
-            isGenerating: false,
-        });
-        meetingStore.isGenerating = false;
-        meetingStore.generatingMessageId = null;
     } catch (error: any) {
         meetingStore.isGenerating = false;
         meetingStore.generatingMessageId = null;
@@ -384,9 +406,90 @@ async function generateRoleMessage(
     }
 }
 
+async function generateMeetingSummary(abortController: AbortController) {
+    const meeting = activeMeeting.value;
+    if (!meeting) return;
+
+    const modelId = meeting.roles?.[0]?.modelId;
+    if (!modelId) {
+        (window as any).ElMessage?.warning?.(
+            "请先添加至少一个角色（用于选择模型）",
+        );
+        return;
+    }
+
+    const history = (meeting.messages ?? []).slice(-120);
+    const systemPrompt = `你是会议纪要与总结助手。\n\n会议背景：\n${meeting.summary}\n\n请基于对话记录输出结构化总结（中文，简洁但信息密度高）：\n1）会议主题（一句话）\n2）关键结论（要点列表）\n3）决策与共识（如有）\n4）待办事项（负责人/截止时间/依赖，若未知写“待定”）\n5）风险与分歧（如有）\n6）下一步建议`;
+
+    const messages: UIMessage[] = [
+        {
+            id: `system-summary-${props.meetingId}`,
+            role: "system" as any,
+            parts: [{ type: "text", text: systemPrompt }] as any,
+        } as any,
+        ...history.map(
+            (m) =>
+                ({
+                    id: m.id,
+                    role: m.role as any,
+                    parts: [
+                        {
+                            type: "text",
+                            text: `【${m.speakerName}】: ${m.content}`,
+                        },
+                    ] as any,
+                }) as any,
+        ),
+        {
+            id: `user-summary-${props.meetingId}`,
+            role: "user" as any,
+            parts: [{ type: "text", text: "请生成本次会议总结。" }] as any,
+        } as any,
+    ];
+
+    const messageId = await meetingStore.addMessage(
+        props.meetingId,
+        {
+            role: "assistant",
+            content: "",
+            speakerId: "system",
+            speakerName: "会议总结",
+            speakerAvatar: "📋",
+            speakerColor: "#8b5cf6",
+            isGenerating: true,
+        },
+        { persist: false },
+    );
+
+    if (!messageId) return;
+
+    try {
+        await streamToMeetingMessage({
+            model: modelId,
+            messages,
+            abortController,
+            messageId,
+        });
+    } catch (error: any) {
+        meetingStore.isGenerating = false;
+        meetingStore.generatingMessageId = null;
+        if (error.name === "AbortError") {
+            await meetingStore.deleteMessage(props.meetingId, messageId);
+        } else {
+            console.error("生成会议总结失败:", error);
+            await meetingStore.updateMessage(props.meetingId, messageId, {
+                content: "会议总结生成失败，请重试",
+                isGenerating: false,
+            });
+        }
+        throw error;
+    }
+}
+
 // 暴露方法给父组件
 defineExpose({
     generateRoleMessage,
+    generateMeetingSummary,
 });
 </script>
 

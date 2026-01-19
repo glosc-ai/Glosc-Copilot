@@ -3,7 +3,14 @@ import { ref, computed, watch, nextTick, onUnmounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, StopCircle, Send } from "lucide-vue-next";
+import {
+    Play,
+    Pause,
+    StopCircle,
+    Send,
+    Repeat,
+    FileText,
+} from "lucide-vue-next";
 import MeetingChat from "./MeetingChat.vue";
 import SpeakerQueue from "./SpeakerQueue.vue";
 import RoleList from "./RoleList.vue";
@@ -28,6 +35,14 @@ const canStart = computed(() => {
     );
 });
 
+const canStartFromCurrent = computed(() => {
+    return (
+        currentStatus.value === "idle" &&
+        activeMeeting.value?.roles &&
+        activeMeeting.value.roles.length > 0
+    );
+});
+
 const canPause = computed(() => {
     return currentStatus.value === "running";
 });
@@ -42,9 +57,24 @@ const canStop = computed(() => {
     );
 });
 
+const autoCycleEnabled = computed(
+    () => activeMeeting.value?.autoCycle ?? false,
+);
+
+const canSummarize = computed(() => {
+    const meeting = activeMeeting.value;
+    if (!meeting) return false;
+    return (meeting.messages?.length ?? 0) > 0;
+});
+
 async function startMeeting() {
     await meetingStore.startMeeting(props.meetingId);
     // 开始自动推进
+    await processQueue();
+}
+
+async function startMeetingFromCurrent() {
+    await meetingStore.startMeetingFromCurrent(props.meetingId);
     await processQueue();
 }
 
@@ -77,6 +107,23 @@ async function stopMeeting() {
     await meetingStore.stopMeeting(props.meetingId);
     if (abortController.value) {
         abortController.value.abort();
+        abortController.value = null;
+    }
+}
+
+async function toggleAutoCycle() {
+    await meetingStore.toggleAutoCycle(props.meetingId);
+}
+
+async function summarizeMeetingNow() {
+    if (!chatRef.value) return;
+    try {
+        abortController.value = new AbortController();
+        await chatRef.value.generateMeetingSummary(abortController.value);
+    } catch (error: any) {
+        if (error?.name === "AbortError") return;
+        console.error("总结会议失败:", error);
+    } finally {
         abortController.value = null;
     }
 }
@@ -122,6 +169,10 @@ async function processQueue() {
         const currentIndex = meeting.currentSpeakerIndex ?? 0;
         if (currentIndex >= meeting.speakerQueue.length) {
             // 已到队列末尾
+            if (meeting.autoCycle && meeting.speakerQueue.length > 0) {
+                await meetingStore.setCurrentSpeakerIndex(props.meetingId, 0);
+                continue;
+            }
             await meetingStore.pauseMeeting(props.meetingId);
             break;
         }
@@ -137,19 +188,18 @@ async function processQueue() {
             break;
         } else if (currentNode.type === "task") {
             // 执行任务（如总结）
-            // TODO: 实现各种任务类型的执行逻辑
             if (currentNode.taskType === "总结会议") {
-                // 将来可以调用特定的总结API
-                await meetingStore.addMessage(props.meetingId, {
-                    role: "assistant",
-                    content: "（会议总结功能待实现）",
-                    speakerId: "system",
-                    speakerName: "系统",
-                    speakerAvatar: "📋",
-                    speakerColor: "#8b5cf6",
-                });
+                if (chatRef.value) {
+                    try {
+                        abortController.value = new AbortController();
+                        await chatRef.value.generateMeetingSummary(
+                            abortController.value,
+                        );
+                    } finally {
+                        abortController.value = null;
+                    }
+                }
             }
-            await meetingStore.advanceQueue(props.meetingId);
         }
 
         // 检查是否应该继续
@@ -228,6 +278,16 @@ onUnmounted(() => {
                         开始会议
                     </Button>
                     <Button
+                        v-if="canStartFromCurrent"
+                        @click="startMeetingFromCurrent"
+                        size="sm"
+                        variant="outline"
+                        class="gap-2"
+                    >
+                        <Play class="w-4 h-4" />
+                        从当前开始发言
+                    </Button>
+                    <Button
                         v-if="canPause"
                         @click="pauseMeeting"
                         size="sm"
@@ -258,6 +318,27 @@ onUnmounted(() => {
                     </Button>
                 </div>
                 <div class="flex-1"></div>
+                <div class="flex items-center gap-2">
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        class="gap-2"
+                        @click="toggleAutoCycle"
+                    >
+                        <Repeat class="w-4 h-4" />
+                        自动循环：{{ autoCycleEnabled ? "开" : "关" }}
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        class="gap-2"
+                        :disabled="!canSummarize || meetingStore.isGenerating"
+                        @click="summarizeMeetingNow"
+                    >
+                        <FileText class="w-4 h-4" />
+                        总结会议
+                    </Button>
+                </div>
                 <div class="text-sm">
                     <span
                         class="px-2 py-1 rounded-full text-xs font-medium"
