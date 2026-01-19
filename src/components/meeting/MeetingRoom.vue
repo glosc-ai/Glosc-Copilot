@@ -80,6 +80,9 @@ const canPause = computed(() => {
 
 const canResume = computed(() => {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 77b8d03 (支持 继续会议)
     return (
         currentStatus.value === "paused" || currentStatus.value === "stopped"
     );
@@ -465,10 +468,14 @@ onUnmounted(() => {
                     >
                         <Play class="w-4 h-4" />
 <<<<<<< HEAD
+<<<<<<< HEAD
                         {{ currentStatus === "stopped" ? "继续会议" : "继续" }}
 =======
                         继续
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+                        {{ currentStatus === "stopped" ? "继续会议" : "继续" }}
+>>>>>>> 77b8d03 (支持 继续会议)
                     </Button>
                     <Button
                         v-if="canStop"
