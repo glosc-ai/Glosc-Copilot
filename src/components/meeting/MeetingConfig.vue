@@ -361,8 +361,9 @@ const selectedModel = computed(() => {
                     <div>
                         <Label>使用模型 *</Label>
                         <ModelSelectorPicker
-                            :model-value="selectedModel"
-                            @update:model-value="onModelSelect"
+                            :models="availableModels"
+                            :selected-model="selectedModel"
+                            @update:selected-model="onModelSelect"
                             class="mt-1"
                         />
                     </div>

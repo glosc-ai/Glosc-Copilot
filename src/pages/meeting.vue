@@ -7,7 +7,7 @@ import {
     CardDescription,
     CardContent,
 } from "@/components/ui/card";
-import { Plus, Users, MessageSquare, Calendar, Trash2, Edit } from "lucide-vue-next";
+import { Plus, Users, MessageSquare, Calendar, Trash2 } from "lucide-vue-next";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
 import { onMounted } from "vue";

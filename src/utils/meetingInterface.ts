@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { StoredChatMessage } from "./interface";
 
 // 会议角色 Schema
 export const MeetingRoleSchema = z.object({
