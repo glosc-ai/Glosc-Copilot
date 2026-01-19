@@ -35,6 +35,9 @@ export const useMeetingStore = defineStore("meeting", {
 
     getters: {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
         // 按日期分组的会议列表（逻辑对齐 chatStore.groupedConversations）
         groupedMeetings: (state) => {
             const groups: Record<string, MeetingItem[]> = {};
@@ -83,8 +86,11 @@ export const useMeetingStore = defineStore("meeting", {
             return sortedGroups;
         },
 
+<<<<<<< HEAD
 =======
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
         // 当前激活的会议
         activeMeeting(state): Meeting | null {
             if (!state.activeKey) return null;
@@ -148,14 +154,20 @@ export const useMeetingStore = defineStore("meeting", {
                 }>(this.meetingIndexKey());
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
                 if (
                     index &&
                     index.version === 1 &&
                     Array.isArray(index.items)
                 ) {
+<<<<<<< HEAD
 =======
                 if (index && index.version === 1 && Array.isArray(index.items)) {
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
                     const order =
                         Array.isArray(index.order) && index.order.length > 0
                             ? index.order
@@ -198,12 +210,18 @@ export const useMeetingStore = defineStore("meeting", {
 
             try {
 <<<<<<< HEAD
+<<<<<<< HEAD
                 const meeting = await storeUtils.get<Meeting>(
                     this.meetingKey(id),
                 );
 =======
                 const meeting = await storeUtils.get<Meeting>(this.meetingKey(id));
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+                const meeting = await storeUtils.get<Meeting>(
+                    this.meetingKey(id),
+                );
+>>>>>>> 5e25028 (实现基础会议功能)
                 if (meeting) {
                     this.meetings[id] = meeting;
                     this.loadedMeetingIds[id] = true;
@@ -290,14 +308,20 @@ export const useMeetingStore = defineStore("meeting", {
                     this.meetings[id].title = newTitle;
                     this.meetings[id].updatedAt = Date.now();
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
                     await storeUtils.set(
                         this.meetingKey(id),
                         this.meetings[id],
                         true,
                     );
+<<<<<<< HEAD
 =======
                     await storeUtils.set(this.meetingKey(id), this.meetings[id], true);
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
                 }
 
                 const item = this.meetingsItems.find((item) => item.key === id);
@@ -352,6 +376,9 @@ export const useMeetingStore = defineStore("meeting", {
         },
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
         /**
          * 拖拽排序：把 sourceKey 移动到 targetKey 之前。
          */
@@ -375,8 +402,11 @@ export const useMeetingStore = defineStore("meeting", {
             await this.persistIndex();
         },
 
+<<<<<<< HEAD
 =======
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
         // ============ 角色管理 ============
         async addRole(meetingId: string, role: Omit<MeetingRole, "id">) {
             await this.ensureMeetingLoaded(meetingId);
@@ -453,6 +483,7 @@ export const useMeetingStore = defineStore("meeting", {
 
         // ============ 消息管理 ============
 <<<<<<< HEAD
+<<<<<<< HEAD
         async addMessage(
             meetingId: string,
             message: Omit<MeetingMessage, "id" | "timestamp">,
@@ -467,6 +498,12 @@ export const useMeetingStore = defineStore("meeting", {
 =======
         async addMessage(meetingId: string, message: Omit<MeetingMessage, "id" | "timestamp">) {
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+        async addMessage(
+            meetingId: string,
+            message: Omit<MeetingMessage, "id" | "timestamp">,
+        ) {
+>>>>>>> 5e25028 (实现基础会议功能)
             await this.ensureMeetingLoaded(meetingId);
             const meeting = this.meetings[meetingId];
             if (!meeting) return;
@@ -541,12 +578,18 @@ export const useMeetingStore = defineStore("meeting", {
             if (!meeting) return;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
             meeting.messages = meeting.messages.filter(
                 (m) => m.id !== messageId,
             );
 =======
             meeting.messages = meeting.messages.filter((m) => m.id !== messageId);
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+            meeting.messages = meeting.messages.filter(
+                (m) => m.id !== messageId,
+            );
+>>>>>>> 5e25028 (实现基础会议功能)
             meeting.updatedAt = Date.now();
 
             const item = this.meetingsItems.find((it) => it.key === meetingId);
@@ -571,14 +614,20 @@ export const useMeetingStore = defineStore("meeting", {
         },
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
         async addToQueue(
             meetingId: string,
             node: Omit<QueueNode, "id">,
             position?: number,
         ) {
+<<<<<<< HEAD
 =======
         async addToQueue(meetingId: string, node: Omit<QueueNode, "id">, position?: number) {
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
             await this.ensureMeetingLoaded(meetingId);
             const meeting = this.meetings[meetingId];
             if (!meeting) return;
@@ -592,17 +641,23 @@ export const useMeetingStore = defineStore("meeting", {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
             if (
                 position !== undefined &&
                 position >= 0 &&
                 position < meeting.speakerQueue.length
             ) {
+<<<<<<< HEAD
 =======
             if (position !== undefined && position >= 0 && position <= meeting.speakerQueue.length) {
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 =======
             if (position !== undefined && position >= 0 && position < meeting.speakerQueue.length) {
 >>>>>>> 5c112eb (Fix code review issues and improve error handling)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
                 meeting.speakerQueue.splice(position, 0, newNode);
             } else {
                 meeting.speakerQueue.push(newNode);
@@ -620,12 +675,18 @@ export const useMeetingStore = defineStore("meeting", {
             if (!meeting.speakerQueue) return;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
             meeting.speakerQueue = meeting.speakerQueue.filter(
                 (n) => n.id !== nodeId,
             );
 =======
             meeting.speakerQueue = meeting.speakerQueue.filter((n) => n.id !== nodeId);
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+            meeting.speakerQueue = meeting.speakerQueue.filter(
+                (n) => n.id !== nodeId,
+            );
+>>>>>>> 5e25028 (实现基础会议功能)
             meeting.updatedAt = Date.now();
 
             await storeUtils.set(this.meetingKey(meetingId), meeting, true);
@@ -769,7 +830,10 @@ export const useMeetingStore = defineStore("meeting", {
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 =======
                 // 确保不超出队列范围
-                if (meeting.speakerQueue && meeting.currentSpeakerIndex >= meeting.speakerQueue.length) {
+                if (
+                    meeting.speakerQueue &&
+                    meeting.currentSpeakerIndex >= meeting.speakerQueue.length
+                ) {
                     meeting.currentSpeakerIndex = meeting.speakerQueue.length;
                 }
 >>>>>>> 5c112eb (Fix code review issues and improve error handling)
@@ -891,6 +955,9 @@ export const useMeetingStore = defineStore("meeting", {
             if (!meeting) return DEFAULT_COLORS[0];
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
             const usedColors = new Set(
                 meeting.roles.map((r) => r.color).filter(Boolean),
             );
@@ -901,11 +968,14 @@ export const useMeetingStore = defineStore("meeting", {
                 availableColor ||
                 DEFAULT_COLORS[meeting.roles.length % DEFAULT_COLORS.length]
             );
+<<<<<<< HEAD
 =======
             const usedColors = new Set(meeting.roles.map((r) => r.color).filter(Boolean));
             const availableColor = DEFAULT_COLORS.find((c) => !usedColors.has(c));
             return availableColor || DEFAULT_COLORS[meeting.roles.length % DEFAULT_COLORS.length];
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
         },
 
         getNextAvailableAvatar(meetingId: string): string {
@@ -913,6 +983,9 @@ export const useMeetingStore = defineStore("meeting", {
             if (!meeting) return DEFAULT_AVATARS[0];
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
             const usedAvatars = new Set(
                 meeting.roles.map((r) => r.avatar).filter(Boolean),
             );
@@ -923,11 +996,14 @@ export const useMeetingStore = defineStore("meeting", {
                 availableAvatar ||
                 DEFAULT_AVATARS[meeting.roles.length % DEFAULT_AVATARS.length]
             );
+<<<<<<< HEAD
 =======
             const usedAvatars = new Set(meeting.roles.map((r) => r.avatar).filter(Boolean));
             const availableAvatar = DEFAULT_AVATARS.find((a) => !usedAvatars.has(a));
             return availableAvatar || DEFAULT_AVATARS[meeting.roles.length % DEFAULT_AVATARS.length];
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
         },
     },
 });

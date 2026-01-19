@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
 
-const props = defineProps<{
+defineProps<{
     meetingId: string;
 }>();
 
@@ -61,12 +61,18 @@ async function jumpToRole(roleId: string) {
                     <div
                         class="w-10 h-10 rounded-full flex items-center justify-center text-xl shrink-0"
 <<<<<<< HEAD
+<<<<<<< HEAD
                         :style="{
                             backgroundColor: (role.color || '#6b7280') + '20',
                         }"
 =======
                         :style="{ backgroundColor: (role.color || '#6b7280') + '20' }"
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+                        :style="{
+                            backgroundColor: (role.color || '#6b7280') + '20',
+                        }"
+>>>>>>> 5e25028 (实现基础会议功能)
                     >
                         {{ role.avatar || "👤" }}
                     </div>

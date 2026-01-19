@@ -1,5 +1,6 @@
 <script setup lang="ts">
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { computed, ref, onMounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { useChatStore } from "@/stores/chat";
@@ -8,6 +9,11 @@ import { useMcpStore } from "@/stores/mcp";
 import { computed, ref } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+import { computed, ref, onMounted } from "vue";
+import { useMeetingStore } from "@/stores/meeting";
+import { useChatStore } from "@/stores/chat";
+>>>>>>> 5e25028 (实现基础会议功能)
 import { storeToRefs } from "pinia";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,9 +32,13 @@ import type { MeetingRole } from "@/utils/meetingInterface";
 import ModelSelectorPicker from "@/components/ModelSelectorPicker.vue";
 import type { ModelInfo } from "@/utils/interface";
 <<<<<<< HEAD
+<<<<<<< HEAD
 import OpenAI from "openai";
 =======
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+import OpenAI from "openai";
+>>>>>>> 5e25028 (实现基础会议功能)
 
 const props = defineProps<{
     meetingId: string;
@@ -42,8 +52,11 @@ const meetingStore = useMeetingStore();
 const { activeMeeting, availableModels } = storeToRefs(meetingStore);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 const mcpStore = useMcpStore();
 
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
 const chatStore = useChatStore();
 const { recentModelUsage } = storeToRefs(chatStore);
 
@@ -51,11 +64,16 @@ onMounted(() => {
     if (!chatStore.recentModelUsageLoaded) {
         void chatStore.loadRecentModelUsage();
     }
+<<<<<<< HEAD
     void mcpStore.init();
 });
 
 =======
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+});
+
+>>>>>>> 5e25028 (实现基础会议功能)
 // 会议基本信息编辑
 const editingTitle = ref(false);
 const editingTitleValue = ref("");
@@ -80,6 +98,9 @@ const roleForm = ref({
 const isEditMode = computed(() => editingRoleId.value !== null);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
 // 智能输入：根据简短人设自动生成 system prompt
 const smartInputOpen = ref(false);
 const smartPersona = ref("");
@@ -158,8 +179,11 @@ async function generateSystemPrompt() {
     }
 }
 
+<<<<<<< HEAD
 =======
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
 function startEditTitle() {
     editingTitleValue.value = activeMeeting.value?.title || "";
     editingTitle.value = true;
@@ -168,13 +192,19 @@ function startEditTitle() {
 async function saveTitle() {
     if (editingTitleValue.value.trim()) {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
         await meetingStore.renameMeeting(
             props.meetingId,
             editingTitleValue.value.trim(),
         );
+<<<<<<< HEAD
 =======
         await meetingStore.renameMeeting(props.meetingId, editingTitleValue.value.trim());
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
     }
     editingTitle.value = false;
 }
@@ -190,13 +220,19 @@ function startEditSummary() {
 
 async function saveSummary() {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
     await meetingStore.updateMeetingSummary(
         props.meetingId,
         editingSummaryValue.value,
     );
+<<<<<<< HEAD
 =======
     await meetingStore.updateMeetingSummary(props.meetingId, editingSummaryValue.value);
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
     editingSummary.value = false;
 }
 
@@ -256,8 +292,12 @@ async function saveRole() {
 =======
 async function saveRole() {
     if (!roleForm.value.name.trim()) {
+<<<<<<< HEAD
         alert("请输入角色名称");
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+        ElMessage.warning("请输入角色名称");
+>>>>>>> 5e25028 (实现基础会议功能)
         return;
     }
 
@@ -292,6 +332,9 @@ async function saveRole() {
 
 async function deleteRole(roleId: string) {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
     try {
         await ElMessageBox.confirm("确定要删除此角色吗？", "提示", {
             type: "warning",
@@ -300,6 +343,7 @@ async function deleteRole(roleId: string) {
         });
     } catch {
         return;
+<<<<<<< HEAD
     }
 
     await meetingStore.deleteRole(props.meetingId, roleId);
@@ -308,20 +352,30 @@ async function deleteRole(roleId: string) {
         await meetingStore.deleteRole(props.meetingId, roleId);
     }
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+    }
+
+    await meetingStore.deleteRole(props.meetingId, roleId);
+>>>>>>> 5e25028 (实现基础会议功能)
 }
 
 function startMeeting() {
     if (!activeMeeting.value?.roles.length) {
 <<<<<<< HEAD
+<<<<<<< HEAD
         ElMessage.warning("请至少添加一个角色");
 =======
         alert("请至少添加一个角色");
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+        ElMessage.warning("请至少添加一个角色");
+>>>>>>> 5e25028 (实现基础会议功能)
         return;
     }
     emit("startMeeting");
 }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 function onModelSelect(model: ModelInfo) {
     roleForm.value.modelId = model.id;
@@ -343,6 +397,18 @@ function onModelSelect(model: ModelInfo | null) {
 const selectedModel = computed(() => {
     return availableModels.value.find((m) => m.id === roleForm.value.modelId) || null;
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+function onModelSelect(model: ModelInfo) {
+    roleForm.value.modelId = model.id;
+    chatStore.markModelUsed(model.id);
+}
+
+const selectedModel = computed(() => {
+    return (
+        availableModels.value.find((m) => m.id === roleForm.value.modelId) ||
+        null
+    );
+>>>>>>> 5e25028 (实现基础会议功能)
 });
 </script>
 
@@ -359,13 +425,19 @@ const selectedModel = computed(() => {
                     <div>
                         <Label>会议名称</Label>
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
                         <div
                             v-if="!editingTitle"
                             class="flex items-center gap-2 mt-1"
                         >
+<<<<<<< HEAD
 =======
                         <div v-if="!editingTitle" class="flex items-center gap-2 mt-1">
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
                             <span class="text-lg font-semibold">
                                 {{ activeMeeting?.title }}
                             </span>
@@ -403,12 +475,18 @@ const selectedModel = computed(() => {
                         </p>
                         <div v-if="!editingSummary">
 <<<<<<< HEAD
+<<<<<<< HEAD
                             <div
                                 class="p-3 bg-muted rounded-md whitespace-pre-wrap"
                             >
 =======
                             <div class="p-3 bg-muted rounded-md whitespace-pre-wrap">
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+                            <div
+                                class="p-3 bg-muted rounded-md whitespace-pre-wrap"
+                            >
+>>>>>>> 5e25028 (实现基础会议功能)
                                 {{ activeMeeting?.summary }}
                             </div>
                             <Button
@@ -429,12 +507,18 @@ const selectedModel = computed(() => {
                             />
                             <div class="flex gap-2">
 <<<<<<< HEAD
+<<<<<<< HEAD
                                 <Button size="sm" @click="saveSummary"
                                     >保存</Button
                                 >
 =======
                                 <Button size="sm" @click="saveSummary">保存</Button>
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+                                <Button size="sm" @click="saveSummary"
+                                    >保存</Button
+                                >
+>>>>>>> 5e25028 (实现基础会议功能)
                                 <Button
                                     size="sm"
                                     variant="outline"
@@ -479,12 +563,18 @@ const selectedModel = computed(() => {
                                     <div
                                         class="w-12 h-12 rounded-full flex items-center justify-center text-2xl shrink-0"
 <<<<<<< HEAD
+<<<<<<< HEAD
                                         :style="{
                                             backgroundColor: role.color + '20',
                                         }"
 =======
                                         :style="{ backgroundColor: role.color + '20' }"
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+                                        :style="{
+                                            backgroundColor: role.color + '20',
+                                        }"
+>>>>>>> 5e25028 (实现基础会议功能)
                                     >
                                         {{ role.avatar || "👤" }}
                                     </div>
@@ -493,25 +583,37 @@ const selectedModel = computed(() => {
                                             {{ role.name }}
                                         </h3>
 <<<<<<< HEAD
+<<<<<<< HEAD
                                         <p
                                             class="text-xs text-muted-foreground mt-1"
                                         >
 =======
                                         <p class="text-xs text-muted-foreground mt-1">
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+                                        <p
+                                            class="text-xs text-muted-foreground mt-1"
+                                        >
+>>>>>>> 5e25028 (实现基础会议功能)
                                             模型: {{ role.modelId }}
                                         </p>
                                         <p
                                             class="text-sm mt-2 line-clamp-2 text-muted-foreground"
                                         >
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
                                             {{
                                                 role.systemPrompt ||
                                                 "无角色设定"
                                             }}
+<<<<<<< HEAD
 =======
                                             {{ role.systemPrompt || "无角色设定" }}
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
                                         </p>
                                     </div>
                                     <div class="flex gap-1">
@@ -608,8 +710,18 @@ const selectedModel = computed(() => {
 =======
                             :models="availableModels"
                             :selected-model="selectedModel"
+<<<<<<< HEAD
                             @update:selected-model="onModelSelect"
 >>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
+=======
+                            :selected-model-id="roleForm.modelId"
+                            :recent-usage="recentModelUsage"
+                            :allow-remove-recent="true"
+                            @select="onModelSelect"
+                            @remove-recent="
+                                (id) => chatStore.removeRecentModel(id)
+                            "
+>>>>>>> 5e25028 (实现基础会议功能)
                             class="mt-1"
                         />
                     </div>
@@ -709,11 +821,60 @@ const selectedModel = computed(() => {
 
 =======
                     <div>
-                        <Label>角色设定 (System Prompt)</Label>
+                        <div class="flex items-center justify-between gap-3">
+                            <Label>角色设定 (System Prompt)</Label>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                class="gap-2"
+                                @click="openSmartInput"
+                            >
+                                智能输入
+                            </Button>
+                        </div>
                         <p class="text-xs text-muted-foreground mt-1 mb-2">
                             定义角色的人设、专业领域、说话风格、立场观点等
                         </p>
+<<<<<<< HEAD
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+
+                        <div
+                            v-if="smartInputOpen"
+                            class="p-3 rounded-md border bg-muted/40 space-y-2"
+                        >
+                            <div class="text-sm font-medium">简约人设描述</div>
+                            <Input
+                                v-model="smartPersona"
+                                placeholder="例如：严谨的技术负责人，关注可行性与风险；说话简洁，喜欢列要点"
+                            />
+                            <div class="flex gap-2">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    :disabled="smartGenerating"
+                                    @click="generateSystemPrompt"
+                                >
+                                    {{
+                                        smartGenerating
+                                            ? "生成中..."
+                                            : "生成并填充"
+                                    }}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    :disabled="smartGenerating"
+                                    @click="closeSmartInput"
+                                >
+                                    取消
+                                </Button>
+                            </div>
+                        </div>
+
+>>>>>>> 5e25028 (实现基础会议功能)
                         <Textarea
                             v-model="roleForm.systemPrompt"
                             rows="6"
@@ -724,6 +885,7 @@ const selectedModel = computed(() => {
                 </div>
                 <DialogFooter>
 <<<<<<< HEAD
+<<<<<<< HEAD
                     <Button variant="outline" @click="roleDialogOpen = false">
 =======
                     <Button
@@ -731,6 +893,9 @@ const selectedModel = computed(() => {
                         @click="roleDialogOpen = false"
                     >
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+                    <Button variant="outline" @click="roleDialogOpen = false">
+>>>>>>> 5e25028 (实现基础会议功能)
                         取消
                     </Button>
                     <Button @click="saveRole">

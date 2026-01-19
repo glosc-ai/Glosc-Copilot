@@ -87,16 +87,23 @@ async function removeFromQueue(nodeId: string) {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
 const currentSpeakerIndex = computed(
     () => activeMeeting.value?.currentSpeakerIndex ?? 0,
 );
 
+<<<<<<< HEAD
 async function setCurrentIndex(index: number) {
     await meetingStore.setCurrentSpeakerIndex(props.meetingId, index);
 }
 =======
 const currentSpeakerIndex = computed(() => activeMeeting.value?.currentSpeakerIndex ?? 0);
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+console.log(currentSpeakerIndex.value);
+>>>>>>> 5e25028 (实现基础会议功能)
 </script>
 
 <template>
@@ -111,17 +118,23 @@ const currentSpeakerIndex = computed(() => activeMeeting.value?.currentSpeakerIn
         <div class="flex-1 overflow-y-auto p-4 space-y-2">
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
             <VueDraggableNext
                 v-model="queueNodes"
                 :animation="150"
                 handle=".drag-handle"
             >
+<<<<<<< HEAD
 =======
             <VueDraggable v-model="queueNodes" :animation="150" handle=".drag-handle">
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 =======
             <VueDraggableNext v-model="queueNodes" :animation="150" handle=".drag-handle">
 >>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
                 <div
                     v-for="(node, index) in queueNodes"
                     :key="node.id"
@@ -145,12 +158,18 @@ const currentSpeakerIndex = computed(() => activeMeeting.value?.currentSpeakerIn
 
                     <!-- 序号 -->
 <<<<<<< HEAD
+<<<<<<< HEAD
                     <div
                         class="text-xs text-muted-foreground w-6 text-center shrink-0"
                     >
 =======
                     <div class="text-xs text-muted-foreground w-6 text-center shrink-0">
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+                    <div
+                        class="text-xs text-muted-foreground w-6 text-center shrink-0"
+                    >
+>>>>>>> 5e25028 (实现基础会议功能)
                         {{ index + 1 }}
                     </div>
 

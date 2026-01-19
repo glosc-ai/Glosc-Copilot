@@ -33,8 +33,11 @@
     "store:allow-save",
     "store:allow-load",
     "dialog:allow-confirm",
+<<<<<<< HEAD
     "dialog:allow-save",
     "dialog:default",
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
     "shell:allow-execute",
     "shell:allow-open",
     "cors-fetch:default",

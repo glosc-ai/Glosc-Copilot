@@ -154,7 +154,9 @@ async function exportMeetingMarkdown() {
 });
 
 const canStop = computed(() => {
-    return currentStatus.value === "running" || currentStatus.value === "paused";
+    return (
+        currentStatus.value === "running" || currentStatus.value === "paused"
+    );
 });
 
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
@@ -189,6 +191,9 @@ async function resumeMeeting() {
 
 async function stopMeeting() {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
     try {
         await ElMessageBox.confirm("确定要停止会议吗？", "提示", {
             type: "warning",
@@ -203,6 +208,7 @@ async function stopMeeting() {
     if (abortController.value) {
         abortController.value.abort();
         abortController.value = null;
+<<<<<<< HEAD
     }
 }
 
@@ -228,6 +234,8 @@ async function summarizeMeetingNow() {
             abortController.value = null;
         }
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
     }
 }
 
@@ -260,14 +268,20 @@ async function processQueue() {
     while (currentStatus.value === "running") {
         const meeting = activeMeeting.value;
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
         if (
             !meeting ||
             !meeting.speakerQueue ||
             meeting.speakerQueue.length === 0
         ) {
+<<<<<<< HEAD
 =======
         if (!meeting || !meeting.speakerQueue || meeting.speakerQueue.length === 0) {
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
             // 队列为空，暂停会议
             await meetingStore.pauseMeeting(props.meetingId);
             break;
@@ -356,13 +370,19 @@ async function generateRoleSpeech(roleId: string) {
         // 通过 chatRef 调用生成方法
         if (chatRef.value) {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
             await chatRef.value.generateRoleMessage(
                 role,
                 abortController.value,
             );
+<<<<<<< HEAD
 =======
             await chatRef.value.generateRoleMessage(role, abortController.value);
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 5e25028 (实现基础会议功能)
         }
     } catch (error: any) {
         if (error.name === "AbortError") {
