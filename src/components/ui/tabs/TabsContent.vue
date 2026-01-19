@@ -1,5 +1,8 @@
 <script setup lang="ts">
+<<<<<<< HEAD
 import { computed } from "vue";
+=======
+>>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
 import { TabsContent, type TabsContentProps } from "reka-ui";
 import { cn } from "@/lib/utils";
 

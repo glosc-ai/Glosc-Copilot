@@ -591,6 +591,7 @@ const selectedModel = computed(() => {
                         <Label>使用模型 *</Label>
                         <ModelSelectorPicker
 <<<<<<< HEAD
+<<<<<<< HEAD
                             :models="availableModels"
                             :selected-model="selectedModel"
                             :selected-model-id="roleForm.modelId"
@@ -604,6 +605,11 @@ const selectedModel = computed(() => {
                             :model-value="selectedModel"
                             @update:model-value="onModelSelect"
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+                            :models="availableModels"
+                            :selected-model="selectedModel"
+                            @update:selected-model="onModelSelect"
+>>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
                             class="mt-1"
                         />
                     </div>

@@ -1,8 +1,11 @@
 import { z } from "zod";
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 import type { StoredChatMessage } from "./interface";
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
 
 // 会议角色 Schema
 export const MeetingRoleSchema = z.object({

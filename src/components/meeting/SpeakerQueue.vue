@@ -1,5 +1,6 @@
 <script setup lang="ts">
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { computed } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
@@ -9,13 +10,20 @@ import type { QueueNode } from "@/utils/meetingInterface";
 import { VueDraggableNext } from "vue-draggable-next";
 =======
 import { ref, computed } from "vue";
+=======
+import { computed } from "vue";
+>>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, X, User, ListTodo } from "lucide-vue-next";
+import { GripVertical, X, User, ListTodo } from "lucide-vue-next";
 import type { QueueNode } from "@/utils/meetingInterface";
+<<<<<<< HEAD
 import { VueDraggable } from "vue-draggable-next";
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+import { VueDraggableNext } from "vue-draggable-next";
+>>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
 
 const props = defineProps<{
     meetingId: string;
@@ -102,6 +110,7 @@ const currentSpeakerIndex = computed(() => activeMeeting.value?.currentSpeakerIn
 
         <div class="flex-1 overflow-y-auto p-4 space-y-2">
 <<<<<<< HEAD
+<<<<<<< HEAD
             <VueDraggableNext
                 v-model="queueNodes"
                 :animation="150"
@@ -110,6 +119,9 @@ const currentSpeakerIndex = computed(() => activeMeeting.value?.currentSpeakerIn
 =======
             <VueDraggable v-model="queueNodes" :animation="150" handle=".drag-handle">
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+            <VueDraggableNext v-model="queueNodes" :animation="150" handle=".drag-handle">
+>>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
                 <div
                     v-for="(node, index) in queueNodes"
                     :key="node.id"
@@ -172,10 +184,14 @@ const currentSpeakerIndex = computed(() => activeMeeting.value?.currentSpeakerIn
                     </Button>
                 </div>
 <<<<<<< HEAD
+<<<<<<< HEAD
             </VueDraggableNext>
 =======
             </VueDraggable>
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+            </VueDraggableNext>
+>>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
 
             <div
                 v-if="!queueNodes.length"

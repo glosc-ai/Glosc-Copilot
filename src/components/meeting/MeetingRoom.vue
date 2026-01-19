@@ -1,5 +1,6 @@
 <script setup lang="ts">
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { ref, computed, watch, nextTick, onUnmounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
@@ -15,6 +16,9 @@ import {
 } from "lucide-vue-next";
 =======
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
+=======
+import { ref, computed, watch, nextTick, onUnmounted } from "vue";
+>>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
 import { Button } from "@/components/ui/button";
@@ -25,9 +29,12 @@ import SpeakerQueue from "./SpeakerQueue.vue";
 import RoleList from "./RoleList.vue";
 import { Textarea } from "@/components/ui/textarea";
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 import type { QueueNode } from "@/utils/meetingInterface";
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
 
 const props = defineProps<{
     meetingId: string;
@@ -35,10 +42,14 @@ const props = defineProps<{
 
 const meetingStore = useMeetingStore();
 <<<<<<< HEAD
+<<<<<<< HEAD
 const { activeMeeting, currentStatus } = storeToRefs(meetingStore);
 =======
 const { activeMeeting, currentStatus, isGenerating } = storeToRefs(meetingStore);
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+const { activeMeeting, currentStatus } = storeToRefs(meetingStore);
+>>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
 
 const userInput = ref("");
 const chatRef = ref<InstanceType<typeof MeetingChat>>();

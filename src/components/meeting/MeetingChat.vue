@@ -1,5 +1,6 @@
 <script setup lang="ts">
 <<<<<<< HEAD
+<<<<<<< HEAD
 import type { ChatStatus } from "ai";
 import { ref, watch, nextTick, computed, shallowRef, onMounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
@@ -16,6 +17,9 @@ import { McpUtils } from "@/utils/McpUtils";
 import { ChatUtils } from "@/utils/ChatUtils";
 =======
 import { ref, computed, watch, nextTick } from "vue";
+=======
+import { computed, watch, nextTick } from "vue";
+>>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
 import { Button } from "@/components/ui/button";
