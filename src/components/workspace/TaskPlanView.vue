@@ -71,7 +71,6 @@ import {
     Circle,
     Loader2,
     XCircle,
-    AlertCircle,
 } from "lucide-vue-next";
 import ToolExecutionPanel from "./ToolExecutionPanel.vue";
 

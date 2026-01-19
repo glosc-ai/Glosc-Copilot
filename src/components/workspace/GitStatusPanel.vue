@@ -5,7 +5,7 @@
                 <GitBranch class="w-4 h-4" />
                 <span class="branch-name">{{ currentBranch || 'N/A' }}</span>
             </div>
-            <Button size="sm" variant="ghost" @click="refreshStatus">
+            <Button size="icon-sm" variant="ghost" @click="refreshStatus">
                 <RefreshCw
                     class="w-3 h-3"
                     :class="{ 'animate-spin': loading }"
@@ -56,12 +56,12 @@
                 <div class="section-title">
                     <span>更改 ({{ unstagedFiles.length }})</span>
                     <Button
-                        size="xs"
+                        size="sm"
                         variant="ghost"
                         @click="stageAll"
                         :disabled="loading"
                     >
-                        <Plus class="w-3 h-3" />
+                        <Plus class="w-3 h-3 mr-1" />
                         全部暂存
                     </Button>
                 </div>
@@ -78,14 +78,14 @@
                         <span class="file-path">{{ file.path }}</span>
                         <div class="file-actions">
                             <Button
-                                size="xs"
+                                size="icon-sm"
                                 variant="ghost"
                                 @click="viewDiff(file.path, false)"
                             >
                                 <Eye class="w-3 h-3" />
                             </Button>
                             <Button
-                                size="xs"
+                                size="icon-sm"
                                 variant="ghost"
                                 @click="stageFile(file.path)"
                                 :disabled="loading"
@@ -111,7 +111,7 @@
                         <FileQuestion class="w-3 h-3" />
                         <span class="file-path">{{ file }}</span>
                         <Button
-                            size="xs"
+                            size="icon-sm"
                             variant="ghost"
                             @click="stageFile(file)"
                             :disabled="loading"
