@@ -2,6 +2,7 @@
 import { computed, ref, onMounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { useChatStore } from "@/stores/chat";
+import { useMcpStore } from "@/stores/mcp";
 import { storeToRefs } from "pinia";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,8 @@ const emit = defineEmits<{
 const meetingStore = useMeetingStore();
 const { activeMeeting, availableModels } = storeToRefs(meetingStore);
 
+const mcpStore = useMcpStore();
+
 const chatStore = useChatStore();
 const { recentModelUsage } = storeToRefs(chatStore);
 
@@ -39,6 +42,7 @@ onMounted(() => {
     if (!chatStore.recentModelUsageLoaded) {
         void chatStore.loadRecentModelUsage();
     }
+    void mcpStore.init();
 });
 
 // 会议基本信息编辑
@@ -56,6 +60,7 @@ const roleForm = ref({
     modelId: "",
     systemPrompt: "",
     color: "",
+    enabledMcpServerIds: [] as string[],
 });
 
 const isEditMode = computed(() => editingRoleId.value !== null);
@@ -182,6 +187,9 @@ function openAddRoleDialog() {
         modelId: availableModels.value[0]?.id || "",
         systemPrompt: "",
         color: meetingStore.getNextAvailableColor(props.meetingId),
+        enabledMcpServerIds: (mcpStore.servers || [])
+            .filter((s) => s.enabled)
+            .map((s) => s.id),
     };
     roleDialogOpen.value = true;
 }
@@ -194,8 +202,20 @@ function openEditRoleDialog(role: MeetingRole) {
         modelId: role.modelId,
         systemPrompt: role.systemPrompt,
         color: role.color || "",
+        enabledMcpServerIds: Array.isArray(role.enabledMcpServerIds)
+            ? [...role.enabledMcpServerIds]
+            : (mcpStore.servers || [])
+                  .filter((s) => s.enabled)
+                  .map((s) => s.id),
     };
     roleDialogOpen.value = true;
+}
+
+function toggleRoleServer(serverId: string, checked: boolean) {
+    const next = new Set(roleForm.value.enabledMcpServerIds || []);
+    if (checked) next.add(serverId);
+    else next.delete(serverId);
+    roleForm.value.enabledMcpServerIds = Array.from(next);
 }
 
 async function saveRole() {
@@ -211,6 +231,7 @@ async function saveRole() {
             modelId: roleForm.value.modelId,
             systemPrompt: roleForm.value.systemPrompt,
             color: roleForm.value.color,
+            enabledMcpServerIds: roleForm.value.enabledMcpServerIds,
         });
     } else {
         await meetingStore.addRole(props.meetingId, {
@@ -219,6 +240,7 @@ async function saveRole() {
             modelId: roleForm.value.modelId,
             systemPrompt: roleForm.value.systemPrompt,
             color: roleForm.value.color,
+            enabledMcpServerIds: roleForm.value.enabledMcpServerIds,
         });
     }
 
@@ -491,6 +513,47 @@ const selectedModel = computed(() => {
                             "
                             class="mt-1"
                         />
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label>工具（按角色启用 MCP Server）</Label>
+                        <p class="text-xs text-muted-foreground">
+                            该角色只能调用你在此勾选的 MCP 工具（不同 AI
+                            可配置不同工具）。
+                        </p>
+                        <div
+                            v-if="mcpStore.servers.length === 0"
+                            class="text-xs text-muted-foreground"
+                        >
+                            未配置 MCP Server（可到 MCP 页面配置）
+                        </div>
+                        <div
+                            v-else
+                            class="max-h-48 overflow-auto rounded-md border p-2"
+                        >
+                            <label
+                                v-for="s in mcpStore.servers"
+                                :key="s.id"
+                                class="flex items-center gap-2 text-sm py-1"
+                            >
+                                <input
+                                    type="checkbox"
+                                    :checked="
+                                        (
+                                            roleForm.enabledMcpServerIds || []
+                                        ).includes(s.id)
+                                    "
+                                    @change="
+                                        toggleRoleServer(
+                                            s.id,
+                                            ($event.target as HTMLInputElement)
+                                                .checked,
+                                        )
+                                    "
+                                />
+                                <span class="truncate">{{ s.name }}</span>
+                            </label>
+                        </div>
                     </div>
 
                     <div>

@@ -10,6 +10,7 @@ import {
     Send,
     Repeat,
     FileText,
+    Download,
 } from "lucide-vue-next";
 import MeetingChat from "./MeetingChat.vue";
 import SpeakerQueue from "./SpeakerQueue.vue";
@@ -66,6 +67,54 @@ const canSummarize = computed(() => {
     if (!meeting) return false;
     return (meeting.messages?.length ?? 0) > 0;
 });
+
+async function exportMeetingMarkdown() {
+    const md = await meetingStore.exportMeetingMarkdown(props.meetingId);
+    const title = (activeMeeting.value?.title || "会议").trim() || "会议";
+    const safeName = title.replace(/[\\/:*?"<>|]/g, "-");
+    const defaultName = `${safeName}.md`;
+
+    // 优先走 Tauri：弹出保存对话框
+    try {
+        const dialog = await import("@tauri-apps/plugin-dialog");
+        const fs = await import("@tauri-apps/plugin-fs");
+        const path = await (dialog as any).save?.({
+            defaultPath: defaultName,
+            filters: [{ name: "Markdown", extensions: ["md"] }],
+        });
+        if (!path) return;
+
+        await (fs as any).writeTextFile(path, md);
+        (window as any).ElMessage?.success?.("已导出 Markdown");
+        return;
+    } catch (e) {
+        // ignore
+        console.log(`Tauri 保存失败，使用 Web fallback：${e}`);
+    }
+
+    // Web fallback：下载
+    try {
+        const blob = new Blob([md], {
+            type: "text/markdown;charset=utf-8",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = defaultName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        (window as any).ElMessage?.success?.("已导出 Markdown");
+    } catch {
+        try {
+            await navigator.clipboard.writeText(md);
+            (window as any).ElMessage?.success?.("已复制 Markdown 到剪贴板");
+        } catch {
+            (window as any).ElMessage?.error?.("导出失败");
+        }
+    }
+}
 
 async function startMeeting() {
     await meetingStore.startMeeting(props.meetingId);
@@ -327,6 +376,16 @@ onUnmounted(() => {
                     >
                         <Repeat class="w-4 h-4" />
                         自动循环：{{ autoCycleEnabled ? "开" : "关" }}
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        class="gap-2"
+                        :disabled="meetingStore.isGenerating"
+                        @click="exportMeetingMarkdown"
+                    >
+                        <Download class="w-4 h-4" />
+                        导出 Markdown
                     </Button>
                     <Button
                         size="sm"

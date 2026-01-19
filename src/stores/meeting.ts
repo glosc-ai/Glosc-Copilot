@@ -706,6 +706,94 @@ export const useMeetingStore = defineStore("meeting", {
             await storeUtils.set(this.meetingKey(meetingId), meeting, true);
         },
 
+        // ============ 导出 ============
+        async exportMeetingMarkdown(meetingId: string) {
+            await this.ensureMeetingLoaded(meetingId);
+            const meeting = this.meetings[meetingId];
+            if (!meeting) return "";
+
+            const formatTime = (ts?: number) => {
+                if (!ts) return "";
+                const d = new Date(ts);
+                const pad2 = (n: number) => String(n).padStart(2, "0");
+                return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+            };
+
+            const safe = (s: any) => (typeof s === "string" ? s : "");
+            const title = safe(meeting.title) || "会议";
+
+            const lines: string[] = [];
+            lines.push(`# ${title}`);
+            lines.push("");
+            lines.push(`- 会议ID：${meeting.id}`);
+            lines.push(`- 创建时间：${formatTime(meeting.createdAt)}`);
+            lines.push(`- 更新时间：${formatTime(meeting.updatedAt)}`);
+            lines.push("");
+
+            const summary = safe(meeting.summary).trim();
+            if (summary) {
+                lines.push("## 会议背景");
+                lines.push("");
+                lines.push(summary);
+                lines.push("");
+            }
+
+            lines.push("## 参与角色");
+            lines.push("");
+            if ((meeting.roles || []).length === 0) {
+                lines.push("（无）");
+                lines.push("");
+            } else {
+                lines.push("| 角色 | 模型 | 备注 |");
+                lines.push("| --- | --- | --- |");
+                for (const r of meeting.roles) {
+                    const name = safe(r.name) || r.id;
+                    const model = safe(r.modelId) || "";
+                    const note = safe(r.systemPrompt)
+                        .replace(/\r\n/g, "\n")
+                        .replace(/\n/g, " ")
+                        .slice(0, 120);
+                    lines.push(`| ${name} | ${model} | ${note} |`);
+                }
+                lines.push("");
+            }
+
+            lines.push("## 对话记录");
+            lines.push("");
+            const msgs = meeting.messages || [];
+            if (msgs.length === 0) {
+                lines.push("（无）");
+                lines.push("");
+            } else {
+                for (const m of msgs) {
+                    const speaker =
+                        safe(m.speakerName) || safe(m.speakerId) || m.role;
+                    const ts = formatTime(m.timestamp);
+                    const header = ts
+                        ? `### ${speaker} · ${ts}`
+                        : `### ${speaker}`;
+                    lines.push(header);
+                    lines.push("");
+                    const content = safe(m.content).replace(/\r\n/g, "\n");
+                    lines.push(content || "（空）");
+
+                    const reasoning = safe((m as any).reasoning).trim();
+                    if (reasoning) {
+                        lines.push("");
+                        lines.push("<details><summary>推理过程</summary>");
+                        lines.push("");
+                        lines.push("```\n" + reasoning + "\n```");
+                        lines.push("");
+                        lines.push("</details>");
+                    }
+
+                    lines.push("");
+                }
+            }
+
+            return lines.join("\n");
+        },
+
         // ============ 模型管理 ============
         async loadAvailableModels() {
             this.isLoadingModels = true;
