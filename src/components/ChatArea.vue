@@ -782,6 +782,130 @@ const tokenizer = TokenizerLoader.fromPreTrained({
     tokenizerJSON,
 });
 
+// 将任意附件按“二进制大小”估算 token（避免把 base64 直接塞进 tokenizer）
+// 经验值：1 token ~ 4 bytes（仅用于前端展示的粗略估算）
+const BYTES_PER_TOKEN = 4;
+const attachmentByteSizeCache = shallowRef<Map<string, number>>(new Map());
+const attachmentByteSizeInFlight = shallowRef<Set<string>>(new Set());
+
+function attachmentCacheKey(messageId: string, part: any, index: number) {
+    const partId = part?.id ?? part?.url ?? part?.filename ?? part?.name;
+    const raw = String(partId ?? index);
+    const safe = raw.length > 200 ? raw.slice(0, 200) : raw;
+    return `${messageId}::${safe}`;
+}
+
+function estimateTokensFromBytes(bytes: number) {
+    const safe = Number.isFinite(bytes) ? Math.max(0, bytes) : 0;
+    return Math.ceil(safe / BYTES_PER_TOKEN);
+}
+
+function dataUrlByteSize(dataUrl: string): number | null {
+    if (!dataUrl.startsWith("data:")) return null;
+    const comma = dataUrl.indexOf(",");
+    if (comma < 0) return null;
+
+    const meta = dataUrl.slice(0, comma);
+    const payload = dataUrl.slice(comma + 1);
+
+    try {
+        if (meta.includes(";base64")) {
+            // base64 bytes ≈ (len * 3 / 4) - padding
+            const padding = payload.endsWith("==")
+                ? 2
+                : payload.endsWith("=")
+                  ? 1
+                  : 0;
+            return Math.max(0, Math.floor((payload.length * 3) / 4) - padding);
+        }
+        // 非 base64：按 URL 编码文本解码后再测 UTF-8 字节数
+        const decoded = decodeURIComponent(payload);
+        return new TextEncoder().encode(decoded).length;
+    } catch {
+        return null;
+    }
+}
+
+async function fetchUrlByteSize(url: string): Promise<number | null> {
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const len = res.headers.get("content-length");
+        if (len && /^\d+$/.test(len)) return Number(len);
+        const blob = await res.blob();
+        return blob.size;
+    } catch {
+        return null;
+    }
+}
+
+function getMessageText(msg: UIMessage): string {
+    return (
+        msg.parts
+            ?.filter((p) => p.type === "text")
+            .map((p) => (p as any).text)
+            .join("\n") ||
+        (msg as any).text ||
+        ""
+    );
+}
+
+function getKnownAttachmentByteSize(part: any): number | null {
+    if (typeof part?.file?.size === "number") return part.file.size;
+    if (typeof part?.size === "number") return part.size;
+    const url = typeof part?.url === "string" ? part.url : "";
+    if (url.startsWith("data:")) return dataUrlByteSize(url);
+    return null;
+}
+
+function getOrScheduleAttachmentByteSize(
+    messageId: string,
+    part: any,
+    index: number,
+): number | null {
+    const key = attachmentCacheKey(messageId, part, index);
+    const cached = attachmentByteSizeCache.value.get(key);
+    if (typeof cached === "number") return cached;
+
+    const known = getKnownAttachmentByteSize(part);
+    if (typeof known === "number") {
+        const next = new Map(attachmentByteSizeCache.value);
+        next.set(key, known);
+        attachmentByteSizeCache.value = next;
+        return known;
+    }
+
+    const url = typeof part?.url === "string" ? part.url : "";
+    const shouldFetch =
+        url.startsWith("blob:") ||
+        url.startsWith("http:") ||
+        url.startsWith("https:");
+    if (!shouldFetch) return null;
+
+    if (attachmentByteSizeInFlight.value.has(key)) return null;
+    const nextInFlight = new Set(attachmentByteSizeInFlight.value);
+    nextInFlight.add(key);
+    attachmentByteSizeInFlight.value = nextInFlight;
+
+    void (async () => {
+        try {
+            const size = await fetchUrlByteSize(url);
+            if (typeof size === "number") {
+                const nextCache = new Map(attachmentByteSizeCache.value);
+                nextCache.set(key, size);
+                attachmentByteSizeCache.value = nextCache;
+            }
+        } finally {
+            const nextSet = new Set(attachmentByteSizeInFlight.value);
+            nextSet.delete(key);
+            attachmentByteSizeInFlight.value = nextSet;
+            if (status.value !== "streaming") scheduleRecalcUsage(0);
+        }
+    })();
+
+    return null;
+}
+
 const calculatedUsage = shallowRef({
     inputTokens: 0,
     outputTokens: 0,
@@ -808,15 +932,20 @@ const recalcUsage = () => {
     let input = 0;
     let output = 0;
     for (const msg of messages.value || []) {
-        const content =
-            msg.parts
-                ?.filter((p) => p.type === "text")
-                .map((p) => (p as any).text)
-                .join("\n") ||
-            (msg as any).text ||
-            "";
+        const text = getMessageText(msg);
+        const textTokens = tokenizer.encode(text).length || 0;
 
-        const tokens = tokenizer.encode(content).length || 0;
+        let binaryTokens = 0;
+        const fileParts = getMessageFileParts(msg);
+        for (let index = 0; index < fileParts.length; index += 1) {
+            const part = fileParts[index];
+            const bytes = getOrScheduleAttachmentByteSize(msg.id, part, index);
+            if (typeof bytes === "number") {
+                binaryTokens += estimateTokensFromBytes(bytes);
+            }
+        }
+
+        const tokens = textTokens + binaryTokens;
         if (msg.role === "assistant") output += tokens;
         else input += tokens;
     }
