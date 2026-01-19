@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { computed } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
 import { Button } from "@/components/ui/button";
-import { Plus, GripVertical, X, User, ListTodo } from "lucide-vue-next";
+import { GripVertical, X, User, ListTodo } from "lucide-vue-next";
 import type { QueueNode } from "@/utils/meetingInterface";
-import { VueDraggable } from "vue-draggable-next";
+import { VueDraggableNext } from "vue-draggable-next";
 
 const props = defineProps<{
     meetingId: string;
@@ -81,7 +81,7 @@ const currentSpeakerIndex = computed(() => activeMeeting.value?.currentSpeakerIn
         </div>
 
         <div class="flex-1 overflow-y-auto p-4 space-y-2">
-            <VueDraggable v-model="queueNodes" :animation="150" handle=".drag-handle">
+            <VueDraggableNext v-model="queueNodes" :animation="150" handle=".drag-handle">
                 <div
                     v-for="(node, index) in queueNodes"
                     :key="node.id"
@@ -126,7 +126,7 @@ const currentSpeakerIndex = computed(() => activeMeeting.value?.currentSpeakerIn
                         <X class="w-3 h-3" />
                     </Button>
                 </div>
-            </VueDraggable>
+            </VueDraggableNext>
 
             <div
                 v-if="!queueNodes.length"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, nextTick, onUnmounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
 import { Button } from "@/components/ui/button";
@@ -8,14 +8,13 @@ import MeetingChat from "./MeetingChat.vue";
 import SpeakerQueue from "./SpeakerQueue.vue";
 import RoleList from "./RoleList.vue";
 import { Textarea } from "@/components/ui/textarea";
-import type { QueueNode } from "@/utils/meetingInterface";
 
 const props = defineProps<{
     meetingId: string;
 }>();
 
 const meetingStore = useMeetingStore();
-const { activeMeeting, currentStatus, isGenerating } = storeToRefs(meetingStore);
+const { activeMeeting, currentStatus } = storeToRefs(meetingStore);
 
 const userInput = ref("");
 const chatRef = ref<InstanceType<typeof MeetingChat>>();
