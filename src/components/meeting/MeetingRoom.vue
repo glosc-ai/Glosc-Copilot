@@ -37,7 +37,9 @@ const canResume = computed(() => {
 });
 
 const canStop = computed(() => {
-    return currentStatus.value === "running" || currentStatus.value === "paused";
+    return (
+        currentStatus.value === "running" || currentStatus.value === "paused"
+    );
 });
 
 async function startMeeting() {
@@ -62,12 +64,20 @@ async function resumeMeeting() {
 }
 
 async function stopMeeting() {
-    if (confirm("确定要停止会议吗？")) {
-        await meetingStore.stopMeeting(props.meetingId);
-        if (abortController.value) {
-            abortController.value.abort();
-            abortController.value = null;
-        }
+    try {
+        await ElMessageBox.confirm("确定要停止会议吗？", "提示", {
+            type: "warning",
+            confirmButtonText: "停止",
+            cancelButtonText: "取消",
+        });
+    } catch {
+        return;
+    }
+
+    await meetingStore.stopMeeting(props.meetingId);
+    if (abortController.value) {
+        abortController.value.abort();
+        abortController.value = null;
     }
 }
 
@@ -99,7 +109,11 @@ async function sendUserMessage() {
 async function processQueue() {
     while (currentStatus.value === "running") {
         const meeting = activeMeeting.value;
-        if (!meeting || !meeting.speakerQueue || meeting.speakerQueue.length === 0) {
+        if (
+            !meeting ||
+            !meeting.speakerQueue ||
+            meeting.speakerQueue.length === 0
+        ) {
             // 队列为空，暂停会议
             await meetingStore.pauseMeeting(props.meetingId);
             break;
@@ -161,7 +175,10 @@ async function generateRoleSpeech(roleId: string) {
 
         // 通过 chatRef 调用生成方法
         if (chatRef.value) {
-            await chatRef.value.generateRoleMessage(role, abortController.value);
+            await chatRef.value.generateRoleMessage(
+                role,
+                abortController.value,
+            );
         }
     } catch (error: any) {
         if (error.name === "AbortError") {
