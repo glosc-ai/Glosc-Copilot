@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
 
-const props = defineProps<{
+defineProps<{
     meetingId: string;
 }>();
 
@@ -46,7 +46,9 @@ const currentSpeakerId = computed(() => {
                 <div class="flex items-center gap-3">
                     <div
                         class="w-10 h-10 rounded-full flex items-center justify-center text-xl shrink-0"
-                        :style="{ backgroundColor: (role.color || '#6b7280') + '20' }"
+                        :style="{
+                            backgroundColor: (role.color || '#6b7280') + '20',
+                        }"
                     >
                         {{ role.avatar || "👤" }}
                     </div>

@@ -330,8 +330,19 @@ async function openFile(node: TreeNode) {
     }
 
     if (isDirty.value) {
-        const ok = window.confirm("当前文件有未保存的修改，确定要切换文件吗？");
-        if (!ok) return;
+        try {
+            await ElMessageBox.confirm(
+                "当前文件有未保存的修改，确定要切换文件吗？",
+                "提示",
+                {
+                    type: "warning",
+                    confirmButtonText: "切换",
+                    cancelButtonText: "取消",
+                },
+            );
+        } catch {
+            return;
+        }
     }
 
     fileLoadError.value = null;
@@ -365,7 +376,7 @@ async function saveActiveFile() {
                 : typeof e === "string"
                   ? e
                   : "保存失败";
-        window.alert(msg);
+        ElMessage.error(msg);
     } finally {
         fileSaving.value = false;
     }
@@ -377,10 +388,19 @@ function updateEditorValue(v: string) {
 
 async function createWorkspace() {
     if (isDirty.value) {
-        const ok = window.confirm(
-            "当前文件有未保存的修改，确定要切换工作区吗？",
-        );
-        if (!ok) return;
+        try {
+            await ElMessageBox.confirm(
+                "当前文件有未保存的修改，确定要切换工作区吗？",
+                "提示",
+                {
+                    type: "warning",
+                    confirmButtonText: "切换",
+                    cancelButtonText: "取消",
+                },
+            );
+        } catch {
+            return;
+        }
     }
 
     const selected = await open({

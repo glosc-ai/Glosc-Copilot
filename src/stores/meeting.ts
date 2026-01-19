@@ -34,6 +34,54 @@ export const useMeetingStore = defineStore("meeting", {
     }),
 
     getters: {
+        // 按日期分组的会议列表（逻辑对齐 chatStore.groupedConversations）
+        groupedMeetings: (state) => {
+            const groups: Record<string, MeetingItem[]> = {};
+            const now = new Date();
+            const today = new Date(
+                now.getFullYear(),
+                now.getMonth(),
+                now.getDate(),
+            );
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            state.meetingsItems.forEach((item) => {
+                const date = new Date(item.timestamp || 0);
+                let dateKey: string;
+
+                if (date >= today) {
+                    dateKey = "今天";
+                } else if (date >= yesterday) {
+                    dateKey = "昨天";
+                } else {
+                    dateKey = date.toISOString().split("T")[0];
+                }
+
+                if (!groups[dateKey]) {
+                    groups[dateKey] = [];
+                }
+                groups[dateKey].push(item);
+            });
+
+            const sortedGroups: Record<string, MeetingItem[]> = {};
+            const keys = Object.keys(groups).sort((a, b) => {
+                if (a === "今天") return -1;
+                if (b === "今天") return 1;
+                if (a === "昨天") return -1;
+                if (b === "昨天") return 1;
+                return b.localeCompare(a);
+            });
+
+            keys.forEach((key) => {
+                sortedGroups[key] = groups[key].sort((a, b) => {
+                    return (b.timestamp || 0) - (a.timestamp || 0);
+                });
+            });
+
+            return sortedGroups;
+        },
+
         // 当前激活的会议
         activeMeeting(state): Meeting | null {
             if (!state.activeKey) return null;
@@ -96,7 +144,11 @@ export const useMeetingStore = defineStore("meeting", {
                     order?: string[];
                 }>(this.meetingIndexKey());
 
-                if (index && index.version === 1 && Array.isArray(index.items)) {
+                if (
+                    index &&
+                    index.version === 1 &&
+                    Array.isArray(index.items)
+                ) {
                     const order =
                         Array.isArray(index.order) && index.order.length > 0
                             ? index.order
@@ -138,7 +190,9 @@ export const useMeetingStore = defineStore("meeting", {
             if (this.loadedMeetingIds[id] && this.meetings[id]) return;
 
             try {
-                const meeting = await storeUtils.get<Meeting>(this.meetingKey(id));
+                const meeting = await storeUtils.get<Meeting>(
+                    this.meetingKey(id),
+                );
                 if (meeting) {
                     this.meetings[id] = meeting;
                     this.loadedMeetingIds[id] = true;
@@ -216,7 +270,11 @@ export const useMeetingStore = defineStore("meeting", {
                 if (this.loadedMeetingIds[id] && this.meetings[id]) {
                     this.meetings[id].title = newTitle;
                     this.meetings[id].updatedAt = Date.now();
-                    await storeUtils.set(this.meetingKey(id), this.meetings[id], true);
+                    await storeUtils.set(
+                        this.meetingKey(id),
+                        this.meetings[id],
+                        true,
+                    );
                 }
 
                 const item = this.meetingsItems.find((item) => item.key === id);
@@ -268,6 +326,29 @@ export const useMeetingStore = defineStore("meeting", {
             } catch (error) {
                 console.error("删除会议失败:", error);
             }
+        },
+
+        /**
+         * 拖拽排序：把 sourceKey 移动到 targetKey 之前。
+         */
+        async moveMeeting(sourceKey: string, targetKey: string) {
+            if (sourceKey === targetKey) return;
+
+            const fromIndex = this.meetingsItems.findIndex(
+                (it) => it.key === sourceKey,
+            );
+            const toIndex = this.meetingsItems.findIndex(
+                (it) => it.key === targetKey,
+            );
+            if (fromIndex < 0 || toIndex < 0) return;
+
+            const next = [...this.meetingsItems];
+            const [moved] = next.splice(fromIndex, 1);
+            const insertIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+            next.splice(insertIndex, 0, moved);
+            this.meetingsItems = next;
+
+            await this.persistIndex();
         },
 
         // ============ 角色管理 ============
@@ -345,7 +426,10 @@ export const useMeetingStore = defineStore("meeting", {
         },
 
         // ============ 消息管理 ============
-        async addMessage(meetingId: string, message: Omit<MeetingMessage, "id" | "timestamp">) {
+        async addMessage(
+            meetingId: string,
+            message: Omit<MeetingMessage, "id" | "timestamp">,
+        ) {
             await this.ensureMeetingLoaded(meetingId);
             const meeting = this.meetings[meetingId];
             if (!meeting) return;
@@ -394,7 +478,9 @@ export const useMeetingStore = defineStore("meeting", {
             const meeting = this.meetings[meetingId];
             if (!meeting) return;
 
-            meeting.messages = meeting.messages.filter((m) => m.id !== messageId);
+            meeting.messages = meeting.messages.filter(
+                (m) => m.id !== messageId,
+            );
             meeting.updatedAt = Date.now();
 
             const item = this.meetingsItems.find((it) => it.key === meetingId);
@@ -418,7 +504,11 @@ export const useMeetingStore = defineStore("meeting", {
             await storeUtils.set(this.meetingKey(meetingId), meeting, true);
         },
 
-        async addToQueue(meetingId: string, node: Omit<QueueNode, "id">, position?: number) {
+        async addToQueue(
+            meetingId: string,
+            node: Omit<QueueNode, "id">,
+            position?: number,
+        ) {
             await this.ensureMeetingLoaded(meetingId);
             const meeting = this.meetings[meetingId];
             if (!meeting) return;
@@ -430,7 +520,11 @@ export const useMeetingStore = defineStore("meeting", {
                 id: crypto.randomUUID(),
             };
 
-            if (position !== undefined && position >= 0 && position < meeting.speakerQueue.length) {
+            if (
+                position !== undefined &&
+                position >= 0 &&
+                position < meeting.speakerQueue.length
+            ) {
                 meeting.speakerQueue.splice(position, 0, newNode);
             } else {
                 meeting.speakerQueue.push(newNode);
@@ -447,7 +541,9 @@ export const useMeetingStore = defineStore("meeting", {
 
             if (!meeting.speakerQueue) return;
 
-            meeting.speakerQueue = meeting.speakerQueue.filter((n) => n.id !== nodeId);
+            meeting.speakerQueue = meeting.speakerQueue.filter(
+                (n) => n.id !== nodeId,
+            );
             meeting.updatedAt = Date.now();
 
             await storeUtils.set(this.meetingKey(meetingId), meeting, true);
@@ -507,7 +603,10 @@ export const useMeetingStore = defineStore("meeting", {
             if (meeting.currentSpeakerIndex !== undefined) {
                 meeting.currentSpeakerIndex++;
                 // 确保不超出队列范围
-                if (meeting.speakerQueue && meeting.currentSpeakerIndex >= meeting.speakerQueue.length) {
+                if (
+                    meeting.speakerQueue &&
+                    meeting.currentSpeakerIndex >= meeting.speakerQueue.length
+                ) {
                     meeting.currentSpeakerIndex = meeting.speakerQueue.length;
                 }
             }
@@ -536,18 +635,32 @@ export const useMeetingStore = defineStore("meeting", {
             const meeting = this.meetings[meetingId];
             if (!meeting) return DEFAULT_COLORS[0];
 
-            const usedColors = new Set(meeting.roles.map((r) => r.color).filter(Boolean));
-            const availableColor = DEFAULT_COLORS.find((c) => !usedColors.has(c));
-            return availableColor || DEFAULT_COLORS[meeting.roles.length % DEFAULT_COLORS.length];
+            const usedColors = new Set(
+                meeting.roles.map((r) => r.color).filter(Boolean),
+            );
+            const availableColor = DEFAULT_COLORS.find(
+                (c) => !usedColors.has(c),
+            );
+            return (
+                availableColor ||
+                DEFAULT_COLORS[meeting.roles.length % DEFAULT_COLORS.length]
+            );
         },
 
         getNextAvailableAvatar(meetingId: string): string {
             const meeting = this.meetings[meetingId];
             if (!meeting) return DEFAULT_AVATARS[0];
 
-            const usedAvatars = new Set(meeting.roles.map((r) => r.avatar).filter(Boolean));
-            const availableAvatar = DEFAULT_AVATARS.find((a) => !usedAvatars.has(a));
-            return availableAvatar || DEFAULT_AVATARS[meeting.roles.length % DEFAULT_AVATARS.length];
+            const usedAvatars = new Set(
+                meeting.roles.map((r) => r.avatar).filter(Boolean),
+            );
+            const availableAvatar = DEFAULT_AVATARS.find(
+                (a) => !usedAvatars.has(a),
+            );
+            return (
+                availableAvatar ||
+                DEFAULT_AVATARS[meeting.roles.length % DEFAULT_AVATARS.length]
+            );
         },
     },
 });

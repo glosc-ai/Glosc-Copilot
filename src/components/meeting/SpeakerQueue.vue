@@ -68,7 +68,11 @@ async function removeFromQueue(nodeId: string) {
     await meetingStore.removeFromQueue(props.meetingId, nodeId);
 }
 
-const currentSpeakerIndex = computed(() => activeMeeting.value?.currentSpeakerIndex ?? 0);
+const currentSpeakerIndex = computed(
+    () => activeMeeting.value?.currentSpeakerIndex ?? 0,
+);
+
+console.log(currentSpeakerIndex.value);
 </script>
 
 <template>
@@ -81,7 +85,11 @@ const currentSpeakerIndex = computed(() => activeMeeting.value?.currentSpeakerIn
         </div>
 
         <div class="flex-1 overflow-y-auto p-4 space-y-2">
-            <VueDraggableNext v-model="queueNodes" :animation="150" handle=".drag-handle">
+            <VueDraggableNext
+                v-model="queueNodes"
+                :animation="150"
+                handle=".drag-handle"
+            >
                 <div
                     v-for="(node, index) in queueNodes"
                     :key="node.id"
@@ -97,7 +105,9 @@ const currentSpeakerIndex = computed(() => activeMeeting.value?.currentSpeakerIn
                     </div>
 
                     <!-- 序号 -->
-                    <div class="text-xs text-muted-foreground w-6 text-center shrink-0">
+                    <div
+                        class="text-xs text-muted-foreground w-6 text-center shrink-0"
+                    >
                         {{ index + 1 }}
                     </div>
 
