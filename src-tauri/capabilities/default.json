@@ -34,10 +34,15 @@
     "store:allow-load",
     "dialog:allow-confirm",
 <<<<<<< HEAD
+<<<<<<< HEAD
     "dialog:allow-save",
     "dialog:default",
 =======
 >>>>>>> 5e25028 (实现基础会议功能)
+=======
+    "dialog:allow-save",
+    "dialog:default",
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
     "shell:allow-execute",
     "shell:allow-open",
     "cors-fetch:default",

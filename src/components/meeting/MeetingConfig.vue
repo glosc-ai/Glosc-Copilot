@@ -5,6 +5,7 @@ import { computed, ref, onMounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { useChatStore } from "@/stores/chat";
 import { useMcpStore } from "@/stores/mcp";
+<<<<<<< HEAD
 =======
 import { computed, ref } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
@@ -14,6 +15,8 @@ import { computed, ref, onMounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { useChatStore } from "@/stores/chat";
 >>>>>>> 5e25028 (实现基础会议功能)
+=======
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
 import { storeToRefs } from "pinia";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,10 +56,15 @@ const { activeMeeting, availableModels } = storeToRefs(meetingStore);
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 const mcpStore = useMcpStore();
 
 =======
 >>>>>>> 5e25028 (实现基础会议功能)
+=======
+const mcpStore = useMcpStore();
+
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
 const chatStore = useChatStore();
 const { recentModelUsage } = storeToRefs(chatStore);
 
@@ -65,6 +73,9 @@ onMounted(() => {
         void chatStore.loadRecentModelUsage();
     }
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
     void mcpStore.init();
 });
 
@@ -90,9 +101,13 @@ const roleForm = ref({
     systemPrompt: "",
     color: "",
 <<<<<<< HEAD
+<<<<<<< HEAD
     enabledMcpServerIds: [] as string[],
 =======
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+    enabledMcpServerIds: [] as string[],
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
 });
 
 const isEditMode = computed(() => editingRoleId.value !== null);
@@ -249,11 +264,17 @@ function openAddRoleDialog() {
         systemPrompt: "",
         color: meetingStore.getNextAvailableColor(props.meetingId),
 <<<<<<< HEAD
+<<<<<<< HEAD
         enabledMcpServerIds: (mcpStore.servers || [])
             .filter((s) => s.enabled)
             .map((s) => s.id),
 =======
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+        enabledMcpServerIds: (mcpStore.servers || [])
+            .filter((s) => s.enabled)
+            .map((s) => s.id),
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
     };
     roleDialogOpen.value = true;
 }
@@ -267,18 +288,27 @@ function openEditRoleDialog(role: MeetingRole) {
         systemPrompt: role.systemPrompt,
         color: role.color || "",
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
         enabledMcpServerIds: Array.isArray(role.enabledMcpServerIds)
             ? [...role.enabledMcpServerIds]
             : (mcpStore.servers || [])
                   .filter((s) => s.enabled)
                   .map((s) => s.id),
+<<<<<<< HEAD
 =======
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
     };
     roleDialogOpen.value = true;
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
 function toggleRoleServer(serverId: string, checked: boolean) {
     const next = new Set(roleForm.value.enabledMcpServerIds || []);
     if (checked) next.add(serverId);
@@ -309,9 +339,13 @@ async function saveRole() {
             systemPrompt: roleForm.value.systemPrompt,
             color: roleForm.value.color,
 <<<<<<< HEAD
+<<<<<<< HEAD
             enabledMcpServerIds: roleForm.value.enabledMcpServerIds,
 =======
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+            enabledMcpServerIds: roleForm.value.enabledMcpServerIds,
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
         });
     } else {
         await meetingStore.addRole(props.meetingId, {
@@ -321,9 +355,13 @@ async function saveRole() {
             systemPrompt: roleForm.value.systemPrompt,
             color: roleForm.value.color,
 <<<<<<< HEAD
+<<<<<<< HEAD
             enabledMcpServerIds: roleForm.value.enabledMcpServerIds,
 =======
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+            enabledMcpServerIds: roleForm.value.enabledMcpServerIds,
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
         });
     }
 
@@ -727,6 +765,9 @@ const selectedModel = computed(() => {
                     </div>
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
                     <div class="space-y-2">
                         <Label>工具（按角色启用 MCP Server）</Label>
                         <p class="text-xs text-muted-foreground">

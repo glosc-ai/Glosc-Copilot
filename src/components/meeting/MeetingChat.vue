@@ -17,6 +17,7 @@ import { meetingMessagesToUiMessages } from "@/utils/MeetingUiMessageAdapter";
 import { useMcpStore } from "@/stores/mcp";
 import { McpUtils } from "@/utils/McpUtils";
 import { ChatUtils } from "@/utils/ChatUtils";
+<<<<<<< HEAD
 =======
 import { ref, computed, watch, nextTick } from "vue";
 =======
@@ -43,6 +44,8 @@ import ChatMessageItem from "@/components/chat/ChatMessageItem.vue";
 import { meetingMessagesToUiMessages } from "@/utils/MeetingUiMessageAdapter";
 import { useAuthStore } from "@/stores/auth";
 >>>>>>> 5e25028 (实现基础会议功能)
+=======
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
 
 const props = defineProps<{
     meetingId: string;
@@ -52,14 +55,20 @@ const meetingStore = useMeetingStore();
 const { currentMessages, activeMeeting } = storeToRefs(meetingStore);
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
 const mcpStore = useMcpStore();
 
 onMounted(() => {
     void mcpStore.init();
 });
+<<<<<<< HEAD
 =======
 const authStore = useAuthStore();
 >>>>>>> 5e25028 (实现基础会议功能)
+=======
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
 
 const uiMessages = computed(() =>
     meetingMessagesToUiMessages(currentMessages.value),

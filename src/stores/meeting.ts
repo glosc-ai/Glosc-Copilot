@@ -844,6 +844,9 @@ export const useMeetingStore = defineStore("meeting", {
         },
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
         // ============ 导出 ============
         async exportMeetingMarkdown(meetingId: string) {
             await this.ensureMeetingLoaded(meetingId);
@@ -932,8 +935,11 @@ export const useMeetingStore = defineStore("meeting", {
             return lines.join("\n");
         },
 
+<<<<<<< HEAD
 =======
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
         // ============ 模型管理 ============
         async loadAvailableModels() {
             this.isLoadingModels = true;

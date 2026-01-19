@@ -149,6 +149,7 @@ async function exportMeetingMarkdown() {
     }
 }
 
+<<<<<<< HEAD
 =======
     return currentStatus.value === "paused";
 });
@@ -160,6 +161,8 @@ const canStop = computed(() => {
 });
 
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+>>>>>>> d7bbb64 (为不同的角色添加不同的工具使用)
 async function startMeeting() {
     await meetingStore.startMeeting(props.meetingId);
     // 开始自动推进
