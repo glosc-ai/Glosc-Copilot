@@ -22,7 +22,7 @@ export class ChatUtils {
     static streamResponse(
         modelId: string,
         messages: ModelMessage[],
-        tools?: ToolSet
+        tools?: ToolSet,
     ) {
         return streamText({
             model: this.gateway(modelId),
@@ -37,7 +37,7 @@ export class ChatUtils {
             tools?: ToolSet;
             onToolCall?: (toolCall: any) => void;
             onFinish?: (result: any) => void;
-        } = {}
+        } = {},
     ) {
         const messages: ModelMessage[] = [];
         const status = ref<"ready" | "streaming" | "error">("ready");

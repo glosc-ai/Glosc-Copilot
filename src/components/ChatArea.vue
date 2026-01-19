@@ -56,7 +56,7 @@ const props = withDefaults(
     }>(),
     {
         apiPath: "/api/chat",
-    }
+    },
 );
 
 // import { nanoid } from "nanoid";
@@ -175,21 +175,21 @@ const recentModels = computed(() => {
 });
 
 const recentModelIdSet = computed(
-    () => new Set(recentModels.value.map((m) => m.id))
+    () => new Set(recentModels.value.map((m) => m.id)),
 );
 
 const filteredModels = computed(() =>
     (availableModels.value || [])
         .filter((m) => !recentModelIdSet.value.has(m.id))
-        .filter(matchesModelFilters)
+        .filter(matchesModelFilters),
 );
 
 const groupedModels = computed(() =>
-    groupModelsByProvider(filteredModels.value)
+    groupModelsByProvider(filteredModels.value),
 );
 const selectedModelData = computed(() => selectedModel.value);
 const selectedModelSearchTerm = computed(() =>
-    selectedModel.value ? getModelSearchTerm(selectedModel.value) : ""
+    selectedModel.value ? getModelSearchTerm(selectedModel.value) : "",
 );
 const openModelSelector = ref(false);
 
@@ -225,7 +225,7 @@ const messageTimestampKey = (conversationId: string, messageId: string) =>
 const getOrSetMessageTimestamp = (
     conversationId: string,
     messageId: string,
-    fallbackTimestamp?: number
+    fallbackTimestamp?: number,
 ) => {
     const key = messageTimestampKey(conversationId, messageId);
     const existing = messageTimestamps.value.get(key);
@@ -245,7 +245,7 @@ const formatTimestamp = (ts: number) => {
     const d = new Date(ts);
     const pad2 = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(
-        d.getDate()
+        d.getDate(),
     )} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 };
 
@@ -264,7 +264,7 @@ const isChatBusy = computed(
     () =>
         sendLock.value ||
         status.value === "submitted" ||
-        status.value === "streaming"
+        status.value === "streaming",
 );
 
 watch(
@@ -273,7 +273,7 @@ watch(
         if (next !== "submitted" && next !== "streaming") {
             sendLock.value = false;
         }
-    }
+    },
 );
 
 // ===== 用户消息编辑 / 重新发送 =====
@@ -296,7 +296,7 @@ function getMessageFileParts(message: UIMessage): any[] {
 function asAttachmentFile(
     part: any,
     messageId: string,
-    index: number
+    index: number,
 ): AttachmentFile {
     const id = part?.id ?? `${messageId}-file-${index}`;
     const filename = part?.filename ?? part?.name;
@@ -331,7 +331,7 @@ function replaceTextParts(parts: any[], nextText: string): any[] {
 async function sendChatMessage(
     text: string,
     messageId?: string,
-    files?: any[]
+    files?: any[],
 ) {
     if (isChatBusy.value) return;
 
@@ -355,7 +355,7 @@ async function sendChatMessage(
                     tools,
                     ...(webSearchEnabled.value ? { webSearch: true } : {}),
                 },
-            }
+            },
         );
     } finally {
         if (status.value !== "submitted" && status.value !== "streaming") {
@@ -424,7 +424,7 @@ async function confirmEditAndResendUserMessage() {
     const originalMessage = messages.value.find((m) => m.id === messageId);
     const files = originalMessage
         ? (originalMessage.parts.filter(
-              (part) => part.type === "file"
+              (part) => part.type === "file",
           ) as any[])
         : [];
 
@@ -460,7 +460,7 @@ function syncChatToStoreFor(conversationId: string) {
             timestamp: getOrSetMessageTimestamp(
                 conversationId,
                 m.id,
-                old?.timestamp
+                old?.timestamp,
             ),
             parts: m.parts,
             reasoning: old?.reasoning,
@@ -475,7 +475,7 @@ function syncChatToStoreFor(conversationId: string) {
     conversation.updatedAt = lastMessageTimestamp;
 
     const item = chatStore.conversationsItems.find(
-        (it) => it.key === conversationId
+        (it) => it.key === conversationId,
     );
     if (item) {
         item.timestamp = lastMessageTimestamp;
@@ -534,7 +534,7 @@ watch(
             hasGeneratedSummaryTitle.value = false;
         })();
     },
-    { immediate: true }
+    { immediate: true },
 );
 
 let syncTimer: number | null = null;
@@ -564,7 +564,7 @@ watch(
         }
         // 新消息进入（用户/助手占位）时，非流式情况下可以同步一次
         scheduleSyncChatToStore(0);
-    }
+    },
 );
 
 watch(
@@ -593,7 +593,7 @@ watch(
                 }
             }
         }
-    }
+    },
 );
 
 const lastAssistantMessageId = computed(() => {
@@ -607,7 +607,7 @@ const lastAssistantMessageId = computed(() => {
 const messagesWithCheckpoints = computed(() => {
     return messages.value.map((message, index) => {
         const checkpoint = checkpoints.value.find(
-            (cp) => cp.messageIndex === index
+            (cp) => cp.messageIndex === index,
         );
         return { message, index, checkpoint };
     });
@@ -646,7 +646,7 @@ async function handleSubmit(message: PromptInputMessage) {
                     tools,
                     ...(webSearchEnabled.value ? { webSearch: true } : {}),
                 },
-            }
+            },
         );
 
         p.catch((error) => {
@@ -680,13 +680,13 @@ const submitDisabled = computed(
         !hasPendingInput.value ||
         isChatBusy.value ||
         promptInput.isLoading.value ||
-        !authStore.isLoggedIn
+        !authStore.isLoggedIn,
 );
 
 function getSourceUrlParts(message: UIMessage) {
     return (
         message.parts?.filter(
-            (part): part is SourceUrlUIPart => part.type === "source-url"
+            (part): part is SourceUrlUIPart => part.type === "source-url",
         ) ?? []
     );
 }
@@ -773,7 +773,7 @@ function restoreToCheckpoint(messageIndex: number) {
     chat.sendMessage(messages.value.slice(0, messageIndex + 1) as any);
     // Remove checkpoints after this point
     checkpoints.value = checkpoints.value.filter(
-        (cp) => cp.messageIndex <= messageIndex
+        (cp) => cp.messageIndex <= messageIndex,
     );
 }
 
@@ -789,7 +789,7 @@ const calculatedUsage = shallowRef({
 });
 
 const contextMaxTokens = computed(
-    () => selectedModelData.value?.context_window ?? 0
+    () => selectedModelData.value?.context_window ?? 0,
 );
 
 const contextUsage = computed<LanguageModelUsage>(() => {
@@ -878,12 +878,12 @@ watch(
             }
             recalcUsage();
         }
-    }
+    },
 );
 
 watch(
     () => messages.value.length,
-    () => scheduleRecalcUsage(0)
+    () => scheduleRecalcUsage(0),
 );
 </script>
 
@@ -931,7 +931,7 @@ watch(
                                 />
                                 <SourcesContent
                                     v-for="(source, index) in getSourceUrlParts(
-                                        message
+                                        message,
                                     )"
                                     :key="`${message.id}-source-${index}`"
                                 >
@@ -963,7 +963,7 @@ watch(
                                             asAttachmentFile(
                                                 filePart,
                                                 message.id,
-                                                fileIndex
+                                                fileIndex,
                                             )
                                         "
                                         readonly
@@ -982,7 +982,7 @@ watch(
                                                     message.id &&
                                                 isLastTextPart(
                                                     message,
-                                                    partIndex
+                                                    partIndex,
                                                 )
                                             "
                                         >
@@ -998,7 +998,7 @@ watch(
                                                 :is-streaming="
                                                     isStreamingPart(
                                                         index,
-                                                        partIndex
+                                                        partIndex,
                                                     )
                                                 "
                                             />
@@ -1072,7 +1072,7 @@ watch(
                                         v-if="
                                             part.type === 'file' &&
                                             part.mediaType.startsWith(
-                                                'image/'
+                                                'image/',
                                             ) &&
                                             message.role === 'assistant'
                                         "
@@ -1088,7 +1088,7 @@ watch(
                                         v-if="
                                             shouldShowActions(
                                                 message,
-                                                partIndex
+                                                partIndex,
                                             ) && part.type === 'text'
                                         "
                                     >
@@ -1107,14 +1107,14 @@ watch(
                                         <span
                                             v-if="
                                                 getMessageTimestampText(
-                                                    message.id
+                                                    message.id,
                                                 )
                                             "
                                             class="ml-1 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity select-none"
                                         >
                                             {{
                                                 getMessageTimestampText(
-                                                    message.id
+                                                    message.id,
                                                 )
                                             }}
                                         </span>
@@ -1153,7 +1153,7 @@ watch(
                                                 label="编辑"
                                                 @click="
                                                     startEditUserMessage(
-                                                        message
+                                                        message,
                                                     )
                                                 "
                                             >
@@ -1174,14 +1174,14 @@ watch(
                                         <span
                                             v-if="
                                                 getMessageTimestampText(
-                                                    message.id
+                                                    message.id,
                                                 )
                                             "
                                             class="ml-1 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity select-none"
                                         >
                                             {{
                                                 getMessageTimestampText(
-                                                    message.id
+                                                    message.id,
                                                 )
                                             }}
                                         </span>
@@ -1305,7 +1305,7 @@ watch(
                                                         'w-2 h-2 rounded-full',
                                                         server.enabled
                                                             ? 'bg-green-500'
-                                                            : 'bg-gray-300'
+                                                            : 'bg-gray-300',
                                                     )
                                                 "
                                             />
@@ -1316,20 +1316,20 @@ watch(
                                         <DropdownMenuItem
                                             :disabled="
                                                 mcpTogglingServerIds.has(
-                                                    server.id
+                                                    server.id,
                                                 )
                                             "
                                             @click="
                                                 toggleServer(
                                                     server.id,
-                                                    !server.enabled
+                                                    !server.enabled,
                                                 )
                                             "
                                         >
                                             <Loader2Icon
                                                 v-if="
                                                     mcpTogglingServerIds.has(
-                                                        server.id
+                                                        server.id,
                                                     )
                                                 "
                                                 class="mr-2 h-4 w-4 animate-spin"
@@ -1342,7 +1342,7 @@ watch(
                                             <span
                                                 v-if="
                                                     mcpTogglingServerIds.has(
-                                                        server.id
+                                                        server.id,
                                                     )
                                                 "
                                             >
@@ -1377,7 +1377,7 @@ watch(
                                                             mcpStore
                                                                 .serverCapabilities[
                                                                 server.id
-                                                            ].tools
+                                                            ].tools,
                                                         ).length
                                                     }})
                                                 </div>
@@ -1387,7 +1387,7 @@ watch(
                                                             mcpStore
                                                                 .serverCapabilities[
                                                                 server.id
-                                                            ].tools
+                                                            ].tools,
                                                         )"
                                                         :key="String(name)"
                                                         class="truncate"
@@ -1471,7 +1471,7 @@ watch(
                                             {{
                                                 selectedModelData
                                                     ? formatModelName(
-                                                          selectedModelData.id
+                                                          selectedModelData.id,
                                                       )
                                                     : "选择模型..."
                                             }}
@@ -1539,21 +1539,21 @@ watch(
                                                 :key="tag"
                                                 :checked="
                                                     selectedModelTags.includes(
-                                                        tag
+                                                        tag,
                                                     )
                                                 "
                                                 @select.prevent="
                                                     updateSelectedTag(
                                                         tag,
                                                         !selectedModelTags.includes(
-                                                            tag
-                                                        )
+                                                            tag,
+                                                        ),
                                                     )
                                                 "
                                                 :class="{
                                                     'bg-blue-500!':
                                                         selectedModelTags.includes(
-                                                            tag
+                                                            tag,
                                                         ),
                                                 }"
                                             >
@@ -1603,21 +1603,21 @@ watch(
                                                 :key="owner"
                                                 :checked="
                                                     selectedModelOwners.includes(
-                                                        owner
+                                                        owner,
                                                     )
                                                 "
                                                 @select.prevent="
                                                     updateSelectedOwner(
                                                         owner,
                                                         !selectedModelOwners.includes(
-                                                            owner
-                                                        )
+                                                            owner,
+                                                        ),
                                                     )
                                                 "
                                                 :class="{
                                                     'bg-blue-500!':
                                                         selectedModelOwners.includes(
-                                                            owner
+                                                            owner,
                                                         ),
                                                 }"
                                             >
@@ -1671,7 +1671,7 @@ watch(
                                                     selectedModel?.id ===
                                                         item.id
                                                         ? 'bg-accent text-accent-foreground'
-                                                        : ''
+                                                        : '',
                                                 )
                                             "
                                             @select="
@@ -1688,7 +1688,7 @@ watch(
                                                         selectedModel?.id ===
                                                             item.id
                                                             ? 'opacity-100'
-                                                            : 'opacity-0'
+                                                            : 'opacity-0',
                                                     )
                                                 "
                                             />
@@ -1711,7 +1711,7 @@ watch(
                                                         >
                                                             {{
                                                                 formatModelName(
-                                                                    item.id
+                                                                    item.id,
                                                                 )
                                                             }}
                                                         </ModelSelectorName>
@@ -1731,7 +1731,7 @@ watch(
                                                             class="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
                                                             @click.stop="
                                                                 chatStore.removeRecentModel(
-                                                                    item.id
+                                                                    item.id,
                                                                 )
                                                             "
                                                         >
@@ -1834,7 +1834,7 @@ watch(
                                                     selectedModel?.id ===
                                                         item.id
                                                         ? 'bg-accent text-accent-foreground'
-                                                        : ''
+                                                        : '',
                                                 )
                                             "
                                             @select="
@@ -1851,7 +1851,7 @@ watch(
                                                         selectedModel?.id ===
                                                             item.id
                                                             ? 'opacity-100'
-                                                            : 'opacity-0'
+                                                            : 'opacity-0',
                                                     )
                                                 "
                                             />
@@ -1874,7 +1874,7 @@ watch(
                                                         >
                                                             {{
                                                                 formatModelName(
-                                                                    item.id
+                                                                    item.id,
                                                                 )
                                                             }}
                                                         </ModelSelectorName>

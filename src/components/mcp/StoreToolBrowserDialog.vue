@@ -84,7 +84,6 @@ async function load() {
 
     try {
         const res = await GloscStoreApi.listPlugins({
-            category: "工具",
             q: q.value.trim() || undefined,
             sort: "popular",
             limit: 50,
@@ -154,7 +153,7 @@ watch(
         await authStore.init();
         await Promise.all([load(), loadLibrary()]);
         activeTab.value = "browse";
-    }
+    },
 );
 
 watch(
@@ -166,7 +165,7 @@ watch(
             return;
         }
         await loadLibrary();
-    }
+    },
 );
 
 async function onInstall(plugin: StorePlugin) {

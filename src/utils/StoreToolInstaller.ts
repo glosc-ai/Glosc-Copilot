@@ -34,7 +34,7 @@ function validateToolConfig(toolConfig: ToolConfig) {
 
     if (mcp.runtime && mcp.runtime !== "python" && mcp.runtime !== "node") {
         throw new Error(
-            "config.yml 字段无效：mcp.runtime 必须为 python 或 node"
+            "config.yml 字段无效：mcp.runtime 必须为 python 或 node",
         );
     }
     if (mcp.entry !== undefined && typeof mcp.entry !== "string") {
@@ -54,13 +54,13 @@ function validateToolConfig(toolConfig: ToolConfig) {
     if (mcp.env !== undefined) {
         if (!mcp.env || typeof mcp.env !== "object" || Array.isArray(mcp.env)) {
             throw new Error(
-                "config.yml 字段类型错误：mcp.env 期望 Record<string, string>"
+                "config.yml 字段类型错误：mcp.env 期望 Record<string, string>",
             );
         }
         for (const [k, v] of Object.entries(mcp.env)) {
             if (typeof v !== "string") {
                 throw new Error(
-                    `config.yml 字段类型错误：mcp.env.${k} 期望 string`
+                    `config.yml 字段类型错误：mcp.env.${k} 期望 string`,
                 );
             }
         }
@@ -91,7 +91,7 @@ function pickToolName(toolConfig: ToolConfig | null, plugin: StorePlugin) {
 
 function pickToolDescription(
     toolConfig: ToolConfig | null,
-    plugin: StorePlugin
+    plugin: StorePlugin,
 ) {
     const raw =
         String(toolConfig?.description || "").trim() ||
@@ -133,18 +133,18 @@ async function validateToolLayout(params: {
             const entryAbsAlt = await join(
                 params.installDir,
                 params.cwdRel,
-                params.entryRel
+                params.entryRel,
             );
             if (await exists(entryAbsAlt)) {
                 entryAbs = entryAbsAlt;
             } else {
                 throw new Error(
-                    `工具入口不存在：${params.entryRel}（已尝试：${params.entryRel} 和 ${normalizeRelPath(`${params.cwdRel}/${params.entryRel}`)}；请检查包内文件或 config.yml 的 mcp.entry/mcp.cwd）`
+                    `工具入口不存在：${params.entryRel}（已尝试：${params.entryRel} 和 ${normalizeRelPath(`${params.cwdRel}/${params.entryRel}`)}；请检查包内文件或 config.yml 的 mcp.entry/mcp.cwd）`,
                 );
             }
         } else {
             throw new Error(
-                `工具入口不存在：${params.entryRel}（请检查包内文件或 config.yml 的 mcp.entry）`
+                `工具入口不存在：${params.entryRel}（请检查包内文件或 config.yml 的 mcp.entry）`,
             );
         }
     }
@@ -153,12 +153,12 @@ async function validateToolLayout(params: {
         // Soft validations: if present, it helps confirm layout.
         const pyproject =
             (await exists(
-                await join(params.installDir, "src/python/pyproject.toml")
+                await join(params.installDir, "src/python/pyproject.toml"),
             )) ||
             (await exists(await join(params.installDir, "pyproject.toml")));
         const requirements =
             (await exists(
-                await join(params.installDir, "src/python/requirements.txt")
+                await join(params.installDir, "src/python/requirements.txt"),
             )) ||
             (await exists(await join(params.installDir, "requirements.txt")));
         if (!pyproject && !requirements) {
@@ -170,14 +170,14 @@ async function validateToolLayout(params: {
     // node
     const pkgJson =
         (await exists(
-            await join(params.installDir, "src/TypeScript/package.json")
+            await join(params.installDir, "src/TypeScript/package.json"),
         )) || (await exists(await join(params.installDir, "package.json")));
     if (!pkgJson) {
         // Not fatal: allow single-file JS tools.
     }
     if (entryAbs.toLowerCase().endsWith(".ts")) {
         throw new Error(
-            "当前仅支持运行 JavaScript 入口（.js）。TypeScript 入口（.ts）请先构建为 .js，或在 config.yml 指向 main.js。"
+            "当前仅支持运行 JavaScript 入口（.js）。TypeScript 入口（.ts）请先构建为 .js，或在 config.yml 指向 main.js。",
         );
     }
 
@@ -201,6 +201,61 @@ function guessEntryFromConvention(plugin: StorePlugin): {
     return { runtime: "node", entry: "src/TypeScript/main.js" };
 }
 
+async function ensureStoreEntitlement(params: {
+    plugin: StorePlugin;
+    token: string | null;
+}) {
+    const pricingType = params.plugin.pricing?.type || "unknown";
+
+    // paid/subscription always require login + entitlement check
+    if (pricingType !== "free") {
+        if (!params.token) {
+            throw new Error("该工具为付费/订阅项，请先登录再安装");
+        }
+
+        try {
+            const status = await GloscStoreApi.getLibraryStatus(
+                params.plugin.slug,
+                params.token,
+            );
+            if (!status?.inLibrary) {
+                throw new Error(
+                    "该工具不在你的库中（可能未购买/未续费或已移除）",
+                );
+            }
+            return;
+        } catch (e: any) {
+            const msg = e?.message || String(e);
+            if (
+                String(msg).includes("Billing not implemented") ||
+                /\b501\b/.test(String(msg))
+            ) {
+                throw new Error(
+                    "该插件为付费/订阅项，但当前 Store 计费/授权校验尚未接入（501 Billing not implemented），暂无法安装",
+                );
+            }
+            throw e;
+        }
+    }
+
+    // free: best-effort ensure in library (required by some download flows)
+    if (!params.token) return;
+    try {
+        const status = await GloscStoreApi.getLibraryStatus(
+            params.plugin.slug,
+            params.token,
+        );
+        if (!status?.inLibrary) {
+            await GloscStoreApi.acquireToLibrary(
+                params.plugin.slug,
+                params.token,
+            );
+        }
+    } catch {
+        // ignore: free tools can still be installed if store doesn't enforce library
+    }
+}
+
 export async function installStoreTool(params: {
     plugin: StorePlugin;
     authToken: string | null;
@@ -214,18 +269,7 @@ export async function installStoreTool(params: {
     }
 
     if (plugin.source.type === "package") {
-        if (
-            plugin.pricing?.type &&
-            plugin.pricing.type !== "free" &&
-            !authToken
-        ) {
-            throw new Error("该工具为付费项，请先登录再购买/安装");
-        }
-
-        if (authToken) {
-            // 同步“购买/加入库”（Store 目前仅支持 free；paid/subscription 会返回 501）
-            await GloscStoreApi.acquireToLibrary(plugin.slug, authToken);
-        }
+        await ensureStoreEntitlement({ plugin, token: authToken });
 
         const command = plugin.source.manager === "npx" ? "npx" : "uvx";
         const args =
@@ -243,6 +287,7 @@ export async function installStoreTool(params: {
                 GLOSC_STORE_KIND: "package",
                 GLOSC_STORE_MANAGER: plugin.source.manager,
                 GLOSC_STORE_PACKAGE: plugin.source.name,
+                GLOSC_STORE_PRICING_TYPE: plugin.pricing?.type || "unknown",
                 GLOSC_STORE_DESCRIPTION: pickToolDescription(null, plugin),
             },
             enabled: !!params.autoEnable,
@@ -256,8 +301,8 @@ export async function installStoreTool(params: {
             throw new Error("请先登录，再安装需要下载的工具");
         }
 
-        // 购买/加入库：目前 Store 仅支持 free（paid/subscription 返回 501）
-        await GloscStoreApi.acquireToLibrary(plugin.slug, authToken);
+        // 付费/订阅：只做授权校验；免费：必要时入库（避免 POST 触发 501）。
+        await ensureStoreEntitlement({ plugin, token: authToken });
 
         const versions = await GloscStoreApi.getVersions(plugin.slug);
         const latest = versions.items?.[0];
@@ -314,7 +359,7 @@ export async function installStoreTool(params: {
         const guessed = await guessEntryFromFilesystem({ installDir, plugin });
         const runtime = toolConfig?.mcp?.runtime || guessed.runtime;
         const entryRel = normalizeRelPath(
-            toolConfig?.mcp?.entry || guessed.entry
+            toolConfig?.mcp?.entry || guessed.entry,
         );
         const cwdRel = normalizeRelPath(toolConfig?.mcp?.cwd || "");
 
@@ -343,6 +388,7 @@ export async function installStoreTool(params: {
                     GLOSC_STORE_SLUG: plugin.slug,
                     GLOSC_STORE_KIND: "file",
                     GLOSC_STORE_VERSION: latest.version,
+                    GLOSC_STORE_PRICING_TYPE: plugin.pricing?.type || "unknown",
                     GLOSC_TOOL_DIR: installDir,
                     GLOSC_STORE_DESCRIPTION: serverDescription,
                 },
@@ -361,6 +407,7 @@ export async function installStoreTool(params: {
                     GLOSC_STORE_SLUG: plugin.slug,
                     GLOSC_STORE_KIND: "file",
                     GLOSC_STORE_VERSION: latest.version,
+                    GLOSC_STORE_PRICING_TYPE: plugin.pricing?.type || "unknown",
                     GLOSC_TOOL_DIR: installDir,
                     GLOSC_STORE_DESCRIPTION: serverDescription,
                 },
@@ -491,6 +538,7 @@ export async function updateStoreTool(params: {
         GLOSC_STORE_SLUG: String(slug),
         GLOSC_STORE_KIND: "file",
         GLOSC_STORE_VERSION: latest.version,
+        GLOSC_STORE_PRICING_TYPE: plugin.pricing?.type || "unknown",
         GLOSC_TOOL_DIR: installDir,
         GLOSC_STORE_DESCRIPTION: serverDescription,
     };

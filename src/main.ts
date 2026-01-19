@@ -15,6 +15,7 @@ import {
     type McpServerImportConfig,
 } from "@/utils/McpServerImport";
 import { GloscStoreApi } from "@/utils/GloscStoreApi";
+import { syncInstalledStoreToolsAccess } from "@/utils/StoreToolAccess";
 
 const app = createApp(App);
 const pinia = createPinia();
@@ -32,7 +33,7 @@ async function importMcpServersFromConfigs(configs: McpServerImportConfig[]) {
     for (const cfg of configs) {
         // Upsert by (type,name) as the most user-friendly behavior.
         const existing = mcpStore.servers.find(
-            (s) => s.type === cfg.type && s.name === cfg.name
+            (s) => s.type === cfg.type && s.name === cfg.name,
         );
 
         if (existing) {
@@ -58,7 +59,7 @@ async function importMcpServersFromConfigs(configs: McpServerImportConfig[]) {
 
     if (added || updated) {
         ElMessage.success(
-            `已导入工具：新增 ${added} 个，更新/启用 ${updated} 个`
+            `已导入工具：新增 ${added} 个，更新/启用 ${updated} 个`,
         );
     } else {
         ElMessage.info("未导入任何工具（可能已存在）");
@@ -179,6 +180,23 @@ function setupConsoleImporter() {
 setupConsoleImporter();
 handleStartupImports();
 
+// 启动时：校验已安装的 Store 工具是否仍在用户库/商店中。
+// 若已过期/失效则自动禁用，避免继续调用到未续费插件。
+(async () => {
+    try {
+        const authStore = useAuthStore(pinia);
+        const mcpStore = useMcpStore(pinia);
+        await Promise.all([authStore.init(), mcpStore.init()]);
+        await syncInstalledStoreToolsAccess({
+            mcpStore,
+            authToken: authStore.token,
+            notify: true,
+        });
+    } catch (e) {
+        console.warn("startup store tool access sync failed", e);
+    }
+})();
+
 async function setupProdDevtoolsHotkey() {
     try {
         // When running in a normal browser (vite dev), Tauri internals are not available.
@@ -200,7 +218,7 @@ async function setupProdDevtoolsHotkey() {
                     // ignore
                 });
             },
-            { capture: true }
+            { capture: true },
         );
     } catch {
         // ignore

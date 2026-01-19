@@ -102,14 +102,20 @@ export class McpUtils {
         }
     }
 
-    public static async getTools(servers: McpServer[]) {
+    public static async getTools(
+        servers: McpServer[],
+        options: { skipStopDisabled?: boolean } = {},
+    ) {
         const tools: any = {};
 
         for (const server of servers) {
             if (!server.enabled) {
-                // Ensure it's stopped if disabled
-                if (this.activeServers.has(server.id)) {
-                    await this.stopServer(server.id);
+                // 默认行为：禁用即停。
+                // workspace 会话会在不影响全局连接的情况下做“仅过滤工具”，因此允许跳过 stop。
+                if (!options.skipStopDisabled) {
+                    if (this.activeServers.has(server.id)) {
+                        await this.stopServer(server.id);
+                    }
                 }
                 continue;
             }
@@ -121,7 +127,7 @@ export class McpUtils {
             } catch (error) {
                 console.log(
                     `Failed to initialize MCP server ${server.name}:`,
-                    error
+                    error,
                 );
             }
         }
@@ -159,7 +165,7 @@ export class McpUtils {
         } catch (error) {
             console.log(
                 "Error fetching resource templates from MCP client:",
-                error
+                error,
             );
             return { resourceTemplates: [] };
         }

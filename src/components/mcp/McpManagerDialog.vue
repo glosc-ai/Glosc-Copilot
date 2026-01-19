@@ -18,6 +18,10 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { GloscStoreApi } from "@/utils/GloscStoreApi";
 import { updateStoreTool } from "@/utils/StoreToolInstaller";
+import {
+    getStoreToolAccessInfoFromEnv,
+    isStoreToolBlocked,
+} from "@/utils/StoreToolAccess";
 
 import { VueDraggableNext } from "vue-draggable-next";
 
@@ -97,6 +101,9 @@ const getStoreKind = (server: McpServer) =>
 const getStoreVersion = (server: McpServer) =>
     server.type === "stdio" ? (server.env?.GLOSC_STORE_VERSION as any) : null;
 
+const getStoreAccess = (server: McpServer) =>
+    getStoreToolAccessInfoFromEnv(server);
+
 const getStoreDescription = (server: McpServer) => {
     if (server.type !== "stdio") return null;
     const raw = server.env?.GLOSC_STORE_DESCRIPTION;
@@ -132,7 +139,7 @@ const openStoreDetailByServer = async (server: McpServer, anchor?: string) => {
 const capabilityDialogOpen = ref(false);
 const capabilityDialogServerId = ref<string | null>(null);
 const capabilityDialogInitialTab = ref<"tools" | "resources" | "templates">(
-    "tools"
+    "tools",
 );
 
 const capabilityDialogServer = computed(() => {
@@ -149,7 +156,7 @@ const capabilityDialogCaps = computed(() => {
 
 const openCapabilityDialog = (
     serverId: string,
-    tab: "tools" | "resources" | "templates"
+    tab: "tools" | "resources" | "templates",
 ) => {
     capabilityDialogServerId.value = serverId;
     capabilityDialogInitialTab.value = tab;
@@ -303,7 +310,7 @@ const resetForm = () => {
             },
         },
         null,
-        2
+        2,
     );
     editingServer.value = null;
     inputMode.value = "form";
@@ -338,7 +345,7 @@ const openEditDialog = (server: McpServer) => {
                 },
             },
             null,
-            2
+            2,
         );
     } else {
         form.value = {
@@ -361,7 +368,7 @@ const openEditDialog = (server: McpServer) => {
                 },
             },
             null,
-            2
+            2,
         );
     }
     isDialogOpen.value = true;
@@ -388,7 +395,7 @@ const syncToJson = () => {
                 },
             },
             null,
-            2
+            2,
         );
     } else {
         let headers = {};
@@ -408,7 +415,7 @@ const syncToJson = () => {
                 },
             },
             null,
-            2
+            2,
         );
     }
 };
@@ -416,7 +423,7 @@ const syncToJson = () => {
 const stripJsonComments = (jsonStr: string) => {
     return jsonStr.replace(
         /\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g,
-        (m, g) => (g ? "" : m)
+        (m, g) => (g ? "" : m),
     );
 };
 
@@ -704,6 +711,15 @@ const toggleServer = async (server: McpServer) => {
     if (isServerBusy(server.id)) return;
 
     const nextEnabled = !server.enabled;
+
+    if (nextEnabled && isStoreToolBlocked(server)) {
+        const label = getStoreAccess(server)?.label || "已过期/失效";
+        ElMessage.warning(
+            `该工具${label}，已被禁用，请在 Glosc Store 续费/恢复后再启用`,
+        );
+        return;
+    }
+
     toggleActionLabel.value = {
         ...toggleActionLabel.value,
         [server.id]: nextEnabled ? "enable" : "disable",
@@ -729,7 +745,7 @@ const toggleServer = async (server: McpServer) => {
         ElMessage.error(
             `${server.enabled ? "禁用" : "启用"} ${server.name} 失败: ${
                 e?.message || String(e)
-            }`
+            }`,
         );
         mcpStore.setServerCapability(server.id, {
             success: false,
@@ -835,7 +851,7 @@ watch(
             await mcpStore.checkConnections();
         }
     },
-    { immediate: true }
+    { immediate: true },
 );
 </script>
 
@@ -944,7 +960,7 @@ watch(
                                         <Badge
                                             v-if="
                                                 isStoreInstalledServer(
-                                                    server
+                                                    server,
                                                 ) && getStoreVersion(server)
                                             "
                                             variant="secondary"
@@ -954,13 +970,32 @@ watch(
                                         <Badge
                                             v-if="
                                                 isStoreInstalledServer(
-                                                    server
+                                                    server,
                                                 ) && getStoreKind(server)
                                             "
                                             variant="outline"
                                         >
                                             {{ getStoreKind(server) }}
                                         </Badge>
+
+                                        <span
+                                            v-if="
+                                                getStoreAccess(server)
+                                                    ?.status === 'expired'
+                                            "
+                                            class="px-2 py-0.5 rounded text-xs bg-destructive/10 text-destructive"
+                                        >
+                                            已过期
+                                        </span>
+                                        <span
+                                            v-else-if="
+                                                getStoreAccess(server)
+                                                    ?.status === 'invalid'
+                                            "
+                                            class="px-2 py-0.5 rounded text-xs bg-destructive/10 text-destructive"
+                                        >
+                                            已失效
+                                        </span>
                                     </div>
 
                                     <div
@@ -1056,7 +1091,7 @@ watch(
                                             @select="
                                                 openCapabilityDialog(
                                                     server.id,
-                                                    'tools'
+                                                    'tools',
                                                 )
                                             "
                                         >
@@ -1071,7 +1106,7 @@ watch(
                                             @select="
                                                 openCapabilityDialog(
                                                     server.id,
-                                                    'resources'
+                                                    'resources',
                                                 )
                                             "
                                         >
@@ -1086,7 +1121,7 @@ watch(
                                             @select="
                                                 openCapabilityDialog(
                                                     server.id,
-                                                    'templates'
+                                                    'templates',
                                                 )
                                             "
                                         >
@@ -1133,20 +1168,20 @@ watch(
                                         <DropdownMenuItem
                                             :disabled="
                                                 !isStoreInstalledServer(
-                                                    server
+                                                    server,
                                                 ) ||
                                                 updatingServerIds.has(server.id)
                                             "
                                             @select="
                                                 updateStoreInstalledServer(
-                                                    server
+                                                    server,
                                                 )
                                             "
                                         >
                                             <Loader2
                                                 v-if="
                                                     updatingServerIds.has(
-                                                        server.id
+                                                        server.id,
                                                     )
                                                 "
                                                 class="w-4 h-4 animate-spin"
@@ -1165,7 +1200,7 @@ watch(
                                             @select="
                                                 openStoreDetailByServer(
                                                     server,
-                                                    '#rating'
+                                                    '#rating',
                                                 )
                                             "
                                         >

@@ -48,7 +48,7 @@ export const useChatStore = defineStore("chat", {
             const today = new Date(
                 now.getFullYear(),
                 now.getMonth(),
-                now.getDate()
+                now.getDate(),
             );
             const yesterday = new Date(today);
             yesterday.setDate(yesterday.getDate() - 1);
@@ -103,7 +103,7 @@ export const useChatStore = defineStore("chat", {
         async loadWebSearchEnabled() {
             try {
                 const value = await storeUtils.get<boolean>(
-                    "chat_web_search_enabled"
+                    "chat_web_search_enabled",
                 );
                 this.webSearchEnabled = Boolean(value);
             } catch (error) {
@@ -118,7 +118,7 @@ export const useChatStore = defineStore("chat", {
                 await storeUtils.set(
                     "chat_web_search_enabled",
                     this.webSearchEnabled,
-                    false
+                    false,
                 );
             } catch (error) {
                 console.error("保存 webSearch 开关失败:", error);
@@ -128,7 +128,7 @@ export const useChatStore = defineStore("chat", {
         async loadRecentModelUsage() {
             try {
                 const data = await storeUtils.get<Record<string, number>>(
-                    "chat_recent_model_usage"
+                    "chat_recent_model_usage",
                 );
                 this.recentModelUsage = data || {};
                 this.recentModelUsageLoaded = true;
@@ -143,7 +143,7 @@ export const useChatStore = defineStore("chat", {
             try {
                 // 只保留最近 50 条，避免无限增长
                 const entries = Object.entries(this.recentModelUsage).sort(
-                    (a, b) => (b[1] || 0) - (a[1] || 0)
+                    (a, b) => (b[1] || 0) - (a[1] || 0),
                 );
                 const next: Record<string, number> = {};
                 for (const [modelId, ts] of entries.slice(0, 50)) {
@@ -283,7 +283,7 @@ export const useChatStore = defineStore("chat", {
                     this.conversationsItems = hasPersistedOrder
                         ? items
                         : items.sort(
-                              (a, b) => (b.timestamp || 0) - (a.timestamp || 0)
+                              (a, b) => (b.timestamp || 0) - (a.timestamp || 0),
                           );
 
                     // 分片保存：每个会话单独一个 key + 索引 key
@@ -293,7 +293,7 @@ export const useChatStore = defineStore("chat", {
                         encrypt?: boolean;
                     }> = [];
                     for (const [id, conv] of Object.entries(
-                        legacyConversations
+                        legacyConversations,
                     )) {
                         if (!id || !conv) continue;
                         entries.push({
@@ -337,11 +337,11 @@ export const useChatStore = defineStore("chat", {
 
             try {
                 const conv = await storeUtils.get<Conversation>(
-                    this.chatConversationKey(id)
+                    this.chatConversationKey(id),
                 );
                 if (conv) {
                     const item = this.conversationsItems.find(
-                        (it) => it.key === id
+                        (it) => it.key === id,
                     );
                     if (item?.label && conv.title !== item.label) {
                         conv.title = item.label;
@@ -410,7 +410,7 @@ export const useChatStore = defineStore("chat", {
             }
 
             const firstUserMsg = conversation.messages.find(
-                (msg) => msg.role === "user"
+                (msg) => msg.role === "user",
             );
             if (!firstUserMsg) return false;
 
@@ -424,7 +424,7 @@ export const useChatStore = defineStore("chat", {
             conversation.title = title;
 
             const item = this.conversationsItems.find(
-                (it) => it.key === conversationId
+                (it) => it.key === conversationId,
             );
             if (item) {
                 item.label = title;
@@ -440,10 +440,10 @@ export const useChatStore = defineStore("chat", {
             if (sourceKey === targetKey) return;
 
             const fromIndex = this.conversationsItems.findIndex(
-                (it) => it.key === sourceKey
+                (it) => it.key === sourceKey,
             );
             const toIndex = this.conversationsItems.findIndex(
-                (it) => it.key === targetKey
+                (it) => it.key === targetKey,
             );
             if (fromIndex < 0 || toIndex < 0) return;
 
@@ -500,7 +500,7 @@ export const useChatStore = defineStore("chat", {
 
                 // 会话分片（仅保存脏的会话）
                 for (const [id, dirty] of Object.entries(
-                    this.pendingConversationIds
+                    this.pendingConversationIds,
                 )) {
                     if (!dirty) continue;
                     const conv = this.conversations[id];
@@ -605,7 +605,7 @@ export const useChatStore = defineStore("chat", {
                 delete this.conversations[id];
                 delete this.loadedConversationIds[id];
                 this.conversationsItems = this.conversationsItems.filter(
-                    (item) => item.key !== id
+                    (item) => item.key !== id,
                 );
 
                 this.indexDirty = true;
@@ -614,7 +614,7 @@ export const useChatStore = defineStore("chat", {
                 if (this.activeKey === id) {
                     if (this.conversationsItems.length > 0) {
                         await this.selectConversation(
-                            this.conversationsItems[0].key
+                            this.conversationsItems[0].key,
                         );
                     } else {
                         await this.createNewConversation();
@@ -641,7 +641,7 @@ export const useChatStore = defineStore("chat", {
                 }
 
                 const item = this.conversationsItems.find(
-                    (item) => item.key === id
+                    (item) => item.key === id,
                 );
                 if (item) {
                     item.label = newTitle;
@@ -671,7 +671,7 @@ export const useChatStore = defineStore("chat", {
 
             // 找到第一条用户消息
             const firstUserMsg = conversation.messages.find(
-                (msg) => msg.role === "user"
+                (msg) => msg.role === "user",
             );
             if (firstUserMsg) {
                 // 截取前30个字符作为标题
@@ -699,10 +699,10 @@ export const useChatStore = defineStore("chat", {
 
             // 需要至少有一轮对话（用户消息 + AI回复）
             const userMessages = conversation.messages.filter(
-                (m) => m.role === "user"
+                (m) => m.role === "user",
             );
             const assistantMessages = conversation.messages.filter(
-                (m) => m.role === "assistant"
+                (m) => m.role === "assistant",
             );
             if (userMessages.length < 1 || assistantMessages.length < 1) {
                 return;
@@ -714,7 +714,7 @@ export const useChatStore = defineStore("chat", {
                     .filter((m) => m.role !== "system")
                     .map(
                         (m) =>
-                            `${m.role === "user" ? "用户" : "AI"}: ${m.content}`
+                            `${m.role === "user" ? "用户" : "AI"}: ${m.content}`,
                     )
                     .join("\n");
 
@@ -750,7 +750,7 @@ export const useChatStore = defineStore("chat", {
                 if (cleanedSummary) {
                     await this.renameConversation(
                         conversationId,
-                        cleanedSummary
+                        cleanedSummary,
                     );
                 }
             } catch (error) {
@@ -764,7 +764,7 @@ export const useChatStore = defineStore("chat", {
         async addMessage(
             conversationId: string,
             msgData: Omit<StoredChatMessage, "id" | "timestamp">,
-            saveImmediately = false
+            saveImmediately = false,
         ) {
             try {
                 const conversation = this.conversations[conversationId];
@@ -782,7 +782,7 @@ export const useChatStore = defineStore("chat", {
                 conversation.updatedAt = newMessage.timestamp;
 
                 const item = this.conversationsItems.find(
-                    (it) => it.key === conversationId
+                    (it) => it.key === conversationId,
                 );
                 if (item) {
                     item.timestamp = newMessage.timestamp;
@@ -815,14 +815,14 @@ export const useChatStore = defineStore("chat", {
             conversationId: string,
             messageId: string,
             updates: Partial<StoredChatMessage>,
-            saveImmediately = false
+            saveImmediately = false,
         ) {
             try {
                 const conversation = this.conversations[conversationId];
                 if (!conversation) return;
 
                 const msg = conversation.messages.find(
-                    (m) => m.id === messageId
+                    (m) => m.id === messageId,
                 );
                 if (msg) {
                     Object.assign(msg, updates);
@@ -835,7 +835,7 @@ export const useChatStore = defineStore("chat", {
                     conversation.updatedAt = last;
 
                     const item = this.conversationsItems.find(
-                        (it) => it.key === conversationId
+                        (it) => it.key === conversationId,
                     );
                     if (item) {
                         item.timestamp = last;
@@ -894,12 +894,12 @@ export const useChatStore = defineStore("chat", {
 
                     const resolvedModel = desiredModelId
                         ? this.availableModels.find(
-                              (m) => m.id === desiredModelId
+                              (m) => m.id === desiredModelId,
                           )
                         : undefined;
 
                     const fallbackDefaultModel = this.availableModels.find(
-                        (m) => m.id === defaultModelId
+                        (m) => m.id === defaultModelId,
                     );
 
                     const nextModel =
@@ -912,7 +912,7 @@ export const useChatStore = defineStore("chat", {
                     }
 
                     await this.persistSelectedModelId(
-                        this.selectedModel?.id || null
+                        this.selectedModel?.id || null,
                     );
                 }
             } catch (error) {

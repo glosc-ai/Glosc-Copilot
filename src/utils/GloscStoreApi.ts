@@ -1,7 +1,7 @@
 type StorePricing =
     | { type: "free" }
-    | { type: "paid"; priceCents: number; currency: "USD" | "CNY" }
-    | { type: "subscription"; priceCents: number; currency: "USD" | "CNY" };
+    | { type: "paid"; priceCents: number; currency: "USD" }
+    | { type: "subscription"; priceCents: number; currency: "USD" };
 
 export type StorePluginSource =
     | { type: "package"; manager: "npx" | "uvx"; name: string }

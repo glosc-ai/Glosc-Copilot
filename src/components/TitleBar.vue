@@ -11,7 +11,6 @@ import {
     RefreshCcw,
     ExternalLink,
 } from "lucide-vue-next";
-import { DropdownMenuPortal } from "reka-ui";
 import { computed, ref, onMounted } from "vue";
 import {
     Tooltip,
@@ -42,8 +41,12 @@ const toggleMaximize = async () => {
 };
 const close = () => appWindow.close();
 
-const createNewChat = () => {
-    chatStore.createNewConversation();
+const createNewChat = async () => {
+    await chatStore.createNewConversation(true);
+    // 如果当前不在首页，创建会话后自动跳转到聊天界面
+    if (router.currentRoute.value.path !== "/") {
+        await router.push("/");
+    }
 };
 
 const openMcpManager = () => {
@@ -132,7 +135,10 @@ const balanceTip = computed(() => {
                             <DropdownMenuItem @click="createNewChat"
                                 >新建会话
                             </DropdownMenuItem>
-                            <DropdownMenuSub>
+                            <DropdownMenuItem @click="openWorkspaceFolder">
+                                打开文件夹
+                            </DropdownMenuItem>
+                            <!-- <DropdownMenuSub>
                                 <DropdownMenuSubTrigger>
                                     工作区
                                 </DropdownMenuSubTrigger>
@@ -150,7 +156,7 @@ const balanceTip = computed(() => {
                                         </DropdownMenuItem>
                                     </DropdownMenuSubContent>
                                 </DropdownMenuPortal>
-                            </DropdownMenuSub>
+                            </DropdownMenuSub> -->
                         </DropdownMenuGroup>
                     </DropdownMenuContent>
                 </DropdownMenu>

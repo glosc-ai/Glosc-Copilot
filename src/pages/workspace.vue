@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Button } from "@/components/ui/button";
 
-import AiSessionPlaceholder from "@/components/workspace/AiSessionPlaceholder.vue";
+import WorkspaceAiSession from "@/components/workspace/WorkspaceAiSession.vue";
 import MonacoEditorPane from "@/components/workspace/MonacoEditorPane.vue";
 import WorkspaceConsolePanel from "@/components/workspace/WorkspaceConsolePanel.vue";
 import WorkspaceTreeItem from "@/components/workspace/WorkspaceTreeItem.vue";
@@ -127,7 +127,7 @@ async function loadDir(dirPath: string) {
                 const isDir = Boolean(
                     e?.isDir ??
                     e?.isDirectory ??
-                    (Array.isArray(e?.children) && e.children.length >= 0)
+                    (Array.isArray(e?.children) && e.children.length >= 0),
                 );
                 return { name, path, isDir };
             })
@@ -320,7 +320,7 @@ function languageFromPath(filePath: string) {
 }
 
 const activeLanguage = computed(() =>
-    activeFilePath.value ? languageFromPath(activeFilePath.value) : "plaintext"
+    activeFilePath.value ? languageFromPath(activeFilePath.value) : "plaintext",
 );
 
 async function openFile(node: TreeNode) {
@@ -378,7 +378,7 @@ function updateEditorValue(v: string) {
 async function createWorkspace() {
     if (isDirty.value) {
         const ok = window.confirm(
-            "当前文件有未保存的修改，确定要切换工作区吗？"
+            "当前文件有未保存的修改，确定要切换工作区吗？",
         );
         if (!ok) return;
     }
@@ -450,7 +450,7 @@ watch(
         await createWorkspace();
         clearPickQuery();
     },
-    { immediate: true }
+    { immediate: true },
 );
 </script>
 
@@ -602,7 +602,7 @@ watch(
                 class="shrink-0 border-l bg-muted/10"
                 :style="{ width: rightPaneWidth + 'px' }"
             >
-                <AiSessionPlaceholder />
+                <WorkspaceAiSession :workspace-root="workspaceRoot" />
             </aside>
         </div>
     </div>
