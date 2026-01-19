@@ -80,6 +80,10 @@ const openWorkspaceFolder = async () => {
     });
 };
 
+const openMeetings = async () => {
+    await router.push("/meeting");
+};
+
 const formatUsd = (cents?: number | null) => {
     const safe =
         typeof cents === "number" && Number.isFinite(cents) ? cents : 0;
@@ -134,6 +138,9 @@ const balanceTip = computed(() => {
                         <DropdownMenuGroup>
                             <DropdownMenuItem @click="createNewChat"
                                 >新建会话
+                            </DropdownMenuItem>
+                            <DropdownMenuItem @click="openMeetings">
+                                AI 会议
                             </DropdownMenuItem>
                             <DropdownMenuItem @click="openWorkspaceFolder">
                                 打开文件夹
