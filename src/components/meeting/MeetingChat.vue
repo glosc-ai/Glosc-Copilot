@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ChatStatus } from "ai";
-import { ref, watch, nextTick, computed } from "vue";
+import { ref, watch, nextTick, computed, shallowRef, onMounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,9 @@ import type { MeetingRole, MeetingMessage } from "@/utils/meetingInterface";
 import { Textarea } from "@/components/ui/textarea";
 import ChatMessageItem from "@/components/chat/ChatMessageItem.vue";
 import { meetingMessagesToUiMessages } from "@/utils/MeetingUiMessageAdapter";
-import { useAuthStore } from "@/stores/auth";
+import { useMcpStore } from "@/stores/mcp";
+import { McpUtils } from "@/utils/McpUtils";
+import { ChatUtils } from "@/utils/ChatUtils";
 
 const props = defineProps<{
     meetingId: string;
@@ -18,7 +20,11 @@ const props = defineProps<{
 
 const meetingStore = useMeetingStore();
 const { currentMessages, activeMeeting } = storeToRefs(meetingStore);
-const authStore = useAuthStore();
+const mcpStore = useMcpStore();
+
+onMounted(() => {
+    void mcpStore.init();
+});
 
 const uiMessages = computed(() =>
     meetingMessagesToUiMessages(currentMessages.value),
@@ -151,70 +157,54 @@ type StreamToMessageParams = {
     messages: UIMessage[];
     abortController: AbortController;
     messageId: string;
+    tools?: Record<string, any>;
+    triggerText?: string;
 };
 
 async function streamToMeetingMessage(params: StreamToMessageParams) {
     const { model, messages, abortController, messageId } = params;
+    const tools = params.tools || {};
+    const triggerText = (params.triggerText ?? "").trim();
 
-    if (!authStore.isLoggedIn || !authStore.token) {
-        (window as any).ElMessage?.error?.("请先登录后再开始会议对话");
-        throw new Error("Unauthorized");
-    }
-
-    const host = import.meta.env.VITE_API_HOST || "http://localhost:3000";
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${authStore.token}`,
-    };
-
-    const response = await fetch(`${host}/api/chat`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ model, messages, stream: true }),
-        signal: abortController.signal,
+    // 会议模式改用 ai-sdk 的 Chat（支持 tool calling 自动回填），并把内容同步回 meeting store。
+    const clientToolsRef = shallowRef<Record<string, any> | null>(tools);
+    const chat = ChatUtils.getChat({
+        toolsRef: clientToolsRef,
+        debugTools: false,
     });
 
-    if (response.status === 401 || response.status === 403) {
-        try {
-            await authStore.logout();
-        } catch {
-            // ignore
+    // 预置上下文
+    (chat as any).messages = messages as any;
+
+    const getAssistantSnapshot = () => {
+        const all: any[] = (chat as any).messages || [];
+        for (let i = all.length - 1; i >= 0; i -= 1) {
+            const m = all[i];
+            if (m?.role === "assistant") {
+                const parts: any[] = Array.isArray(m.parts) ? m.parts : [];
+                const content = parts
+                    .filter((p) => p?.type === "text")
+                    .map((p) => p?.text ?? "")
+                    .join("");
+                const reasoning = parts
+                    .filter((p) => p?.type === "reasoning")
+                    .map((p) => p?.text ?? "")
+                    .join("");
+                return {
+                    content,
+                    reasoning: reasoning || "",
+                };
+            }
         }
-        (window as any).ElMessage?.error?.("登录已过期，请重新登录");
-        throw new Error("Unauthorized");
-    }
-
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    meetingStore.isGenerating = true;
-    meetingStore.generatingMessageId = messageId;
-
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-    let accumulatedContent = "";
-    let accumulatedReasoning = "";
-
-    const extractDelta = (json: any) => {
-        const textDelta: string | undefined =
-            json?.choices?.[0]?.delta?.content ??
-            json?.delta?.content ??
-            json?.textDelta ??
-            json?.contentDelta ??
-            json?.delta;
-
-        const reasoningDelta: string | undefined =
-            json?.reasoningDelta ??
-            json?.choices?.[0]?.delta?.reasoning ??
-            (json?.type === "reasoning-delta" ? json?.textDelta : undefined);
-
-        return { textDelta, reasoningDelta };
+        return { content: "", reasoning: "" };
     };
 
+    let accumulatedContent = "";
+    let accumulatedReasoning = "";
     let flushTimer: number | null = null;
     let lastFlushedContent = "";
     let lastFlushedReasoning = "";
+
     const scheduleFlush = () => {
         if (flushTimer != null) return;
         flushTimer = window.setTimeout(async () => {
@@ -239,84 +229,73 @@ async function streamToMeetingMessage(params: StreamToMessageParams) {
         }, 80);
     };
 
-    if (reader) {
-        let buffer = "";
+    const stopOnAbort = () => {
+        try {
+            void (chat as any).stop?.();
+        } catch {
+            // ignore
+        }
+    };
+    if (abortController?.signal?.aborted) stopOnAbort();
+    abortController?.signal?.addEventListener?.("abort", stopOnAbort, {
+        once: true,
+    });
 
-        const handleDataLine = (data: string) => {
-            if (!data) return;
-            if (data === "[DONE]") return;
+    meetingStore.isGenerating = true;
+    meetingStore.generatingMessageId = messageId;
 
-            try {
-                const json = JSON.parse(data);
-                const { textDelta, reasoningDelta } = extractDelta(json);
+    // 这里必须发送一条 user 消息作为触发；不写入 meeting.messages（仅用于本次请求）。
+    const effectiveTriggerText =
+        triggerText || "现在轮到你发言。请基于会议背景与历史讨论继续推进。";
 
-                if (typeof textDelta === "string" && textDelta.length > 0) {
-                    accumulatedContent += textDelta;
-                    scheduleFlush();
-                }
-                if (
-                    typeof reasoningDelta === "string" &&
-                    reasoningDelta.length > 0
-                ) {
-                    accumulatedReasoning += reasoningDelta;
-                    scheduleFlush();
-                }
-            } catch (e) {
-                if (!data.trim().startsWith("{")) {
-                    accumulatedContent += data;
-                    scheduleFlush();
-                    return;
-                }
-                console.warn("Failed to parse SSE data:", e);
-            }
-        };
+    try {
+        const sendPromise = (chat as any).sendMessage(
+            { text: effectiveTriggerText },
+            {
+                body: {
+                    model,
+                    mcpEnabled: Object.keys(tools || {}).length > 0,
+                    tools,
+                },
+            },
+        );
 
+        // streaming 同步回 meeting store
         while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+            const s: any = (chat as any).status;
+            const statusText = typeof s === "string" ? s : s?.value;
 
-            buffer += decoder.decode(value, { stream: true });
-
-            let newlineIndex = buffer.indexOf("\n");
-            while (newlineIndex >= 0) {
-                const rawLine = buffer.slice(0, newlineIndex);
-                buffer = buffer.slice(newlineIndex + 1);
-
-                const line = rawLine.replace(/\r$/, "");
-                if (line.startsWith("data:")) {
-                    handleDataLine(line.slice(5).trimStart());
-                }
-
-                newlineIndex = buffer.indexOf("\n");
+            const snap = getAssistantSnapshot();
+            if (
+                snap.content !== accumulatedContent ||
+                snap.reasoning !== accumulatedReasoning
+            ) {
+                accumulatedContent = snap.content;
+                accumulatedReasoning = snap.reasoning;
+                scheduleFlush();
             }
+
+            if (statusText !== "submitted" && statusText !== "streaming") {
+                break;
+            }
+            await new Promise((r) => window.setTimeout(r, 80));
         }
 
-        const tail = buffer.trim();
-        if (tail.startsWith("data:")) {
-            handleDataLine(tail.slice(5).trimStart());
-        }
+        await sendPromise;
+    } finally {
+        abortController?.signal?.removeEventListener?.("abort", stopOnAbort);
     }
 
     if (flushTimer != null) {
         window.clearTimeout(flushTimer);
         flushTimer = null;
     }
-    if (
-        accumulatedContent !== lastFlushedContent ||
-        accumulatedReasoning !== lastFlushedReasoning
-    ) {
-        await meetingStore.updateMessage(
-            props.meetingId,
-            messageId,
-            {
-                content: accumulatedContent,
-                reasoning: accumulatedReasoning || undefined,
-            },
-            { persist: false },
-        );
-    }
 
-    // 会话结束：一次性落盘（避免流式过程频繁写 store）
+    // 最后再同步一次
+    const finalSnap = getAssistantSnapshot();
+    accumulatedContent = finalSnap.content;
+    accumulatedReasoning = finalSnap.reasoning;
+
     await meetingStore.updateMessage(
         props.meetingId,
         messageId,
@@ -327,6 +306,7 @@ async function streamToMeetingMessage(params: StreamToMessageParams) {
         },
         { persist: true },
     );
+
     meetingStore.isGenerating = false;
     meetingStore.generatingMessageId = null;
 }
@@ -338,6 +318,21 @@ async function generateRoleMessage(
 ) {
     const meeting = activeMeeting.value;
     if (!meeting) return;
+
+    await mcpStore.init();
+
+    // 按角色启用 MCP Server（不同 AI 可用不同工具）
+    const enabledIds = new Set(role.enabledMcpServerIds || []);
+    const toolServers = (mcpStore.servers || []).map((s: any) => ({
+        ...s,
+        enabled: enabledIds.has(s.id),
+    }));
+    const tools =
+        enabledIds.size > 0
+            ? await McpUtils.getTools(toolServers as any, {
+                  skipStopDisabled: true,
+              })
+            : {};
 
     // 构建上下文：全局摘要 + 历史消息
     const systemPrompt = `${meeting.summary}\n\n你的角色设定：\n${role.systemPrompt}`;
@@ -387,6 +382,8 @@ async function generateRoleMessage(
             messages,
             abortController,
             messageId,
+            tools,
+            triggerText: `现在轮到你（${role.name}）发言。请用你的角色立场继续推进讨论，直接输出你的发言内容。`,
         });
     } catch (error: any) {
         meetingStore.isGenerating = false;
@@ -440,11 +437,6 @@ async function generateMeetingSummary(abortController: AbortController) {
                     ] as any,
                 }) as any,
         ),
-        {
-            id: `user-summary-${props.meetingId}`,
-            role: "user" as any,
-            parts: [{ type: "text", text: "请生成本次会议总结。" }] as any,
-        } as any,
     ];
 
     const messageId = await meetingStore.addMessage(
@@ -469,6 +461,8 @@ async function generateMeetingSummary(abortController: AbortController) {
             messages,
             abortController,
             messageId,
+            tools: {},
+            triggerText: "请生成本次会议总结。",
         });
     } catch (error: any) {
         meetingStore.isGenerating = false;
