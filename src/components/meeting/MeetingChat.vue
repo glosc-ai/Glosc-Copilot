@@ -1,6 +1,7 @@
 <script setup lang="ts">
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 import type { ChatStatus } from "ai";
 import { ref, watch, nextTick, computed, shallowRef, onMounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
@@ -20,6 +21,9 @@ import { ref, computed, watch, nextTick } from "vue";
 =======
 import { computed, watch, nextTick } from "vue";
 >>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
+=======
+import { ref, computed, watch, nextTick } from "vue";
+>>>>>>> 5c112eb (Fix code review issues and improve error handling)
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
 import { Button } from "@/components/ui/button";
@@ -399,8 +403,23 @@ async function deleteMessage(msgId: string) {
 }
 
 async function regenerateMessage(msg: MeetingMessage) {
-    // TODO: 实现重新生成逻辑
-    console.log("Regenerate message:", msg);
+    // 删除当前消息并重新生成
+    const meeting = activeMeeting.value;
+    if (!meeting || msg.role !== "assistant") return;
+
+    const role = meeting.roles.find((r) => r.id === msg.speakerId);
+    if (!role) return;
+
+    // 删除当前消息
+    await meetingStore.deleteMessage(props.meetingId, msg.id);
+
+    // 重新生成
+    try {
+        const abortController = new AbortController();
+        await generateRoleMessage(role, abortController);
+    } catch (error) {
+        console.error("重新生成失败:", error);
+    }
 }
 
 // 暴露给父组件的方法：生成角色消息

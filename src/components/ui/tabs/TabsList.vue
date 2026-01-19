@@ -1,8 +1,12 @@
 <script setup lang="ts">
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { computed } from "vue";
 =======
 >>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
+=======
+import { computed } from "vue";
+>>>>>>> 5c112eb (Fix code review issues and improve error handling)
 import { TabsList, type TabsListProps } from "reka-ui";
 import { cn } from "@/lib/utils";
 

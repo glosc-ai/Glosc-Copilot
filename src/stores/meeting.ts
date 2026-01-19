@@ -591,6 +591,7 @@ export const useMeetingStore = defineStore("meeting", {
             };
 
 <<<<<<< HEAD
+<<<<<<< HEAD
             if (
                 position !== undefined &&
                 position >= 0 &&
@@ -599,6 +600,9 @@ export const useMeetingStore = defineStore("meeting", {
 =======
             if (position !== undefined && position >= 0 && position <= meeting.speakerQueue.length) {
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+            if (position !== undefined && position >= 0 && position < meeting.speakerQueue.length) {
+>>>>>>> 5c112eb (Fix code review issues and improve error handling)
                 meeting.speakerQueue.splice(position, 0, newNode);
             } else {
                 meeting.speakerQueue.push(newNode);
@@ -753,6 +757,7 @@ export const useMeetingStore = defineStore("meeting", {
             if (meeting.currentSpeakerIndex !== undefined) {
                 meeting.currentSpeakerIndex++;
 <<<<<<< HEAD
+<<<<<<< HEAD
                 // 确保不超出队列范围
                 if (
                     meeting.speakerQueue &&
@@ -762,6 +767,12 @@ export const useMeetingStore = defineStore("meeting", {
                 }
 =======
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
+=======
+                // 确保不超出队列范围
+                if (meeting.speakerQueue && meeting.currentSpeakerIndex >= meeting.speakerQueue.length) {
+                    meeting.currentSpeakerIndex = meeting.speakerQueue.length;
+                }
+>>>>>>> 5c112eb (Fix code review issues and improve error handling)
             }
             meeting.updatedAt = Date.now();
 

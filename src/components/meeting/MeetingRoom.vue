@@ -299,6 +299,7 @@ async function processQueue() {
         } else if (currentNode.type === "task") {
             // 执行任务（如总结）
 <<<<<<< HEAD
+<<<<<<< HEAD
             if (currentNode.taskType === "总结会议") {
                 if (chatRef.value) {
                     try {
@@ -313,6 +314,20 @@ async function processQueue() {
             }
 =======
             // TODO: 实现任务执行逻辑
+=======
+            // TODO: 实现各种任务类型的执行逻辑
+            if (currentNode.taskType === "总结会议") {
+                // 将来可以调用特定的总结API
+                await meetingStore.addMessage(props.meetingId, {
+                    role: "assistant",
+                    content: "（会议总结功能待实现）",
+                    speakerId: "system",
+                    speakerName: "系统",
+                    speakerAvatar: "📋",
+                    speakerColor: "#8b5cf6",
+                });
+            }
+>>>>>>> 5c112eb (Fix code review issues and improve error handling)
             await meetingStore.advanceQueue(props.meetingId);
 >>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
         }
