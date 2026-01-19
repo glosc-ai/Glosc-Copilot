@@ -49,7 +49,9 @@ const canPause = computed(() => {
 });
 
 const canResume = computed(() => {
-    return currentStatus.value === "paused";
+    return (
+        currentStatus.value === "paused" || currentStatus.value === "stopped"
+    );
 });
 
 const canStop = computed(() => {
@@ -353,7 +355,7 @@ onUnmounted(() => {
                         class="gap-2"
                     >
                         <Play class="w-4 h-4" />
-                        继续
+                        {{ currentStatus === "stopped" ? "继续会议" : "继续" }}
                     </Button>
                     <Button
                         v-if="canStop"
