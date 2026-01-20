@@ -67,13 +67,19 @@ jobs:
             - name: Ensure tag matches version
               run: node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); const tag=process.env.GITHUB_REF_NAME||''; const v=tag.startsWith('v')?tag.slice(1):tag; if(v!==pkg.version){ console.error('Tag version mismatch:', tag, '!=', 'v'+pkg.version); process.exit(1);} console.log('Tag matches package.json version:', pkg.version);"
 
-            - name: Prepare uv sidecar
-              run: yarn -s prepare:uv
+            - name: Prepare binaries (node & uv)
+              run: yarn -s prepare:binaries
 
             - name: Build and publish
               uses: tauri-apps/tauri-action@v0
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  VITE_API_HOST: ${{ secrets.VITE_API_HOST  }}
+                  VITE_SITE_HOST: ${{ secrets.VITE_SITE_HOST  }}
+                  DEEPSEED_API_KEY: ${{ secrets.DEEPSEED_API_KEY }}
+                  AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+                  GOOGLE_VertexAI_API_KEY: ${{ secrets.GOOGLE_VertexAI_API_KEY }}
+                  GOOGLE_VertexAI_PROJECT_ID: ${{ secrets.GOOGLE_VertexAI_PROJECT_ID }}
               with:
                   tagName: ${{ github.ref_name }}
                   releaseName: "Glosc Copilot ${{ github.ref_name }}"

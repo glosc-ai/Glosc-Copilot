@@ -1,7 +1,7 @@
 {
   "name": "glosc-copilot",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,17 +9,19 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "yarn -s sync:version && tauri",
+    "prepare:node": "node scripts/prepare-node.mjs",
     "prepare:uv": "node scripts/prepare-uv.mjs",
+    "prepare:binaries": "yarn -s prepare:node && yarn -s prepare:uv",
     "sync:version": "node scripts/sync-version.mjs",
-    "tauri:dev": "yarn -s prepare:uv && yarn -s tauri dev",
-    "tauri:build": "yarn -s prepare:uv && yarn -s tauri build",
-    "tauri:build:win:nsis": "yarn -s prepare:uv && yarn -s tauri build -b nsis",
-    "tauri:build:win:msi": "yarn -s prepare:uv && yarn -s tauri build -b msi",
-    "tauri:build:mac:universal": "yarn -s prepare:uv && yarn -s tauri build -t universal-apple-darwin",
-    "tauri:build:mac:arm64": "yarn -s prepare:uv && yarn -s tauri build -t aarch64-apple-darwin",
-    "tauri:build:mac:x64": "yarn -s prepare:uv && yarn -s tauri build -t x86_64-apple-darwin",
-    "tauri:build:linux:x64": "yarn -s prepare:uv && yarn -s tauri build -t x86_64-unknown-linux-gnu",
-    "tauri:build:linux:arm64": "yarn -s prepare:uv && yarn -s tauri build -t aarch64-unknown-linux-gnu"
+    "tauri:dev": "yarn -s prepare:binaries && yarn -s tauri dev",
+    "tauri:build": "yarn -s prepare:binaries && yarn -s tauri build",
+    "tauri:build:win:nsis": "yarn -s prepare:binaries && yarn -s tauri build -b nsis",
+    "tauri:build:win:msi": "yarn -s prepare:binaries && yarn -s tauri build -b msi",
+    "tauri:build:mac:universal": "yarn -s prepare:binaries && yarn -s tauri build -t universal-apple-darwin",
+    "tauri:build:mac:arm64": "yarn -s prepare:binaries && yarn -s tauri build -t aarch64-apple-darwin",
+    "tauri:build:mac:x64": "yarn -s prepare:binaries && yarn -s tauri build -t x86_64-apple-darwin",
+    "tauri:build:linux:x64": "yarn -s prepare:binaries && yarn -s tauri build -t x86_64-unknown-linux-gnu",
+    "tauri:build:linux:arm64": "yarn -s prepare:binaries && yarn -s tauri build -t aarch64-unknown-linux-gnu"
   },
   "dependencies": {
     "@ai-sdk/gateway": "^3.0.2",
