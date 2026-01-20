@@ -25,6 +25,8 @@ import {
     Folder,
     FolderOpen,
     Plus,
+    RefreshCcw,
+    MoreHorizontal,
     Save,
     Trash2,
 } from "lucide-vue-next";
@@ -430,6 +432,45 @@ async function createWorkspace() {
     }
 }
 
+async function openLastWorkspaceIfAny() {
+    const savedRoot = await storeUtils.get<string>("workspace_root");
+    if (!savedRoot) return false;
+    workspaceRoot.value = savedRoot;
+    childrenByPath.value = {};
+    expandedDirs.value = new Set([savedRoot]);
+    dirLoadError.value = null;
+    try {
+        await loadDir(savedRoot);
+        return true;
+    } catch {
+        // 兜底：路径失效时清理（onMounted 也会处理）
+        workspaceRoot.value = null;
+        childrenByPath.value = {};
+        expandedDirs.value = new Set();
+        await storeUtils.delete("workspace_root");
+        dirLoadError.value = "上次的工作区文件夹不可用，请重新选择。";
+        return false;
+    }
+}
+
+async function reloadWorkspaceTree() {
+    const root = workspaceRoot.value;
+    if (!root) return;
+    dirLoadError.value = null;
+    childrenByPath.value = {};
+    expandedDirs.value = new Set([root]);
+    try {
+        await loadDir(root);
+    } catch (e: any) {
+        dirLoadError.value =
+            e instanceof Error
+                ? e.message
+                : typeof e === "string"
+                  ? e
+                  : "读取目录失败";
+    }
+}
+
 function clearWorkspace() {
     workspaceRoot.value = null;
     childrenByPath.value = {};
@@ -451,7 +492,12 @@ onMounted(async () => {
     try {
         await loadDir(savedRoot);
     } catch {
-        // ignore
+        // 路径可能已不存在或无权限，清理并让用户重新选择
+        workspaceRoot.value = null;
+        childrenByPath.value = {};
+        expandedDirs.value = new Set();
+        await storeUtils.delete("workspace_root");
+        dirLoadError.value = "上次的工作区文件夹不可用，请重新选择。";
     }
 });
 
@@ -467,7 +513,12 @@ watch(
     () => route.query.pick,
     async (v) => {
         if (!v) return;
-        await createWorkspace();
+        // 外部可能通过 query.pick 触发“打开工作区”。
+        // 需求：首次弹窗选择；后续默认打开上次目录，不再重复弹窗。
+        const opened = await openLastWorkspaceIfAny();
+        if (!opened) {
+            await createWorkspace();
+        }
         clearPickQuery();
     },
     { immediate: true },
@@ -485,26 +536,51 @@ watch(
                 :style="{ width: leftPaneWidth + 'px' }"
             >
                 <div class="p-3 border-b flex items-center gap-2">
-                    <Button size="sm" class="gap-2" @click="createWorkspace">
-                        <Plus class="w-4 h-4" />
-                        选择文件夹
-                    </Button>
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        class="gap-2"
-                        :disabled="!workspaceRoot"
-                        @click="clearWorkspace"
-                    >
-                        <Trash2 class="w-4 h-4" />
-                        清空
-                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                            <Button size="sm" class="gap-2">
+                                <FolderOpen class="w-4 h-4" />
+                                工作区
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent class="w-40" align="start">
+                            <DropdownMenuGroup>
+                                <DropdownMenuItem @click="createWorkspace">
+                                    <Plus class="w-4 h-4 mr-2" />
+                                    选择文件夹
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    :disabled="!workspaceRoot"
+                                    @click="reloadWorkspaceTree"
+                                >
+                                    <RefreshCcw class="w-4 h-4 mr-2" />
+                                    刷新目录
+                                </DropdownMenuItem>
+                            </DropdownMenuGroup>
+
+                            <DropdownMenuSeparator />
+
+                            <DropdownMenuGroup>
+                                <DropdownMenuItem
+                                    :disabled="!workspaceRoot"
+                                    @click="clearWorkspace"
+                                >
+                                    <Trash2 class="w-4 h-4 mr-2" />
+                                    清空工作区
+                                </DropdownMenuItem>
+                            </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <div class="ml-auto text-xs text-muted-foreground truncate">
+                        {{ workspaceRoot || "未选择" }}
+                    </div>
                 </div>
 
-                <div class="p-3 border-b">
-                    <div class="text-xs text-muted-foreground">当前工作区</div>
-                    <div class="mt-1 text-sm break-all">
-                        {{ workspaceRoot || "未选择" }}
+                <div v-if="!workspaceRoot" class="p-3 border-b">
+                    <div class="text-xs text-muted-foreground">提示</div>
+                    <div class="mt-1 text-sm text-muted-foreground">
+                        首次需要选择文件夹，之后会默认打开上次目录。
                     </div>
                 </div>
 
@@ -560,24 +636,61 @@ watch(
                             {{ activeLanguage }}
                         </div>
                     </div>
-                    <Button
-                        size="sm"
-                        class="gap-2"
-                        :disabled="!activeFilePath || !isDirty || fileSaving"
-                        @click="saveActiveFile"
-                    >
-                        <Save class="w-4 h-4" />
-                        保存 (Ctrl+S)
-                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger as-child>
+                            <Button size="sm" variant="outline" class="gap-2">
+                                <MoreHorizontal class="w-4 h-4" />
+                                操作
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent class="w-44" align="end">
+                            <DropdownMenuGroup>
+                                <DropdownMenuItem
+                                    :disabled="
+                                        !activeFilePath ||
+                                        !isDirty ||
+                                        fileSaving
+                                    "
+                                    @click="saveActiveFile"
+                                >
+                                    <Save class="w-4 h-4 mr-2" />
+                                    保存 (Ctrl+S)
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    @click="consoleVisible = !consoleVisible"
+                                >
+                                    {{
+                                        consoleVisible
+                                            ? "隐藏控制台"
+                                            : "显示控制台"
+                                    }}
+                                </DropdownMenuItem>
+                            </DropdownMenuGroup>
 
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        class="gap-2"
-                        @click="consoleVisible = !consoleVisible"
-                    >
-                        {{ consoleVisible ? "隐藏控制台" : "显示控制台" }}
-                    </Button>
+                            <DropdownMenuSeparator />
+
+                            <DropdownMenuGroup>
+                                <DropdownMenuItem @click="createWorkspace">
+                                    <Plus class="w-4 h-4 mr-2" />
+                                    选择文件夹
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    :disabled="!workspaceRoot"
+                                    @click="reloadWorkspaceTree"
+                                >
+                                    <RefreshCcw class="w-4 h-4 mr-2" />
+                                    刷新目录
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    :disabled="!workspaceRoot"
+                                    @click="clearWorkspace"
+                                >
+                                    <Trash2 class="w-4 h-4 mr-2" />
+                                    清空工作区
+                                </DropdownMenuItem>
+                            </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
 
                 <div v-if="fileLoadError" class="p-3 text-sm text-destructive">
