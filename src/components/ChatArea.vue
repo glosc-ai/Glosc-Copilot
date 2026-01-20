@@ -88,11 +88,6 @@ const hasEnabledAnyTools = computed(
     () => hasEnabledServers.value || hasEnabledBuiltinTools.value,
 );
 
-async function toggleBuiltinTool(kind: "filesystem" | "git") {
-    const current = Boolean((settingsStore.builtinToolsEnabled as any)?.[kind]);
-    await settingsStore.setBuiltinToolEnabled(kind as any, !current);
-}
-
 // WebSearch 开关（透传给后端）
 const webSearchEnabled = computed(() => chatStore.webSearchEnabled);
 async function toggleWebSearch() {
