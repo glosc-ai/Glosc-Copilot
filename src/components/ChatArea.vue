@@ -1469,51 +1469,6 @@ watch(
                             <DropdownMenuContent class="w-56">
                                 <DropdownMenuLabel>工具</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-
-                                <DropdownMenuLabel class="text-xs">
-                                    内置工具（本地执行）
-                                </DropdownMenuLabel>
-                                <DropdownMenuItem
-                                    @click="toggleBuiltinTool('filesystem')"
-                                >
-                                    <Check
-                                        v-if="
-                                            settingsStore.builtinToolsEnabled
-                                                .filesystem
-                                        "
-                                        class="mr-2 h-4 w-4"
-                                    />
-                                    <span v-else class="mr-6"></span>
-                                    <span>文件系统</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    @click="toggleBuiltinTool('git')"
-                                >
-                                    <Check
-                                        v-if="
-                                            settingsStore.builtinToolsEnabled
-                                                .git
-                                        "
-                                        class="mr-2 h-4 w-4"
-                                    />
-                                    <span v-else class="mr-6"></span>
-                                    <span>Git</span>
-                                </DropdownMenuItem>
-                                <div
-                                    class="px-2 pb-2 text-[11px] text-muted-foreground"
-                                >
-                                    允许目录：{{
-                                        settingsStore.allowedDirectories
-                                            ?.length || 0
-                                    }}
-                                    条（未配置时工具会拒绝执行）
-                                </div>
-
-                                <DropdownMenuSeparator />
-                                <DropdownMenuLabel class="text-xs">
-                                    MCP Servers
-                                </DropdownMenuLabel>
-
                                 <DropdownMenuSub
                                     v-for="server in servers"
                                     :key="server.id"

@@ -51,13 +51,13 @@ function getStoreHost() {
         import.meta.env.VITE_STORE_HOST ||
         import.meta.env.VITE_SITE_HOST ||
         import.meta.env.VITE_API_HOST ||
-        "https://www.glosc.ai"
+        "http://localhost:3000"
     );
 }
 
 async function storeFetch<T>(
     path: string,
-    init?: RequestInit & { token?: string | null }
+    init?: RequestInit & { token?: string | null },
 ): Promise<T> {
     const host = getStoreHost();
     const url = `${host}${path.startsWith("/") ? path : `/${path}`}`;
@@ -65,7 +65,7 @@ async function storeFetch<T>(
     const headers = new Headers(init?.headers || undefined);
     headers.set(
         "Content-Type",
-        headers.get("Content-Type") || "application/json"
+        headers.get("Content-Type") || "application/json",
     );
 
     if (init?.token) {
@@ -103,19 +103,19 @@ export const GloscStoreApi = {
         if (params.offset != null) qs.set("offset", String(params.offset));
 
         return await storeFetch<{ items: StorePlugin[]; total: number }>(
-            `/api/store/plugins?${qs.toString()}`
+            `/api/store/plugins?${qs.toString()}`,
         );
     },
 
     async getPlugin(slug: string) {
         return await storeFetch<StorePlugin>(
-            `/api/store/plugins/${encodeURIComponent(slug)}`
+            `/api/store/plugins/${encodeURIComponent(slug)}`,
         );
     },
 
     async getVersions(slug: string) {
         return await storeFetch<{ items: StorePluginVersion[] }>(
-            `/api/store/plugins/${encodeURIComponent(slug)}/versions`
+            `/api/store/plugins/${encodeURIComponent(slug)}/versions`,
         );
     },
 
@@ -138,7 +138,7 @@ export const GloscStoreApi = {
                 method: "POST",
                 token,
                 body: JSON.stringify({}),
-            }
+            },
         );
     },
 
@@ -148,7 +148,7 @@ export const GloscStoreApi = {
             {
                 method: "GET",
                 token,
-            }
+            },
         );
     },
 
@@ -159,7 +159,7 @@ export const GloscStoreApi = {
     }) {
         const host = getStoreHost();
         const url = `${host}/api/store/plugins/${encodeURIComponent(
-            params.slug
+            params.slug,
         )}/versions/${encodeURIComponent(params.version)}/download`;
 
         const headers: Record<string, string> = {};

@@ -66,6 +66,70 @@ async function fileExists(filePath) {
     }
 }
 
+async function ensureNpmResources() {
+    // Tauri config bundles `src-tauri/resources/npm`.
+    // In some environments only `npm.zip` is checked in; ensure the folder exists at build time.
+    const resourcesDir = path.resolve(
+        __dirname,
+        "..",
+        "src-tauri",
+        "resources",
+    );
+    const npmDir = path.join(resourcesDir, "npm");
+    const npmZip = path.join(resourcesDir, "npm.zip");
+
+    if (await fileExists(npmDir)) {
+        console.log(
+            `[prepare-node] Found: ${path.relative(process.cwd(), npmDir)}`,
+        );
+        return;
+    }
+
+    if (!(await fileExists(npmZip))) {
+        // Keep build working even if npm resources are optional.
+        await fs.mkdir(npmDir, { recursive: true });
+        console.warn(
+            `[prepare-node] Missing ${path.relative(
+                process.cwd(),
+                npmZip,
+            )}; created empty ${path.relative(process.cwd(), npmDir)}`,
+        );
+        return;
+    }
+
+    console.log(
+        `[prepare-node] Extracting: ${path.relative(process.cwd(), npmZip)} ...`,
+    );
+    await fs.mkdir(resourcesDir, { recursive: true });
+
+    const zip = new AdmZip(npmZip);
+    const entries = zip.getEntries();
+
+    // Support both layouts:
+    // 1) entries start with "npm/..." => extract to resourcesDir
+    // 2) entries are content root => extract to npmDir
+    const hasTopLevelNpmDir = entries.some((e) => {
+        const name = String(e.entryName || "").replaceAll("\\", "/");
+        return name === "npm" || name.startsWith("npm/");
+    });
+
+    if (hasTopLevelNpmDir) {
+        zip.extractAllTo(resourcesDir, true);
+    } else {
+        await fs.mkdir(npmDir, { recursive: true });
+        zip.extractAllTo(npmDir, true);
+    }
+
+    if (!(await fileExists(npmDir))) {
+        // If zip contains `npm/` but extraction failed to create it for any reason, make it to satisfy build.
+        await fs.mkdir(npmDir, { recursive: true });
+    }
+
+    console.log(
+        `[prepare-node] Ready: ${path.relative(process.cwd(), npmDir)}`,
+    );
+}
+
 async function downloadToFile(url, destFile) {
     const res = await fetch(url, {
         redirect: "follow",
@@ -98,6 +162,8 @@ async function findFileRecursive(rootDir, predicate) {
 }
 
 async function main() {
+    await ensureNpmResources();
+
     const nodeTriple = getNodeTriple();
     const tauriTriple = getTauriTriple();
     const binariesDir = path.resolve(__dirname, "..", "src-tauri", "binaries");
