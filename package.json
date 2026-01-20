@@ -17,9 +17,10 @@
     "tauri:build": "yarn -s prepare:binaries && yarn -s tauri build",
     "tauri:build:win:nsis": "yarn -s prepare:binaries && yarn -s tauri build -b nsis",
     "tauri:build:win:msi": "yarn -s prepare:binaries && yarn -s tauri build -b msi",
-    "tauri:build:mac:universal": "yarn -s prepare:binaries && yarn -s tauri build -t universal-apple-darwin",
-    "tauri:build:mac:arm64": "yarn -s prepare:binaries && yarn -s tauri build -t aarch64-apple-darwin",
-    "tauri:build:mac:x64": "yarn -s prepare:binaries && yarn -s tauri build -t x86_64-apple-darwin",
+    "tauri:build:mac:universal": "yarn -s prepare:binaries && yarn -s tauri build -t universal-apple-darwin --bundles dmg",
+    "tauri:build:mac:arm64": "yarn -s prepare:binaries && yarn -s tauri build -t aarch64-apple-darwin --bundles dmg",
+    "tauri:build:mac:x64": "yarn -s prepare:binaries && yarn -s tauri build -t x86_64-apple-darwin --bundles dmg",
+    "tauri:build:mac:dmg": "yarn -s tauri:build:mac:universal",
     "tauri:build:linux:x64": "yarn -s prepare:binaries && yarn -s tauri build -t x86_64-unknown-linux-gnu",
     "tauri:build:linux:arm64": "yarn -s prepare:binaries && yarn -s tauri build -t aarch64-unknown-linux-gnu"
   },
