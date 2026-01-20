@@ -1,18 +1,13 @@
 <script setup lang="ts">
-<<<<<<< HEAD
-<<<<<<< HEAD
 import { computed } from "vue";
-=======
->>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
-=======
-import { computed } from "vue";
->>>>>>> 5c112eb (Fix code review issues and improve error handling)
 import { TabsRoot, type TabsRootProps } from "reka-ui";
 import { cn } from "@/lib/utils";
 
-const props = defineProps<TabsRootProps & {
-    class?: string;
-}>();
+const props = defineProps<
+    TabsRootProps & {
+        class?: string;
+    }
+>();
 
 const delegatedProps = computed(() => {
     const { class: _, ...delegated } = props;
@@ -21,10 +16,7 @@ const delegatedProps = computed(() => {
 </script>
 
 <template>
-    <TabsRoot
-        v-bind="delegatedProps"
-        :class="cn('', props.class)"
-    >
+    <TabsRoot v-bind="delegatedProps" :class="cn('', props.class)">
         <slot />
     </TabsRoot>
 </template>

@@ -1,11 +1,4 @@
 import { z } from "zod";
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-import type { StoredChatMessage } from "./interface";
->>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
-=======
->>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
 
 // 会议角色 Schema
 export const MeetingRoleSchema = z.object({
@@ -66,10 +59,6 @@ export const MeetingSchema = z.object({
     currentSpeakerIndex: z.number().optional(), // 当前发言者在队列中的索引
     speakerQueue: z.array(QueueNodeSchema).optional(), // 发言队列
     autoAdvance: z.boolean().optional(), // 是否自动推进到下一个发言者
-<<<<<<< HEAD
-    autoCycle: z.boolean().optional(), // 是否自动循环（到队列末尾后回到开头继续）
-=======
->>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 });
 
 export type Meeting = z.infer<typeof MeetingSchema>;
@@ -88,7 +77,6 @@ export type MeetingItem = z.infer<typeof MeetingItemSchema>;
 
 // 默认头像列表（emoji）
 export const DEFAULT_AVATARS = [
-<<<<<<< HEAD
     "👨‍💼",
     "👩‍💼",
     "👨‍💻",
@@ -109,11 +97,6 @@ export const DEFAULT_AVATARS = [
     "🔥",
     "⚡",
     "🌟",
-=======
-    "👨‍💼", "👩‍💼", "👨‍💻", "👩‍💻", "👨‍🔬", "👩‍🔬",
-    "👨‍🎨", "👩‍🎨", "👨‍🏫", "👩‍🏫", "👨‍⚖️", "👩‍⚖️",
-    "🤖", "🦾", "🧠", "💡", "🎯", "🔥", "⚡", "🌟",
->>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
 ];
 
 // 默认颜色列表

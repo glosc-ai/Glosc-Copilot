@@ -1,6 +1,4 @@
 <script setup lang="ts">
-<<<<<<< HEAD
-<<<<<<< HEAD
 import { computed } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
@@ -8,22 +6,6 @@ import { Button } from "@/components/ui/button";
 import { GripVertical, X, User, ListTodo } from "lucide-vue-next";
 import type { QueueNode } from "@/utils/meetingInterface";
 import { VueDraggableNext } from "vue-draggable-next";
-=======
-import { ref, computed } from "vue";
-=======
-import { computed } from "vue";
->>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
-import { useMeetingStore } from "@/stores/meeting";
-import { storeToRefs } from "pinia";
-import { Button } from "@/components/ui/button";
-import { GripVertical, X, User, ListTodo } from "lucide-vue-next";
-import type { QueueNode } from "@/utils/meetingInterface";
-<<<<<<< HEAD
-import { VueDraggable } from "vue-draggable-next";
->>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
-=======
-import { VueDraggableNext } from "vue-draggable-next";
->>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
 
 const props = defineProps<{
     meetingId: string;
@@ -86,24 +68,9 @@ async function removeFromQueue(nodeId: string) {
     await meetingStore.removeFromQueue(props.meetingId, nodeId);
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 5e25028 (实现基础会议功能)
 const currentSpeakerIndex = computed(
     () => activeMeeting.value?.currentSpeakerIndex ?? 0,
 );
-
-<<<<<<< HEAD
-async function setCurrentIndex(index: number) {
-    await meetingStore.setCurrentSpeakerIndex(props.meetingId, index);
-}
-=======
-const currentSpeakerIndex = computed(() => activeMeeting.value?.currentSpeakerIndex ?? 0);
->>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
-=======
-console.log(currentSpeakerIndex.value);
->>>>>>> 5e25028 (实现基础会议功能)
 </script>
 
 <template>
@@ -116,25 +83,11 @@ console.log(currentSpeakerIndex.value);
         </div>
 
         <div class="flex-1 overflow-y-auto p-4 space-y-2">
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 5e25028 (实现基础会议功能)
             <VueDraggableNext
                 v-model="queueNodes"
                 :animation="150"
                 handle=".drag-handle"
             >
-<<<<<<< HEAD
-=======
-            <VueDraggable v-model="queueNodes" :animation="150" handle=".drag-handle">
->>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
-=======
-            <VueDraggableNext v-model="queueNodes" :animation="150" handle=".drag-handle">
->>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
-=======
->>>>>>> 5e25028 (实现基础会议功能)
                 <div
                     v-for="(node, index) in queueNodes"
                     :key="node.id"
@@ -143,13 +96,6 @@ console.log(currentSpeakerIndex.value);
                         'ring-2 ring-primary': index === currentSpeakerIndex,
                         'opacity-40': index < currentSpeakerIndex,
                     }"
-<<<<<<< HEAD
-                    role="button"
-                    tabindex="0"
-                    @click="setCurrentIndex(index)"
-                    @keydown.enter.prevent="setCurrentIndex(index)"
-=======
->>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                 >
                     <!-- 拖拽手柄 -->
                     <div class="drag-handle cursor-move text-muted-foreground">
@@ -157,19 +103,9 @@ console.log(currentSpeakerIndex.value);
                     </div>
 
                     <!-- 序号 -->
-<<<<<<< HEAD
-<<<<<<< HEAD
                     <div
                         class="text-xs text-muted-foreground w-6 text-center shrink-0"
                     >
-=======
-                    <div class="text-xs text-muted-foreground w-6 text-center shrink-0">
->>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
-=======
-                    <div
-                        class="text-xs text-muted-foreground w-6 text-center shrink-0"
-                    >
->>>>>>> 5e25028 (实现基础会议功能)
                         {{ index + 1 }}
                     </div>
 
@@ -193,24 +129,12 @@ console.log(currentSpeakerIndex.value);
                         variant="ghost"
                         size="sm"
                         class="shrink-0 opacity-0 group-hover:opacity-100"
-<<<<<<< HEAD
-                        @click.stop="removeFromQueue(node.id)"
-=======
                         @click="removeFromQueue(node.id)"
->>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
                     >
                         <X class="w-3 h-3" />
                     </Button>
                 </div>
-<<<<<<< HEAD
-<<<<<<< HEAD
             </VueDraggableNext>
-=======
-            </VueDraggable>
->>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
-=======
-            </VueDraggableNext>
->>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
 
             <div
                 v-if="!queueNodes.length"

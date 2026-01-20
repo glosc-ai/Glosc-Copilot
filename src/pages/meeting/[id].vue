@@ -15,15 +15,7 @@ const router = useRouter();
 const meetingStore = useMeetingStore();
 const { activeMeeting } = storeToRefs(meetingStore);
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 const meetingId = computed(() => (route.params as any).id as string);
-=======
-const meetingId = computed(() => route.params.id as string);
->>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
-=======
-const meetingId = computed(() => (route.params as any).id as string);
->>>>>>> 5e25028 (实现基础会议功能)
 const activeTab = ref<"config" | "room">("config");
 
 onMounted(async () => {
@@ -44,91 +36,20 @@ function switchToRoom() {
 
 <template>
     <div
-<<<<<<< HEAD
-<<<<<<< HEAD
-        class="flex h-[calc(100vh-40px)] overflow-hidden bg-background text-foreground"
-    >
-        <div class="flex-1 flex flex-col overflow-hidden">
-            <!-- Header -->
-            <div class="border-b px-4 py-3 flex items-center gap-4">
-                <Button variant="ghost" size="sm" @click="goBack" class="gap-2">
-                    <ArrowLeft class="w-4 h-4" />
-                    返回列表
-                </Button>
-                <div class="flex-1 min-w-0">
-                    <h1 class="text-lg font-semibold truncate">
-                        {{ activeMeeting?.title || "加载中..." }}
-                    </h1>
-                </div>
-            </div>
-
-            <!-- Tabs -->
-            <Tabs
-                v-model="activeTab"
-                class="flex-1 flex flex-col overflow-hidden"
-            >
-                <TabsList class="mx-4 mt-3 w-fit">
-                    <TabsTrigger value="config">会议配置</TabsTrigger>
-                    <TabsTrigger value="room">会议室</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="config" class="flex-1 overflow-hidden mt-0">
-                    <MeetingConfig
-                        v-if="activeMeeting"
-                        :meeting-id="meetingId"
-                        @start-meeting="switchToRoom"
-                    />
-                </TabsContent>
-
-                <TabsContent value="room" class="flex-1 overflow-hidden mt-0">
-                    <MeetingRoom v-if="activeMeeting" :meeting-id="meetingId" />
-                </TabsContent>
-            </Tabs>
-        </div>
-=======
         class="flex flex-col h-[calc(100vh-40px)] overflow-hidden bg-background text-foreground"
-=======
-        class="flex h-[calc(100vh-40px)] overflow-hidden bg-background text-foreground"
->>>>>>> 5e25028 (实现基础会议功能)
     >
-        <div class="flex-1 flex flex-col overflow-hidden">
-            <!-- Header -->
-            <div class="border-b px-4 py-3 flex items-center gap-4">
-                <Button variant="ghost" size="sm" @click="goBack" class="gap-2">
-                    <ArrowLeft class="w-4 h-4" />
-                    返回列表
-                </Button>
-                <div class="flex-1 min-w-0">
-                    <h1 class="text-lg font-semibold truncate">
-                        {{ activeMeeting?.title || "加载中..." }}
-                    </h1>
-                </div>
+        <!-- Header -->
+        <div class="border-b px-4 py-3 flex items-center gap-4">
+            <Button variant="ghost" size="sm" @click="goBack" class="gap-2">
+                <ArrowLeft class="w-4 h-4" />
+                返回列表
+            </Button>
+            <div class="flex-1 min-w-0">
+                <h1 class="text-lg font-semibold truncate">
+                    {{ activeMeeting?.title || "加载中..." }}
+                </h1>
             </div>
-
-            <!-- Tabs -->
-            <Tabs
-                v-model="activeTab"
-                class="flex-1 flex flex-col overflow-hidden"
-            >
-                <TabsList class="mx-4 mt-3 w-fit">
-                    <TabsTrigger value="config">会议配置</TabsTrigger>
-                    <TabsTrigger value="room">会议室</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="config" class="flex-1 overflow-hidden mt-0">
-                    <MeetingConfig
-                        v-if="activeMeeting"
-                        :meeting-id="meetingId"
-                        @start-meeting="switchToRoom"
-                    />
-                </TabsContent>
-
-                <TabsContent value="room" class="flex-1 overflow-hidden mt-0">
-                    <MeetingRoom v-if="activeMeeting" :meeting-id="meetingId" />
-                </TabsContent>
-            </Tabs>
         </div>
-<<<<<<< HEAD
 
         <!-- Tabs -->
         <Tabs v-model="activeTab" class="flex-1 flex flex-col overflow-hidden">
@@ -149,8 +70,5 @@ function switchToRoom() {
                 <MeetingRoom v-if="activeMeeting" :meeting-id="meetingId" />
             </TabsContent>
         </Tabs>
->>>>>>> 6ffc780 (Add core meeting infrastructure: types, store, pages, and components)
-=======
->>>>>>> 5e25028 (实现基础会议功能)
     </div>
 </template>

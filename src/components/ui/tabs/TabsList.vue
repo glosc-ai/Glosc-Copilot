@@ -1,18 +1,13 @@
 <script setup lang="ts">
-<<<<<<< HEAD
-<<<<<<< HEAD
 import { computed } from "vue";
-=======
->>>>>>> 4afc7a7 (Add missing UI components and fix TypeScript errors)
-=======
-import { computed } from "vue";
->>>>>>> 5c112eb (Fix code review issues and improve error handling)
 import { TabsList, type TabsListProps } from "reka-ui";
 import { cn } from "@/lib/utils";
 
-const props = defineProps<TabsListProps & {
-    class?: string;
-}>();
+const props = defineProps<
+    TabsListProps & {
+        class?: string;
+    }
+>();
 
 const delegatedProps = computed(() => {
     const { class: _, ...delegated } = props;
@@ -23,10 +18,12 @@ const delegatedProps = computed(() => {
 <template>
     <TabsList
         v-bind="delegatedProps"
-        :class="cn(
-            'inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground',
-            props.class
-        )"
+        :class="
+            cn(
+                'inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground',
+                props.class,
+            )
+        "
     >
         <slot />
     </TabsList>

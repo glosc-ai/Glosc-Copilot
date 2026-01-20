@@ -3,7 +3,7 @@
         <div class="git-header">
             <div class="flex items-center gap-2">
                 <GitBranch class="w-4 h-4" />
-                <span class="branch-name">{{ currentBranch || 'N/A' }}</span>
+                <span class="branch-name">{{ currentBranch || "N/A" }}</span>
             </div>
             <Button size="icon-sm" variant="ghost" @click="refreshStatus">
                 <RefreshCw
@@ -41,7 +41,7 @@
                         />
                         <span class="file-path">{{ file.path }}</span>
                         <Button
-                            size="xs"
+                            size="sm"
                             variant="ghost"
                             @click="viewDiff(file.path, true)"
                         >
