@@ -97,6 +97,7 @@ declare module 'vue' {
     DropdownMenuSubTrigger: typeof import('./src/components/ui/dropdown-menu/DropdownMenuSubTrigger.vue')['default']
     DropdownMenuTrigger: typeof import('./src/components/ui/dropdown-menu/DropdownMenuTrigger.vue')['default']
     EditText: typeof import('./src/components/tools/EditText.vue')['default']
+    ElInput: typeof import('element-plus/es')['ElInput']
     GitStatusPanel: typeof import('./src/components/workspace/GitStatusPanel.vue')['default']
     HoverCard: typeof import('./src/components/ui/hover-card/HoverCard.vue')['default']
     HoverCardContent: typeof import('./src/components/ui/hover-card/HoverCardContent.vue')['default']

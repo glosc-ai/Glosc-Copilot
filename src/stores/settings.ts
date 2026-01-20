@@ -7,7 +7,12 @@ const STORE_KEYS = {
     themeMode: "settings_theme_mode",
     language: "settings_language",
     hiddenModelIds: "settings_hidden_model_ids",
+    builtinToolsEnabled: "settings_builtin_tools_enabled",
+    allowedDirectories: "settings_allowed_directories",
 } as const;
+
+export type BuiltinToolKind = "filesystem" | "git";
+export type BuiltinToolsEnabled = Record<BuiltinToolKind, boolean>;
 
 function getSystemPrefersDark(): boolean {
     if (typeof window === "undefined") return false;
@@ -32,6 +37,15 @@ export const useSettingsStore = defineStore("settings", {
         themeMode: "system" as ThemeMode,
         language: "zh-CN" as AppLanguage,
         hiddenModelIds: [] as string[],
+
+        // 内置工具（会话工具系统）
+        builtinToolsEnabled: {
+            filesystem: false,
+            git: false,
+        } as BuiltinToolsEnabled,
+
+        // 允许工具访问的目录（安全边界）；文件/Git 工具会强制校验。
+        allowedDirectories: [] as string[],
     }),
 
     getters: {
@@ -50,10 +64,20 @@ export const useSettingsStore = defineStore("settings", {
         async init() {
             if (this.initialized) return;
 
-            const [themeMode, language, hiddenModelIds] = await Promise.all([
+            const [
+                themeMode,
+                language,
+                hiddenModelIds,
+                builtinToolsEnabled,
+                allowedDirectories,
+            ] = await Promise.all([
                 storeUtils.get<ThemeMode>(STORE_KEYS.themeMode),
                 storeUtils.get<AppLanguage>(STORE_KEYS.language),
                 storeUtils.get<string[]>(STORE_KEYS.hiddenModelIds),
+                storeUtils.get<BuiltinToolsEnabled>(
+                    STORE_KEYS.builtinToolsEnabled,
+                ),
+                storeUtils.get<string[]>(STORE_KEYS.allowedDirectories),
             ]);
 
             if (
@@ -72,9 +96,67 @@ export const useSettingsStore = defineStore("settings", {
                 );
             }
 
+            if (
+                builtinToolsEnabled &&
+                typeof builtinToolsEnabled === "object"
+            ) {
+                this.builtinToolsEnabled = {
+                    filesystem: Boolean(
+                        (builtinToolsEnabled as any).filesystem,
+                    ),
+                    git: Boolean((builtinToolsEnabled as any).git),
+                };
+            }
+
+            if (Array.isArray(allowedDirectories)) {
+                this.allowedDirectories = allowedDirectories
+                    .map((x) => String(x || "").trim())
+                    .filter(Boolean);
+            }
+
             this.initialized = true;
             this.applyTheme();
             this.ensureSystemThemeListener();
+        },
+
+        async setBuiltinToolEnabled(kind: BuiltinToolKind, enabled: boolean) {
+            const k = kind === "git" ? "git" : "filesystem";
+            this.builtinToolsEnabled = {
+                ...this.builtinToolsEnabled,
+                [k]: Boolean(enabled),
+            };
+            await storeUtils.set(
+                STORE_KEYS.builtinToolsEnabled,
+                this.builtinToolsEnabled,
+                true,
+            );
+        },
+
+        async setAllowedDirectories(dirs: string[]) {
+            this.allowedDirectories = (dirs || [])
+                .map((x) => String(x || "").trim())
+                .filter(Boolean);
+            await storeUtils.set(
+                STORE_KEYS.allowedDirectories,
+                this.allowedDirectories,
+                true,
+            );
+        },
+
+        async addAllowedDirectory(dir: string) {
+            const d = String(dir || "").trim();
+            if (!d) return;
+            const next = new Set(this.allowedDirectories || []);
+            next.add(d);
+            await this.setAllowedDirectories(Array.from(next));
+        },
+
+        async removeAllowedDirectory(dir: string) {
+            const d = String(dir || "").trim();
+            if (!d) return;
+            const next = new Set(this.allowedDirectories || []);
+            next.delete(d);
+            await this.setAllowedDirectories(Array.from(next));
         },
 
         applyTheme() {

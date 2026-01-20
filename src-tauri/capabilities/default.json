@@ -87,6 +87,11 @@
           "name": "uvx",
           "cmd": "uvx",
           "args": true
+        },
+        {
+          "name": "git",
+          "cmd": "git",
+          "args": true
         }
       ]
     }

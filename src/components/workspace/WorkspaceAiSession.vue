@@ -39,6 +39,7 @@ import { storeToRefs } from "pinia";
 
 import { ChatUtils } from "@/utils/ChatUtils";
 import { McpUtils } from "@/utils/McpUtils";
+import { createBuiltinTools } from "@/utils/BuiltinTools";
 
 import { readDir, readTextFile } from "@tauri-apps/plugin-fs";
 
@@ -131,9 +132,22 @@ async function handleRegenerate() {
         enabled: enabledIds.has(s.id),
     }));
 
-    const tools = await McpUtils.getTools(toolServers as any, {
+    const mcpTools = await McpUtils.getTools(toolServers as any, {
         skipStopDisabled: true,
     });
+
+    const builtinEnabled = {
+        filesystem: Boolean(conv.enabledBuiltinTools?.filesystem),
+        git: Boolean(conv.enabledBuiltinTools?.git),
+    };
+    const allowedDirectories = conv.workspaceRoot ? [conv.workspaceRoot] : [];
+    const builtinTools = createBuiltinTools({
+        enabled: builtinEnabled,
+        allowedDirectories,
+        cwd: conv.workspaceRoot || null,
+    });
+
+    const tools = { ...mcpTools, ...builtinTools };
     clientToolsRef.value = tools;
 
     const modelId = conv.modelId || selectedModel.value?.id;
@@ -141,7 +155,8 @@ async function handleRegenerate() {
     chat.regenerate({
         body: {
             model: modelId,
-            mcpEnabled: enabledIds.size > 0,
+            // 兼容后端：只要启用了任意 tools，就把开关打开
+            mcpEnabled: Object.keys(tools).length > 0,
             tools,
             ...(conv.webSearch ? { webSearch: true } : {}),
         },
@@ -226,9 +241,22 @@ async function sendChatMessage(
         enabled: enabledIds.has(s.id),
     }));
 
-    const tools = await McpUtils.getTools(toolServers as any, {
+    const mcpTools = await McpUtils.getTools(toolServers as any, {
         skipStopDisabled: true,
     });
+
+    const builtinEnabled = {
+        filesystem: Boolean(conv.enabledBuiltinTools?.filesystem),
+        git: Boolean(conv.enabledBuiltinTools?.git),
+    };
+    const allowedDirectories = conv.workspaceRoot ? [conv.workspaceRoot] : [];
+    const builtinTools = createBuiltinTools({
+        enabled: builtinEnabled,
+        allowedDirectories,
+        cwd: conv.workspaceRoot || null,
+    });
+
+    const tools = { ...mcpTools, ...builtinTools };
     clientToolsRef.value = tools;
 
     const modelId = conv.modelId || selectedModel.value?.id;
@@ -238,7 +266,7 @@ async function sendChatMessage(
         {
             body: {
                 model: modelId,
-                mcpEnabled: enabledIds.size > 0,
+                mcpEnabled: Object.keys(tools).length > 0,
                 tools,
                 ...(conv.webSearch ? { webSearch: true } : {}),
             },
@@ -303,7 +331,11 @@ const settingsOpen = ref(false);
 
 const enabledToolCount = computed(() => {
     const conv = selectedConversation.value;
-    return (conv?.enabledMcpServerIds || []).length;
+    const mcpCount = (conv?.enabledMcpServerIds || []).length;
+    const builtinCount =
+        (conv?.enabledBuiltinTools?.filesystem ? 1 : 0) +
+        (conv?.enabledBuiltinTools?.git ? 1 : 0);
+    return mcpCount + builtinCount;
 });
 
 const activeModelLabel = computed(() => {
@@ -604,6 +636,7 @@ async function syncChatToStore() {
         messages: stored as any,
         modelId: conv.modelId,
         enabledMcpServerIds: conv.enabledMcpServerIds,
+        enabledBuiltinTools: conv.enabledBuiltinTools,
         webSearch: conv.webSearch,
         apiMode: conv.apiMode,
         customInstructions: conv.customInstructions,
@@ -646,9 +679,22 @@ async function handleSubmit(msg: PromptInputMessage) {
         enabled: enabledIds.has(s.id),
     }));
 
-    const tools = await McpUtils.getTools(toolServers as any, {
+    const mcpTools = await McpUtils.getTools(toolServers as any, {
         skipStopDisabled: true,
     });
+
+    const builtinEnabled = {
+        filesystem: Boolean(conv.enabledBuiltinTools?.filesystem),
+        git: Boolean(conv.enabledBuiltinTools?.git),
+    };
+    const allowedDirectories = conv.workspaceRoot ? [conv.workspaceRoot] : [];
+    const builtinTools = createBuiltinTools({
+        enabled: builtinEnabled,
+        allowedDirectories,
+        cwd: conv.workspaceRoot || null,
+    });
+
+    const tools = { ...mcpTools, ...builtinTools };
     clientToolsRef.value = tools;
 
     const modelId = conv.modelId || selectedModel.value?.id;
@@ -661,12 +707,25 @@ async function handleSubmit(msg: PromptInputMessage) {
         {
             body: {
                 model: modelId,
-                mcpEnabled: enabledIds.size > 0,
+                mcpEnabled: Object.keys(tools).length > 0,
                 tools,
                 ...(conv.webSearch ? { webSearch: true } : {}),
             },
         },
     );
+}
+
+async function toggleBuiltinTool(kind: "filesystem" | "git", checked: boolean) {
+    const conv = selectedConversation.value;
+    if (!conv) return;
+
+    const next = {
+        filesystem: Boolean(conv.enabledBuiltinTools?.filesystem),
+        git: Boolean(conv.enabledBuiltinTools?.git),
+        [kind]: checked,
+    };
+    conv.enabledBuiltinTools = next;
+    await chatStore.updateConversation(conv.id, { enabledBuiltinTools: next });
 }
 
 function onPromptError(error: { code: string; message: string }) {
@@ -1118,6 +1177,61 @@ async function toggleServer(serverId: string, checked: boolean) {
                             <div class="text-xs text-muted-foreground">
                                 工具（按会话启用）
                             </div>
+
+                            <div class="rounded-md border p-2">
+                                <div class="text-xs text-muted-foreground">
+                                    内置工具（本地执行；仅允许访问工作区目录）
+                                </div>
+                                <div class="mt-2 grid gap-2">
+                                    <label
+                                        class="flex items-center gap-2 text-sm"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            :checked="
+                                                Boolean(
+                                                    selectedConversation
+                                                        .enabledBuiltinTools
+                                                        ?.filesystem,
+                                                )
+                                            "
+                                            @change="
+                                                toggleBuiltinTool(
+                                                    'filesystem',
+                                                    (
+                                                        $event.target as HTMLInputElement
+                                                    ).checked,
+                                                )
+                                            "
+                                        />
+                                        <span>文件系统</span>
+                                    </label>
+                                    <label
+                                        class="flex items-center gap-2 text-sm"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            :checked="
+                                                Boolean(
+                                                    selectedConversation
+                                                        .enabledBuiltinTools
+                                                        ?.git,
+                                                )
+                                            "
+                                            @change="
+                                                toggleBuiltinTool(
+                                                    'git',
+                                                    (
+                                                        $event.target as HTMLInputElement
+                                                    ).checked,
+                                                )
+                                            "
+                                        />
+                                        <span>Git</span>
+                                    </label>
+                                </div>
+                            </div>
+
                             <div
                                 v-if="mcpStore.servers.length === 0"
                                 class="text-xs text-muted-foreground"

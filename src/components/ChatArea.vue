@@ -47,6 +47,8 @@ import { useMcpStore } from "@/stores/mcp";
 import { useAuthStore } from "@/stores/auth";
 import { useRouter } from "vue-router";
 
+import { createBuiltinTools } from "@/utils/BuiltinTools";
+
 const props = withDefaults(
     defineProps<{
         /**
@@ -76,6 +78,20 @@ const authStore = useAuthStore();
 const router = useRouter();
 
 const hasEnabledServers = computed(() => servers.value.some((s) => s.enabled));
+
+const hasEnabledBuiltinTools = computed(() => {
+    const t = settingsStore.builtinToolsEnabled;
+    return Boolean(t?.filesystem || t?.git);
+});
+
+const hasEnabledAnyTools = computed(
+    () => hasEnabledServers.value || hasEnabledBuiltinTools.value,
+);
+
+async function toggleBuiltinTool(kind: "filesystem" | "git") {
+    const current = Boolean((settingsStore.builtinToolsEnabled as any)?.[kind]);
+    await settingsStore.setBuiltinToolEnabled(kind as any, !current);
+}
 
 // WebSearch 开关（透传给后端）
 const webSearchEnabled = computed(() => chatStore.webSearchEnabled);
@@ -351,8 +367,19 @@ async function sendChatMessage(
     }
 
     sendLock.value = true;
-    const tools = await mcpStore.getCachedTools();
+    const mcpTools = await mcpStore.getCachedTools();
+    const builtinTools = createBuiltinTools({
+        enabled: settingsStore.builtinToolsEnabled,
+        // 若用户没有配置 allowedDirectories，则工具本身会拒绝执行。
+        allowedDirectories: settingsStore.allowedDirectories,
+        cwd: settingsStore.allowedDirectories?.[0] || null,
+    });
+    const tools = {
+        ...(mcpTools || {}),
+        ...(builtinTools || {}),
+    };
     clientToolsRef.value = tools;
+    const toolsEnabled = Object.keys(tools).length > 0;
 
     try {
         await chat.sendMessage(
@@ -360,7 +387,8 @@ async function sendChatMessage(
             {
                 body: {
                     model: selectedModel.value?.id,
-                    mcpEnabled: hasEnabledServers.value,
+                    // 后端若仅在 mcpEnabled=true 时启用 tools，这里扩展为“任意工具可用”。
+                    mcpEnabled: toolsEnabled,
                     tools,
                     ...(webSearchEnabled.value ? { webSearch: true } : {}),
                 },
@@ -738,12 +766,22 @@ async function handleRegenerate() {
         void authStore.startLogin();
         return;
     }
-    const tools = await mcpStore.getCachedTools();
+    const mcpTools = await mcpStore.getCachedTools();
+    const builtinTools = createBuiltinTools({
+        enabled: settingsStore.builtinToolsEnabled,
+        allowedDirectories: settingsStore.allowedDirectories,
+        cwd: settingsStore.allowedDirectories?.[0] || null,
+    });
+    const tools = {
+        ...(mcpTools || {}),
+        ...(builtinTools || {}),
+    };
     clientToolsRef.value = tools;
+    const toolsEnabled = Object.keys(tools).length > 0;
     chat.regenerate({
         body: {
             model: selectedModel.value?.id,
-            mcpEnabled: hasEnabledServers.value,
+            mcpEnabled: toolsEnabled,
             tools,
             ...(webSearchEnabled.value ? { webSearch: true } : {}),
         },
@@ -1420,7 +1458,7 @@ watch(
                             <DropdownMenuTrigger as-child>
                                 <PromptInputButton
                                     :variant="
-                                        hasEnabledServers ? 'default' : 'ghost'
+                                        hasEnabledAnyTools ? 'default' : 'ghost'
                                     "
                                     @contextmenu.prevent="openMcpManager"
                                 >
@@ -1431,6 +1469,51 @@ watch(
                             <DropdownMenuContent class="w-56">
                                 <DropdownMenuLabel>工具</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
+
+                                <DropdownMenuLabel class="text-xs">
+                                    内置工具（本地执行）
+                                </DropdownMenuLabel>
+                                <DropdownMenuItem
+                                    @click="toggleBuiltinTool('filesystem')"
+                                >
+                                    <Check
+                                        v-if="
+                                            settingsStore.builtinToolsEnabled
+                                                .filesystem
+                                        "
+                                        class="mr-2 h-4 w-4"
+                                    />
+                                    <span v-else class="mr-6"></span>
+                                    <span>文件系统</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    @click="toggleBuiltinTool('git')"
+                                >
+                                    <Check
+                                        v-if="
+                                            settingsStore.builtinToolsEnabled
+                                                .git
+                                        "
+                                        class="mr-2 h-4 w-4"
+                                    />
+                                    <span v-else class="mr-6"></span>
+                                    <span>Git</span>
+                                </DropdownMenuItem>
+                                <div
+                                    class="px-2 pb-2 text-[11px] text-muted-foreground"
+                                >
+                                    允许目录：{{
+                                        settingsStore.allowedDirectories
+                                            ?.length || 0
+                                    }}
+                                    条（未配置时工具会拒绝执行）
+                                </div>
+
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel class="text-xs">
+                                    MCP Servers
+                                </DropdownMenuLabel>
+
                                 <DropdownMenuSub
                                     v-for="server in servers"
                                     :key="server.id"

@@ -41,6 +41,35 @@ const hiddenCount = computed(() => {
 
 const visibleCount = computed(() => totalModelCount.value - hiddenCount.value);
 
+const builtinFilesystemEnabled = computed({
+    get: () => Boolean(settingsStore.builtinToolsEnabled?.filesystem),
+    set: (v: any) => {
+        void settingsStore.setBuiltinToolEnabled("filesystem" as any, !!v);
+    },
+});
+
+const builtinGitEnabled = computed({
+    get: () => Boolean(settingsStore.builtinToolsEnabled?.git),
+    set: (v: any) => {
+        void settingsStore.setBuiltinToolEnabled("git" as any, !!v);
+    },
+});
+
+const allowedDirsDraft = ref("");
+
+function normalizeAllowedDirsText(text: string): string[] {
+    return String(text || "")
+        .split(/\r?\n/)
+        .map((x) => x.trim())
+        .filter(Boolean);
+}
+
+async function saveAllowedDirs() {
+    const dirs = normalizeAllowedDirsText(allowedDirsDraft.value);
+    await settingsStore.setAllowedDirectories(dirs);
+    ElMessage.success("已保存允许目录");
+}
+
 const availableModelTypes = computed(() => {
     const types = new Set<string>();
     for (const m of availableModels.value || []) {
@@ -127,6 +156,11 @@ watch(
         }
         // 进入设置时确保 settings 已初始化（main.ts 会先 init，但这里兜底）
         void settingsStore.init();
+
+        // 同步草稿
+        allowedDirsDraft.value = (settingsStore.allowedDirectories || []).join(
+            "\n",
+        );
     },
     { immediate: true },
 );
@@ -205,6 +239,50 @@ watch(
                             >
                                 显示所有模型
                             </Button>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-2">
+                        <div class="text-xs text-muted-foreground">
+                            会话工具（本地）
+                        </div>
+
+                        <label class="flex items-center gap-2 text-sm">
+                            <input
+                                type="checkbox"
+                                v-model="builtinFilesystemEnabled"
+                            />
+                            <span>启用内置文件系统工具</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm">
+                            <input
+                                type="checkbox"
+                                v-model="builtinGitEnabled"
+                            />
+                            <span>启用内置 Git 工具</span>
+                        </label>
+
+                        <div class="text-xs text-muted-foreground mt-2">
+                            允许目录（每行一个；工具只能读写这些目录下的文件）
+                        </div>
+                        <el-input
+                            v-model="allowedDirsDraft"
+                            type="textarea"
+                            :rows="4"
+                            placeholder="例如：\nE:\\web\\glosc.ai\\Glosc-Copilot\nE:\\work\\my-project"
+                        />
+                        <div class="flex items-center gap-2">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                @click="saveAllowedDirs"
+                            >
+                                保存允许目录
+                            </Button>
+                            <div class="text-xs text-muted-foreground">
+                                提示：未配置允许目录时，文件/Git
+                                工具会拒绝执行。
+                            </div>
                         </div>
                     </div>
                 </div>

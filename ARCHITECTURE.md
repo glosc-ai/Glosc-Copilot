@@ -23,24 +23,26 @@
 │  └────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────┘
                               │
-                              │ MCP 协议
+                              │ 会话工具（toolsRef / tool-calls）
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                      MCP 工具层                              │
+│                 会话工具层（Client Tools）                    │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌──────────────────────┐    ┌──────────────────────────┐  │
-│  │  文件系统 MCP 服务器   │    │    Git MCP 服务器        │  │
+│  │ 内置文件系统工具       │    │ 内置 Git 工具            │  │
 │  ├──────────────────────┤    ├──────────────────────────┤  │
-│  │ • read_file         │    │ • git_status            │  │
-│  │ • write_file        │    │ • git_diff              │  │
-│  │ • edit_file         │    │ • git_log               │  │
-│  │ • list_directory    │    │ • git_branch            │  │
-│  │ • create_directory  │    │ • git_add               │  │
-│  │ • delete_file       │    │ • git_commit            │  │
-│  │ • search_files      │    │ • git_show              │  │
-│  │ • grep_files        │    │ • git_remote            │  │
-│  │ • move_file         │    └──────────────────────────┘  │
+│  │ • read_text_file     │    │ • git_status            │  │
+│  │ • write_file         │    │ • git_diff              │  │
+│  │ • edit_file          │    │ • git_add               │  │
+│  │ • list_directory     │    │ • git_commit            │  │
+│  │ • directory_tree     │    │ • git_log               │  │
+│  │ • search_files       │    │ • git_branch            │  │
+│  │ • grep_files         │    └──────────────────────────┘  │
 │  └──────────────────────┘                                  │
+│                                                             │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │ 可选：MCP Servers（第三方/扩展工具来源，用户可启用）     │ │
+│  └────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
                               │
                               │ 文件系统/Git 操作
@@ -59,24 +61,24 @@
     ▼
 AI 理解意图
     │
-    ├─→ 需要文件操作
-    │   │
-    │   ▼
-    │   调用文件系统 MCP 工具
-    │   │
-    │   ├─→ read_file
-    │   ├─→ write_file
-    │   ├─→ edit_file
-    │   └─→ search_files
-    │
-    ├─→ 需要 Git 操作
-    │   │
-    │   ▼
-    │   调用 Git MCP 工具
-    │   │
-    │   ├─→ git_status
-    │   ├─→ git_diff
-    │   └─→ git_commit
+      ├─→ 需要文件操作
+      │   │
+      │   ▼
+      │   触发 tool-call（内置文件系统工具）
+      │   │
+      │   ├─→ read_text_file / read_multiple_files
+      │   ├─→ write_file / edit_file
+      │   ├─→ list_directory / directory_tree
+      │   └─→ search_files / grep_files
+      │
+      ├─→ 需要 Git 操作
+      │   │
+      │   ▼
+      │   触发 tool-call（内置 Git 工具）
+      │   │
+      │   ├─→ git_status
+      │   ├─→ git_diff
+      │   └─→ git_commit
     │
     └─→ 需要多步骤任务
         │
@@ -138,12 +140,15 @@ AI 理解意图
 Glosc-Copilot/
 │
 ├── src/
-│   ├── mcp-servers/                 # MCP 服务器 (新增)
-│   │   ├── filesystem-server.ts     # 文件系统服务器 (15KB)
-│   │   ├── git-server.ts            # Git 服务器 (11KB)
-│   │   ├── package.json             # 依赖配置
-│   │   ├── tsconfig.json            # TypeScript 配置
-│   │   └── README.md                # 服务器文档
+│   ├── utils/
+│   │   ├── BuiltinTools.ts          # 内置工具（文件系统/Git，本地执行）
+│   │   ├── ChatUtils.ts             # toolsRef/onToolCall 执行链路
+│   │   └── McpUtils.ts              # 可选：MCP server 工具集成
+│   │
+│   ├── stores/
+│   │   ├── settings.ts              # 全局开关 + allowedDirectories
+│   │   ├── mcp.ts                   # MCP servers 配置/缓存
+│   │   └── workspaceChat.ts         # 工作区会话：按会话启用工具
 │   │
 │   └── components/
 │       └── workspace/               # 工作区组件
@@ -177,18 +182,18 @@ Glosc-Copilot/
       └─ 步骤 2: 修改并写入
       │
       ▼
-4. 执行步骤 1
+4. 执行步骤 1（tool-call -> 前端执行）
       │
-      └─→ 调用 read_file("package.json")
+      └─→ 调用 read_text_file({ path: "package.json" })
             │
-            └─→ 返回文件内容
+            └─→ onToolCall 执行并回填 tool output
       │
       ▼
-5. 执行步骤 2
+5. 执行步骤 2（tool-call -> 前端执行）
       │
-      └─→ 调用 write_file("package.json", new_content)
+      └─→ 调用 write_file({ path: "package.json", content: new_content })
             │
-            └─→ 确认写入成功
+            └─→ onToolCall 执行并回填 tool output
       │
       ▼
 6. 返回结果给用户
@@ -253,8 +258,7 @@ Glosc-Copilot/
 ┌─────────────────────────────┬──────────┬────────┐
 │ 组件/文件                    │ 代码行数  │ 大小   │
 ├─────────────────────────────┼──────────┼────────┤
-│ filesystem-server.ts        │   ~450   │ 15KB   │
-│ git-server.ts              │   ~350   │ 11KB   │
+│ BuiltinTools.ts            │   ~?     │  ?     │
 │ ToolExecutionPanel.vue     │   ~180   │ 4.9KB  │
 │ TaskPlanView.vue           │   ~220   │ 6.3KB  │
 │ GitStatusPanel.vue         │   ~300   │ 8.8KB  │

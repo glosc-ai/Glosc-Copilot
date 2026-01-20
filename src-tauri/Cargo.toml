@@ -1,6 +1,6 @@
 [package]
 name = "glosc-copilot"
-version = "0.1.0"
+version = "0.1.3"
 description = "A Tauri App"
 authors = ["小莫"]
 edition = "2024"
