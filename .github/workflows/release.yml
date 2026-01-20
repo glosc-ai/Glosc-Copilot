@@ -1,0 +1,85 @@
+name: release
+
+on:
+    push:
+        tags:
+            - "v*"
+    workflow_dispatch: {}
+
+jobs:
+    publish-tauri:
+        permissions:
+            contents: write
+
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - platform: "windows-latest"
+                      args: ""
+                    - platform: "ubuntu-22.04"
+                      args: ""
+                    # macOS runners are arm64; we build both arm64 and x64 bundles.
+                    - platform: "macos-latest"
+                      args: "--target aarch64-apple-darwin"
+                    - platform: "macos-latest"
+                      args: "--target x86_64-apple-darwin"
+
+        runs-on: ${{ matrix.platform }}
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: lts/*
+                  cache: "yarn"
+
+            - name: Install Rust stable
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  # Those targets are only used on macos runners.
+                  targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+            - name: Rust cache
+              uses: swatinem/rust-cache@v2
+              with:
+                  workspaces: "./src-tauri -> target"
+
+            - name: Install Linux dependencies
+              if: matrix.platform == 'ubuntu-22.04'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y \
+                    libwebkit2gtk-4.1-dev \
+                    libappindicator3-dev \
+                    librsvg2-dev \
+                    patchelf
+
+            - name: Install frontend dependencies
+              run: yarn install --frozen-lockfile
+
+            - name: Sync version (sanity)
+              run: yarn -s sync:version
+
+            - name: Ensure tag matches version
+              run: node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); const tag=process.env.GITHUB_REF_NAME||''; const v=tag.startsWith('v')?tag.slice(1):tag; if(v!==pkg.version){ console.error('Tag version mismatch:', tag, '!=', 'v'+pkg.version); process.exit(1);} console.log('Tag matches package.json version:', pkg.version);"
+
+            - name: Prepare uv sidecar
+              run: yarn -s prepare:uv
+
+            - name: Build and publish
+              uses: tauri-apps/tauri-action@v0
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  tagName: ${{ github.ref_name }}
+                  releaseName: "Glosc Copilot ${{ github.ref_name }}"
+                  releaseBody: "自动构建产物见 Assets。"
+                  generateReleaseNotes: true
+                  releaseDraft: false
+                  prerelease: false
+                  tauriScript: "yarn tauri"
+                  args: ${{ matrix.args }}
