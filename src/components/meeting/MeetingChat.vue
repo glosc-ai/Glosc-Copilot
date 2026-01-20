@@ -319,7 +319,8 @@ async function streamToMeetingMessage(params: StreamToMessageParams) {
                 // 还没看到 status 变忙：给一个短暂宽限期，避免刚触发时就读到 "ready" 直接退出。
                 const elapsed = performance.now() - startedAt;
                 const hasAnyOutput =
-                    Boolean(accumulatedContent) || Boolean(accumulatedReasoning);
+                    Boolean(accumulatedContent) ||
+                    Boolean(accumulatedReasoning);
                 if (hasAnyOutput) {
                     // 已经有输出但 status 仍然非忙，通常表示已经结束
                     break;
