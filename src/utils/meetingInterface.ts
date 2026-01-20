@@ -59,6 +59,7 @@ export const MeetingSchema = z.object({
     currentSpeakerIndex: z.number().optional(), // 当前发言者在队列中的索引
     speakerQueue: z.array(QueueNodeSchema).optional(), // 发言队列
     autoAdvance: z.boolean().optional(), // 是否自动推进到下一个发言者
+    autoCycle: z.boolean().optional(), // 是否自动循环（到队列末尾后回到开头继续）
 });
 
 export type Meeting = z.infer<typeof MeetingSchema>;

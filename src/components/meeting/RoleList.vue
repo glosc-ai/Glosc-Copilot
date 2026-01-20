@@ -3,6 +3,10 @@ import { computed } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
 
+const props = defineProps<{
+    meetingId: string;
+}>();
+
 const meetingStore = useMeetingStore();
 const { currentRoles, activeMeeting } = storeToRefs(meetingStore);
 
@@ -19,6 +23,10 @@ const currentSpeakerId = computed(() => {
 
     return null;
 });
+
+async function jumpToRole(roleId: string) {
+    await meetingStore.jumpToRoleInQueue(props.meetingId, roleId);
+}
 </script>
 
 <template>
@@ -38,6 +46,10 @@ const currentSpeakerId = computed(() => {
                 :class="{
                     'ring-2 ring-primary': currentSpeakerId === role.id,
                 }"
+                role="button"
+                tabindex="0"
+                @click="jumpToRole(role.id)"
+                @keydown.enter.prevent="jumpToRole(role.id)"
             >
                 <div class="flex items-center gap-3">
                     <div

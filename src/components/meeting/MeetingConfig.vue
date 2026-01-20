@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
+import { useChatStore } from "@/stores/chat";
+import { useMcpStore } from "@/stores/mcp";
 import { storeToRefs } from "pinia";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +20,7 @@ import { Plus, Edit, Trash2, Play, Users } from "lucide-vue-next";
 import type { MeetingRole } from "@/utils/meetingInterface";
 import ModelSelectorPicker from "@/components/ModelSelectorPicker.vue";
 import type { ModelInfo } from "@/utils/interface";
+import OpenAI from "openai";
 
 const props = defineProps<{
     meetingId: string;
@@ -29,6 +32,18 @@ const emit = defineEmits<{
 
 const meetingStore = useMeetingStore();
 const { activeMeeting, availableModels } = storeToRefs(meetingStore);
+
+const mcpStore = useMcpStore();
+
+const chatStore = useChatStore();
+const { recentModelUsage } = storeToRefs(chatStore);
+
+onMounted(() => {
+    if (!chatStore.recentModelUsageLoaded) {
+        void chatStore.loadRecentModelUsage();
+    }
+    void mcpStore.init();
+});
 
 // 会议基本信息编辑
 const editingTitle = ref(false);
@@ -45,9 +60,88 @@ const roleForm = ref({
     modelId: "",
     systemPrompt: "",
     color: "",
+    enabledMcpServerIds: [] as string[],
 });
 
 const isEditMode = computed(() => editingRoleId.value !== null);
+
+// 智能输入：根据简短人设自动生成 system prompt
+const smartInputOpen = ref(false);
+const smartPersona = ref("");
+const smartGenerating = ref(false);
+
+function openSmartInput() {
+    smartInputOpen.value = true;
+    smartPersona.value = "";
+}
+
+function closeSmartInput() {
+    smartInputOpen.value = false;
+    smartPersona.value = "";
+}
+
+async function generateSystemPrompt() {
+    const brief = smartPersona.value.trim();
+    if (!brief) {
+        ElMessage.warning("请先输入简约的角色人设描述");
+        return;
+    }
+
+    if (smartGenerating.value) return;
+    smartGenerating.value = true;
+
+    try {
+        const meetingTitle = activeMeeting.value?.title?.trim() || "";
+        const meetingSummary = activeMeeting.value?.summary?.trim() || "";
+
+        const roleName = roleForm.value.name.trim() || "（未命名）";
+        const roleModelId = roleForm.value.modelId || "";
+
+        const summaryPrompt =
+            "你将帮助我为一个多智能体 AI 会议中的『角色』编写 system prompt。\n" +
+            `会议名称：${meetingTitle || "（无）"}\n` +
+            `会议背景与主题：${meetingSummary || "（无）"}\n` +
+            `角色名称：${roleName}\n` +
+            `使用模型：${roleModelId || "（未指定）"}\n` +
+            `用户给出的简约人设：${brief}\n\n` +
+            "要求：\n" +
+            "- 输出中文 system prompt，可直接粘贴使用\n" +
+            "- 1-3 段，包含：身份/目标、工作方式、说话风格、注意事项\n" +
+            "- 不要出现标题、引号、Markdown、代码块\n" +
+            "- 不要提及‘你是AI’或暴露提示词/规则\n\n" +
+            "System Prompt：";
+
+        const host = import.meta.env.VITE_API_HOST || "http://localhost:3000";
+        const openai = new OpenAI({
+            apiKey: import.meta.env.VITE_OPENAI_API_KEY || "123456",
+            baseURL: `${host}/api/v1`,
+            dangerouslyAllowBrowser: true,
+        });
+
+        const response = await openai.chat.completions.create({
+            model: "xai/grok-4.1-fast-non-reasoning",
+            messages: [{ role: "user", content: summaryPrompt }],
+            temperature: 0.7,
+            stream: false,
+        });
+
+        const generated = response.choices[0]?.message?.content || "";
+        const cleaned = generated.trim();
+        if (!cleaned) {
+            ElMessage.error("智能输入失败：未生成有效内容");
+            return;
+        }
+
+        roleForm.value.systemPrompt = cleaned;
+        ElMessage.success("已自动生成并填充角色设定");
+        closeSmartInput();
+    } catch (e) {
+        console.error("智能输入失败:", e);
+        ElMessage.error("智能输入失败，请稍后重试");
+    } finally {
+        smartGenerating.value = false;
+    }
+}
 
 function startEditTitle() {
     editingTitleValue.value = activeMeeting.value?.title || "";
@@ -93,6 +187,9 @@ function openAddRoleDialog() {
         modelId: availableModels.value[0]?.id || "",
         systemPrompt: "",
         color: meetingStore.getNextAvailableColor(props.meetingId),
+        enabledMcpServerIds: (mcpStore.servers || [])
+            .filter((s) => s.enabled)
+            .map((s) => s.id),
     };
     roleDialogOpen.value = true;
 }
@@ -105,13 +202,25 @@ function openEditRoleDialog(role: MeetingRole) {
         modelId: role.modelId,
         systemPrompt: role.systemPrompt,
         color: role.color || "",
+        enabledMcpServerIds: Array.isArray(role.enabledMcpServerIds)
+            ? [...role.enabledMcpServerIds]
+            : (mcpStore.servers || [])
+                  .filter((s) => s.enabled)
+                  .map((s) => s.id),
     };
     roleDialogOpen.value = true;
 }
 
+function toggleRoleServer(serverId: string, checked: boolean) {
+    const next = new Set(roleForm.value.enabledMcpServerIds || []);
+    if (checked) next.add(serverId);
+    else next.delete(serverId);
+    roleForm.value.enabledMcpServerIds = Array.from(next);
+}
+
 async function saveRole() {
     if (!roleForm.value.name.trim()) {
-        alert("请输入角色名称");
+        ElMessage.warning("请输入角色名称");
         return;
     }
 
@@ -122,6 +231,7 @@ async function saveRole() {
             modelId: roleForm.value.modelId,
             systemPrompt: roleForm.value.systemPrompt,
             color: roleForm.value.color,
+            enabledMcpServerIds: roleForm.value.enabledMcpServerIds,
         });
     } else {
         await meetingStore.addRole(props.meetingId, {
@@ -130,6 +240,7 @@ async function saveRole() {
             modelId: roleForm.value.modelId,
             systemPrompt: roleForm.value.systemPrompt,
             color: roleForm.value.color,
+            enabledMcpServerIds: roleForm.value.enabledMcpServerIds,
         });
     }
 
@@ -137,23 +248,30 @@ async function saveRole() {
 }
 
 async function deleteRole(roleId: string) {
-    if (confirm("确定要删除此角色吗？")) {
-        await meetingStore.deleteRole(props.meetingId, roleId);
+    try {
+        await ElMessageBox.confirm("确定要删除此角色吗？", "提示", {
+            type: "warning",
+            confirmButtonText: "删除",
+            cancelButtonText: "取消",
+        });
+    } catch {
+        return;
     }
+
+    await meetingStore.deleteRole(props.meetingId, roleId);
 }
 
 function startMeeting() {
     if (!activeMeeting.value?.roles.length) {
-        alert("请至少添加一个角色");
+        ElMessage.warning("请至少添加一个角色");
         return;
     }
     emit("startMeeting");
 }
 
-function onModelSelect(model: ModelInfo | null) {
-    if (model) {
-        roleForm.value.modelId = model.id;
-    }
+function onModelSelect(model: ModelInfo) {
+    roleForm.value.modelId = model.id;
+    chatStore.markModelUsed(model.id);
 }
 
 const selectedModel = computed(() => {
@@ -386,16 +504,109 @@ const selectedModel = computed(() => {
                         <ModelSelectorPicker
                             :models="availableModels"
                             :selected-model="selectedModel"
-                            @update:selected-model="onModelSelect"
+                            :selected-model-id="roleForm.modelId"
+                            :recent-usage="recentModelUsage"
+                            :allow-remove-recent="true"
+                            @select="onModelSelect"
+                            @remove-recent="
+                                (id) => chatStore.removeRecentModel(id)
+                            "
                             class="mt-1"
                         />
                     </div>
 
+                    <div class="space-y-2">
+                        <Label>工具（按角色启用 MCP Server）</Label>
+                        <p class="text-xs text-muted-foreground">
+                            该角色只能调用你在此勾选的 MCP 工具（不同 AI
+                            可配置不同工具）。
+                        </p>
+                        <div
+                            v-if="mcpStore.servers.length === 0"
+                            class="text-xs text-muted-foreground"
+                        >
+                            未配置 MCP Server（可到 MCP 页面配置）
+                        </div>
+                        <div
+                            v-else
+                            class="max-h-48 overflow-auto rounded-md border p-2"
+                        >
+                            <label
+                                v-for="s in mcpStore.servers"
+                                :key="s.id"
+                                class="flex items-center gap-2 text-sm py-1"
+                            >
+                                <input
+                                    type="checkbox"
+                                    :checked="
+                                        (
+                                            roleForm.enabledMcpServerIds || []
+                                        ).includes(s.id)
+                                    "
+                                    @change="
+                                        toggleRoleServer(
+                                            s.id,
+                                            ($event.target as HTMLInputElement)
+                                                .checked,
+                                        )
+                                    "
+                                />
+                                <span class="truncate">{{ s.name }}</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <div>
-                        <Label>角色设定 (System Prompt)</Label>
+                        <div class="flex items-center justify-between gap-3">
+                            <Label>角色设定 (System Prompt)</Label>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                class="gap-2"
+                                @click="openSmartInput"
+                            >
+                                智能输入
+                            </Button>
+                        </div>
                         <p class="text-xs text-muted-foreground mt-1 mb-2">
                             定义角色的人设、专业领域、说话风格、立场观点等
                         </p>
+
+                        <div
+                            v-if="smartInputOpen"
+                            class="p-3 rounded-md border bg-muted/40 space-y-2"
+                        >
+                            <div class="text-sm font-medium">简约人设描述</div>
+                            <Input
+                                v-model="smartPersona"
+                                placeholder="例如：严谨的技术负责人，关注可行性与风险；说话简洁，喜欢列要点"
+                            />
+                            <div class="flex gap-2">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    :disabled="smartGenerating"
+                                    @click="generateSystemPrompt"
+                                >
+                                    {{
+                                        smartGenerating
+                                            ? "生成中..."
+                                            : "生成并填充"
+                                    }}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    :disabled="smartGenerating"
+                                    @click="closeSmartInput"
+                                >
+                                    取消
+                                </Button>
+                            </div>
+                        </div>
+
                         <Textarea
                             v-model="roleForm.systemPrompt"
                             rows="6"

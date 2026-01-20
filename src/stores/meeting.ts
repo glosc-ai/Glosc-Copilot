@@ -34,6 +34,54 @@ export const useMeetingStore = defineStore("meeting", {
     }),
 
     getters: {
+        // 按日期分组的会议列表（逻辑对齐 chatStore.groupedConversations）
+        groupedMeetings: (state) => {
+            const groups: Record<string, MeetingItem[]> = {};
+            const now = new Date();
+            const today = new Date(
+                now.getFullYear(),
+                now.getMonth(),
+                now.getDate(),
+            );
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            state.meetingsItems.forEach((item) => {
+                const date = new Date(item.timestamp || 0);
+                let dateKey: string;
+
+                if (date >= today) {
+                    dateKey = "今天";
+                } else if (date >= yesterday) {
+                    dateKey = "昨天";
+                } else {
+                    dateKey = date.toISOString().split("T")[0];
+                }
+
+                if (!groups[dateKey]) {
+                    groups[dateKey] = [];
+                }
+                groups[dateKey].push(item);
+            });
+
+            const sortedGroups: Record<string, MeetingItem[]> = {};
+            const keys = Object.keys(groups).sort((a, b) => {
+                if (a === "今天") return -1;
+                if (b === "今天") return 1;
+                if (a === "昨天") return -1;
+                if (b === "昨天") return 1;
+                return b.localeCompare(a);
+            });
+
+            keys.forEach((key) => {
+                sortedGroups[key] = groups[key].sort((a, b) => {
+                    return (b.timestamp || 0) - (a.timestamp || 0);
+                });
+            });
+
+            return sortedGroups;
+        },
+
         // 当前激活的会议
         activeMeeting(state): Meeting | null {
             if (!state.activeKey) return null;
@@ -62,47 +110,6 @@ export const useMeetingStore = defineStore("meeting", {
         currentStatus(state): MeetingStatus {
             const meeting = state.meetings[state.activeKey];
             return meeting?.status || "idle";
-        },
-
-        // 按日期分组的会议列表
-        groupedMeetings(state): Record<string, MeetingItem[]> {
-            const groups: Record<string, MeetingItem[]> = {};
-            const now = new Date();
-            const today = new Date(
-                now.getFullYear(),
-                now.getMonth(),
-                now.getDate(),
-            );
-            const yesterday = new Date(today);
-            yesterday.setDate(yesterday.getDate() - 1);
-
-            state.meetingsItems.forEach((item) => {
-                const itemDate = new Date(item.timestamp);
-                const itemDay = new Date(
-                    itemDate.getFullYear(),
-                    itemDate.getMonth(),
-                    itemDate.getDate(),
-                );
-
-                let groupKey: string;
-                if (itemDay.getTime() === today.getTime()) {
-                    groupKey = "今天";
-                } else if (itemDay.getTime() === yesterday.getTime()) {
-                    groupKey = "昨天";
-                } else {
-                    groupKey = itemDate.toLocaleDateString("zh-CN", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                    });
-                }
-
-                if (!groups[groupKey]) {
-                    groups[groupKey] = [];
-                }
-                groups[groupKey].push(item);
-            });
-            return groups;
         },
     },
 
@@ -209,6 +216,7 @@ export const useMeetingStore = defineStore("meeting", {
                 status: "idle",
                 speakerQueue: [],
                 autoAdvance: true,
+                autoCycle: false,
             };
             this.loadedMeetingIds[id] = true;
         },
@@ -228,6 +236,7 @@ export const useMeetingStore = defineStore("meeting", {
                 status: "idle",
                 speakerQueue: [],
                 autoAdvance: true,
+                autoCycle: false,
             };
 
             const item: MeetingItem = {
@@ -321,17 +330,25 @@ export const useMeetingStore = defineStore("meeting", {
             }
         },
 
+        /**
+         * 拖拽排序：把 sourceKey 移动到 targetKey 之前。
+         */
         async moveMeeting(sourceKey: string, targetKey: string) {
-            const sourceIndex = this.meetingsItems.findIndex(
-                (item) => item.key === sourceKey,
-            );
-            const targetIndex = this.meetingsItems.findIndex(
-                (item) => item.key === targetKey,
-            );
-            if (sourceIndex === -1 || targetIndex === -1) return;
+            if (sourceKey === targetKey) return;
 
-            const [removed] = this.meetingsItems.splice(sourceIndex, 1);
-            this.meetingsItems.splice(targetIndex, 0, removed);
+            const fromIndex = this.meetingsItems.findIndex(
+                (it) => it.key === sourceKey,
+            );
+            const toIndex = this.meetingsItems.findIndex(
+                (it) => it.key === targetKey,
+            );
+            if (fromIndex < 0 || toIndex < 0) return;
+
+            const next = [...this.meetingsItems];
+            const [moved] = next.splice(fromIndex, 1);
+            const insertIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+            next.splice(insertIndex, 0, moved);
+            this.meetingsItems = next;
 
             await this.persistIndex();
         },
@@ -414,6 +431,13 @@ export const useMeetingStore = defineStore("meeting", {
         async addMessage(
             meetingId: string,
             message: Omit<MeetingMessage, "id" | "timestamp">,
+            options?: {
+                /**
+                 * 是否立即落盘。默认 true。
+                 * 流式生成时可传 false，结束后再统一保存。
+                 */
+                persist?: boolean;
+            },
         ) {
             await this.ensureMeetingLoaded(meetingId);
             const meeting = this.meetings[meetingId];
@@ -434,8 +458,11 @@ export const useMeetingStore = defineStore("meeting", {
                 item.timestamp = newMessage.timestamp;
             }
 
-            await storeUtils.set(this.meetingKey(meetingId), meeting, true);
-            await this.persistIndex();
+            const persist = options?.persist ?? true;
+            if (persist) {
+                await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+                await this.persistIndex();
+            }
 
             return newMessage.id;
         },
@@ -444,6 +471,13 @@ export const useMeetingStore = defineStore("meeting", {
             meetingId: string,
             messageId: string,
             updates: Partial<MeetingMessage>,
+            options?: {
+                /**
+                 * 是否立即落盘。默认 true。
+                 * 流式生成时可传 false，结束后再统一保存。
+                 */
+                persist?: boolean;
+            },
         ) {
             await this.ensureMeetingLoaded(meetingId);
             const meeting = this.meetings[meetingId];
@@ -455,7 +489,10 @@ export const useMeetingStore = defineStore("meeting", {
             Object.assign(msg, updates);
             meeting.updatedAt = Date.now();
 
-            await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+            const persist = options?.persist ?? true;
+            if (persist) {
+                await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+            }
         },
 
         async deleteMessage(meetingId: string, messageId: string) {
@@ -547,6 +584,75 @@ export const useMeetingStore = defineStore("meeting", {
             await storeUtils.set(this.meetingKey(meetingId), meeting, true);
         },
 
+        async startMeetingFromCurrent(meetingId: string) {
+            await this.ensureMeetingLoaded(meetingId);
+            const meeting = this.meetings[meetingId];
+            if (!meeting) return;
+
+            meeting.status = "running";
+            // 不重置 currentSpeakerIndex；若不存在则从 0 开始
+            if (meeting.currentSpeakerIndex === undefined) {
+                meeting.currentSpeakerIndex = 0;
+            }
+            meeting.updatedAt = Date.now();
+
+            await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+        },
+
+        async setCurrentSpeakerIndex(meetingId: string, index: number) {
+            await this.ensureMeetingLoaded(meetingId);
+            const meeting = this.meetings[meetingId];
+            if (!meeting) return;
+
+            const queueLen = meeting.speakerQueue?.length ?? 0;
+            const nextIndex = Math.max(
+                0,
+                Math.min(index, Math.max(0, queueLen)),
+            );
+            meeting.currentSpeakerIndex = nextIndex;
+            meeting.updatedAt = Date.now();
+
+            await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+        },
+
+        async jumpToRoleInQueue(meetingId: string, roleId: string) {
+            await this.ensureMeetingLoaded(meetingId);
+            const meeting = this.meetings[meetingId];
+            if (!meeting) return;
+
+            const queue = meeting.speakerQueue ?? [];
+            const idx = queue.findIndex(
+                (n) => n.type === "role" && n.roleId === roleId,
+            );
+            if (idx < 0) return;
+
+            meeting.currentSpeakerIndex = idx;
+            meeting.updatedAt = Date.now();
+            await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+        },
+
+        async setAutoCycle(meetingId: string, enabled: boolean) {
+            await this.ensureMeetingLoaded(meetingId);
+            const meeting = this.meetings[meetingId];
+            if (!meeting) return;
+
+            meeting.autoCycle = enabled;
+            meeting.updatedAt = Date.now();
+
+            await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+        },
+
+        async toggleAutoCycle(meetingId: string) {
+            await this.ensureMeetingLoaded(meetingId);
+            const meeting = this.meetings[meetingId];
+            if (!meeting) return;
+
+            meeting.autoCycle = !meeting.autoCycle;
+            meeting.updatedAt = Date.now();
+
+            await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+        },
+
         async pauseMeeting(meetingId: string) {
             await this.ensureMeetingLoaded(meetingId);
             const meeting = this.meetings[meetingId];
@@ -598,6 +704,94 @@ export const useMeetingStore = defineStore("meeting", {
             meeting.updatedAt = Date.now();
 
             await storeUtils.set(this.meetingKey(meetingId), meeting, true);
+        },
+
+        // ============ 导出 ============
+        async exportMeetingMarkdown(meetingId: string) {
+            await this.ensureMeetingLoaded(meetingId);
+            const meeting = this.meetings[meetingId];
+            if (!meeting) return "";
+
+            const formatTime = (ts?: number) => {
+                if (!ts) return "";
+                const d = new Date(ts);
+                const pad2 = (n: number) => String(n).padStart(2, "0");
+                return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+            };
+
+            const safe = (s: any) => (typeof s === "string" ? s : "");
+            const title = safe(meeting.title) || "会议";
+
+            const lines: string[] = [];
+            lines.push(`# ${title}`);
+            lines.push("");
+            lines.push(`- 会议ID：${meeting.id}`);
+            lines.push(`- 创建时间：${formatTime(meeting.createdAt)}`);
+            lines.push(`- 更新时间：${formatTime(meeting.updatedAt)}`);
+            lines.push("");
+
+            const summary = safe(meeting.summary).trim();
+            if (summary) {
+                lines.push("## 会议背景");
+                lines.push("");
+                lines.push(summary);
+                lines.push("");
+            }
+
+            lines.push("## 参与角色");
+            lines.push("");
+            if ((meeting.roles || []).length === 0) {
+                lines.push("（无）");
+                lines.push("");
+            } else {
+                lines.push("| 角色 | 模型 | 备注 |");
+                lines.push("| --- | --- | --- |");
+                for (const r of meeting.roles) {
+                    const name = safe(r.name) || r.id;
+                    const model = safe(r.modelId) || "";
+                    const note = safe(r.systemPrompt)
+                        .replace(/\r\n/g, "\n")
+                        .replace(/\n/g, " ")
+                        .slice(0, 120);
+                    lines.push(`| ${name} | ${model} | ${note} |`);
+                }
+                lines.push("");
+            }
+
+            lines.push("## 对话记录");
+            lines.push("");
+            const msgs = meeting.messages || [];
+            if (msgs.length === 0) {
+                lines.push("（无）");
+                lines.push("");
+            } else {
+                for (const m of msgs) {
+                    const speaker =
+                        safe(m.speakerName) || safe(m.speakerId) || m.role;
+                    const ts = formatTime(m.timestamp);
+                    const header = ts
+                        ? `### ${speaker} · ${ts}`
+                        : `### ${speaker}`;
+                    lines.push(header);
+                    lines.push("");
+                    const content = safe(m.content).replace(/\r\n/g, "\n");
+                    lines.push(content || "（空）");
+
+                    const reasoning = safe((m as any).reasoning).trim();
+                    if (reasoning) {
+                        lines.push("");
+                        lines.push("<details><summary>推理过程</summary>");
+                        lines.push("");
+                        lines.push("```\n" + reasoning + "\n```");
+                        lines.push("");
+                        lines.push("</details>");
+                    }
+
+                    lines.push("");
+                }
+            }
+
+            return lines.join("\n");
         },
 
         // ============ 模型管理 ============

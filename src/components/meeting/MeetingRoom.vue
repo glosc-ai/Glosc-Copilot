@@ -3,7 +3,15 @@ import { ref, computed, watch, nextTick, onUnmounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, StopCircle, Send } from "lucide-vue-next";
+import {
+    Play,
+    Pause,
+    StopCircle,
+    Send,
+    Repeat,
+    FileText,
+    Download,
+} from "lucide-vue-next";
 import MeetingChat from "./MeetingChat.vue";
 import SpeakerQueue from "./SpeakerQueue.vue";
 import RoleList from "./RoleList.vue";
@@ -28,12 +36,22 @@ const canStart = computed(() => {
     );
 });
 
+const canStartFromCurrent = computed(() => {
+    return (
+        currentStatus.value === "idle" &&
+        activeMeeting.value?.roles &&
+        activeMeeting.value.roles.length > 0
+    );
+});
+
 const canPause = computed(() => {
     return currentStatus.value === "running";
 });
 
 const canResume = computed(() => {
-    return currentStatus.value === "paused";
+    return (
+        currentStatus.value === "paused" || currentStatus.value === "stopped"
+    );
 });
 
 const canStop = computed(() => {
@@ -42,9 +60,72 @@ const canStop = computed(() => {
     );
 });
 
+const autoCycleEnabled = computed(
+    () => activeMeeting.value?.autoCycle ?? false,
+);
+
+const canSummarize = computed(() => {
+    const meeting = activeMeeting.value;
+    if (!meeting) return false;
+    return (meeting.messages?.length ?? 0) > 0;
+});
+
+async function exportMeetingMarkdown() {
+    const md = await meetingStore.exportMeetingMarkdown(props.meetingId);
+    const title = (activeMeeting.value?.title || "会议").trim() || "会议";
+    const safeName = title.replace(/[\\/:*?"<>|]/g, "-");
+    const defaultName = `${safeName}.md`;
+
+    // 优先走 Tauri：弹出保存对话框
+    try {
+        const dialog = await import("@tauri-apps/plugin-dialog");
+        const fs = await import("@tauri-apps/plugin-fs");
+        const path = await (dialog as any).save?.({
+            defaultPath: defaultName,
+            filters: [{ name: "Markdown", extensions: ["md"] }],
+        });
+        if (!path) return;
+
+        await (fs as any).writeTextFile(path, md);
+        (window as any).ElMessage?.success?.("已导出 Markdown");
+        return;
+    } catch (e) {
+        // ignore
+        console.log(`Tauri 保存失败，使用 Web fallback：${e}`);
+    }
+
+    // Web fallback：下载
+    try {
+        const blob = new Blob([md], {
+            type: "text/markdown;charset=utf-8",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = defaultName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        (window as any).ElMessage?.success?.("已导出 Markdown");
+    } catch {
+        try {
+            await navigator.clipboard.writeText(md);
+            (window as any).ElMessage?.success?.("已复制 Markdown 到剪贴板");
+        } catch {
+            (window as any).ElMessage?.error?.("导出失败");
+        }
+    }
+}
+
 async function startMeeting() {
     await meetingStore.startMeeting(props.meetingId);
     // 开始自动推进
+    await processQueue();
+}
+
+async function startMeetingFromCurrent() {
+    await meetingStore.startMeetingFromCurrent(props.meetingId);
     await processQueue();
 }
 
@@ -64,12 +145,37 @@ async function resumeMeeting() {
 }
 
 async function stopMeeting() {
-    if (confirm("确定要停止会议吗？")) {
-        await meetingStore.stopMeeting(props.meetingId);
-        if (abortController.value) {
-            abortController.value.abort();
-            abortController.value = null;
-        }
+    try {
+        await ElMessageBox.confirm("确定要停止会议吗？", "提示", {
+            type: "warning",
+            confirmButtonText: "停止",
+            cancelButtonText: "取消",
+        });
+    } catch {
+        return;
+    }
+
+    await meetingStore.stopMeeting(props.meetingId);
+    if (abortController.value) {
+        abortController.value.abort();
+        abortController.value = null;
+    }
+}
+
+async function toggleAutoCycle() {
+    await meetingStore.toggleAutoCycle(props.meetingId);
+}
+
+async function summarizeMeetingNow() {
+    if (!chatRef.value) return;
+    try {
+        abortController.value = new AbortController();
+        await chatRef.value.generateMeetingSummary(abortController.value);
+    } catch (error: any) {
+        if (error?.name === "AbortError") return;
+        console.error("总结会议失败:", error);
+    } finally {
+        abortController.value = null;
     }
 }
 
@@ -114,6 +220,10 @@ async function processQueue() {
         const currentIndex = meeting.currentSpeakerIndex ?? 0;
         if (currentIndex >= meeting.speakerQueue.length) {
             // 已到队列末尾
+            if (meeting.autoCycle && meeting.speakerQueue.length > 0) {
+                await meetingStore.setCurrentSpeakerIndex(props.meetingId, 0);
+                continue;
+            }
             await meetingStore.pauseMeeting(props.meetingId);
             break;
         }
@@ -129,19 +239,18 @@ async function processQueue() {
             break;
         } else if (currentNode.type === "task") {
             // 执行任务（如总结）
-            // TODO: 实现各种任务类型的执行逻辑
             if (currentNode.taskType === "总结会议") {
-                // 将来可以调用特定的总结API
-                await meetingStore.addMessage(props.meetingId, {
-                    role: "assistant",
-                    content: "（会议总结功能待实现）",
-                    speakerId: "system",
-                    speakerName: "系统",
-                    speakerAvatar: "📋",
-                    speakerColor: "#8b5cf6",
-                });
+                if (chatRef.value) {
+                    try {
+                        abortController.value = new AbortController();
+                        await chatRef.value.generateMeetingSummary(
+                            abortController.value,
+                        );
+                    } finally {
+                        abortController.value = null;
+                    }
+                }
             }
-            await meetingStore.advanceQueue(props.meetingId);
         }
 
         // 检查是否应该继续
@@ -220,6 +329,16 @@ onUnmounted(() => {
                         开始会议
                     </Button>
                     <Button
+                        v-if="canStartFromCurrent"
+                        @click="startMeetingFromCurrent"
+                        size="sm"
+                        variant="outline"
+                        class="gap-2"
+                    >
+                        <Play class="w-4 h-4" />
+                        从当前开始发言
+                    </Button>
+                    <Button
                         v-if="canPause"
                         @click="pauseMeeting"
                         size="sm"
@@ -236,7 +355,7 @@ onUnmounted(() => {
                         class="gap-2"
                     >
                         <Play class="w-4 h-4" />
-                        继续
+                        {{ currentStatus === "stopped" ? "继续会议" : "继续" }}
                     </Button>
                     <Button
                         v-if="canStop"
@@ -250,6 +369,37 @@ onUnmounted(() => {
                     </Button>
                 </div>
                 <div class="flex-1"></div>
+                <div class="flex items-center gap-2">
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        class="gap-2"
+                        @click="toggleAutoCycle"
+                    >
+                        <Repeat class="w-4 h-4" />
+                        自动循环：{{ autoCycleEnabled ? "开" : "关" }}
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        class="gap-2"
+                        :disabled="meetingStore.isGenerating"
+                        @click="exportMeetingMarkdown"
+                    >
+                        <Download class="w-4 h-4" />
+                        导出 Markdown
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        class="gap-2"
+                        :disabled="!canSummarize || meetingStore.isGenerating"
+                        @click="summarizeMeetingNow"
+                    >
+                        <FileText class="w-4 h-4" />
+                        总结会议
+                    </Button>
+                </div>
                 <div class="text-sm">
                     <span
                         class="px-2 py-1 rounded-full text-xs font-medium"
