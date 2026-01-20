@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "glosc-copilot",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "identifier": "aoe.top.glosc-copilot",
   "build": {
-    "beforeDevCommand": "yarn dev",
+    "beforeDevCommand": "yarn -s sync:version && yarn dev",
     "devUrl": "http://localhost:1421",
-    "beforeBuildCommand": "yarn build",
+    "beforeBuildCommand": "yarn -s sync:version && yarn build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -26,7 +26,6 @@
   },
   "bundle": {
     "active": true,
-    "targets": "nsis",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

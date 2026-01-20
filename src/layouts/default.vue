@@ -9,6 +9,8 @@ onMounted(() => {
     <div class="pt-10">
         <TitleBar />
         <McpManagerDialog />
+        <SettingsModal />
+        <AboutDialog />
         <router-view v-slot="{ Component, route }">
             <component :is="Component" :key="route.fullPath" />
         </router-view>

@@ -57,6 +57,10 @@ const openSettings = () => {
     uiStore.openSettings();
 };
 
+const openAbout = (tab: "about" | "changelog" | "github") => {
+    uiStore.openAbout(tab);
+};
+
 const handleLogin = async () => {
     await authStore.startLogin();
 };
@@ -182,6 +186,24 @@ const balanceTip = computed(() => {
                             </DropdownMenuItem>
                             <DropdownMenuItem @click="openSettings">
                                 设置
+                            </DropdownMenuItem>
+                        </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                        <Button variant="ghost"> 关于 </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent class="w-20" align="start">
+                        <DropdownMenuGroup>
+                            <DropdownMenuItem @click="openAbout('about')">
+                                关于
+                            </DropdownMenuItem>
+                            <DropdownMenuItem @click="openAbout('changelog')">
+                                更新日志
+                            </DropdownMenuItem>
+                            <DropdownMenuItem @click="openAbout('github')">
+                                GitHub
                             </DropdownMenuItem>
                         </DropdownMenuGroup>
                     </DropdownMenuContent>

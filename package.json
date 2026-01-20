@@ -8,10 +8,18 @@
     "lint": "vue-tsc --noEmit",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "tauri": "tauri",
+    "tauri": "yarn -s sync:version && tauri",
     "prepare:uv": "node scripts/prepare-uv.mjs",
-    "tauri:dev": "yarn -s prepare:uv && tauri dev",
-    "tauri:build": "yarn -s prepare:uv && tauri build"
+    "sync:version": "node scripts/sync-version.mjs",
+    "tauri:dev": "yarn -s prepare:uv && yarn -s tauri dev",
+    "tauri:build": "yarn -s prepare:uv && yarn -s tauri build",
+    "tauri:build:win:nsis": "yarn -s prepare:uv && yarn -s tauri build -b nsis",
+    "tauri:build:win:msi": "yarn -s prepare:uv && yarn -s tauri build -b msi",
+    "tauri:build:mac:universal": "yarn -s prepare:uv && yarn -s tauri build -t universal-apple-darwin",
+    "tauri:build:mac:arm64": "yarn -s prepare:uv && yarn -s tauri build -t aarch64-apple-darwin",
+    "tauri:build:mac:x64": "yarn -s prepare:uv && yarn -s tauri build -t x86_64-apple-darwin",
+    "tauri:build:linux:x64": "yarn -s prepare:uv && yarn -s tauri build -t x86_64-unknown-linux-gnu",
+    "tauri:build:linux:arm64": "yarn -s prepare:uv && yarn -s tauri build -t aarch64-unknown-linux-gnu"
   },
   "dependencies": {
     "@ai-sdk/gateway": "^3.0.2",

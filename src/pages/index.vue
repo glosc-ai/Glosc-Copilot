@@ -2,7 +2,6 @@
 import ChatSidebar from "@/components/ChatSidebar.vue";
 import ChatArea from "@/components/ChatArea.vue";
 import ChatWelcome from "@/components/ChatWelcome.vue";
-import SettingsModal from "@/components/SettingsModal.vue";
 import { useChatStore } from "@/stores/chat";
 import { storeToRefs } from "pinia";
 import { onBeforeUnmount, onMounted } from "vue";
@@ -48,6 +47,5 @@ onBeforeUnmount(() => {
                 <ChatWelcome v-else />
             </main>
         </div>
-        <SettingsModal />
     </div>
 </template>

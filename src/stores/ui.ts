@@ -4,6 +4,8 @@ export const useUiStore = defineStore("ui", {
     state: () => ({
         mcpManagerOpen: false,
         settingsOpen: false,
+        aboutOpen: false,
+        aboutTab: "about" as "about" | "changelog" | "github",
     }),
     actions: {
         openMcpManager() {
@@ -17,6 +19,14 @@ export const useUiStore = defineStore("ui", {
         },
         closeSettings() {
             this.settingsOpen = false;
+        },
+
+        openAbout(tab?: "about" | "changelog" | "github") {
+            if (tab) this.aboutTab = tab;
+            this.aboutOpen = true;
+        },
+        closeAbout() {
+            this.aboutOpen = false;
         },
     },
 });
