@@ -176,26 +176,46 @@ async function streamToMeetingMessage(params: StreamToMessageParams) {
     // 预置上下文
     (chat as any).messages = messages as any;
 
+    // 会议模式会把历史消息作为 chat.messages 预置进去。
+    // 如果直接“取最后一条 assistant”，在新回复尚未出现时会读到上一位角色的发言，
+    // 导致占位消息在生成中显示错误内容。
+    const initialAssistantIds = new Set<string>();
+    {
+        const existing: any[] = ((chat as any).messages || []) as any[];
+        for (const m of existing) {
+            if (m?.role === "assistant" && typeof m?.id === "string") {
+                initialAssistantIds.add(m.id);
+            }
+        }
+    }
+
     const getAssistantSnapshot = () => {
         const all: any[] = (chat as any).messages || [];
         for (let i = all.length - 1; i >= 0; i -= 1) {
             const m = all[i];
-            if (m?.role === "assistant") {
-                const parts: any[] = Array.isArray(m.parts) ? m.parts : [];
-                const content = parts
-                    .filter((p) => p?.type === "text")
-                    .map((p) => p?.text ?? "")
-                    .join("");
-                const reasoning = parts
-                    .filter((p) => p?.type === "reasoning")
-                    .map((p) => p?.text ?? "")
-                    .join("");
-                return {
-                    content,
-                    reasoning: reasoning || "",
-                };
-            }
+            if (m?.role !== "assistant") continue;
+
+            // 只同步本次请求“新生成”的 assistant 消息
+            const mid: string | undefined =
+                typeof m?.id === "string" ? m.id : undefined;
+            if (mid && initialAssistantIds.has(mid)) continue;
+
+            const parts: any[] = Array.isArray(m.parts) ? m.parts : [];
+            const content = parts
+                .filter((p) => p?.type === "text")
+                .map((p) => p?.text ?? "")
+                .join("");
+            const reasoning = parts
+                .filter((p) => p?.type === "reasoning")
+                .map((p) => p?.text ?? "")
+                .join("");
+
+            return {
+                content,
+                reasoning: reasoning || "",
+            };
         }
+
         return { content: "", reasoning: "" };
     };
 
@@ -217,15 +237,19 @@ async function streamToMeetingMessage(params: StreamToMessageParams) {
 
             lastFlushedContent = accumulatedContent;
             lastFlushedReasoning = accumulatedReasoning;
-            await meetingStore.updateMessage(
-                props.meetingId,
-                messageId,
-                {
-                    content: accumulatedContent,
-                    reasoning: accumulatedReasoning || undefined,
-                },
-                { persist: false },
-            );
+            try {
+                await meetingStore.updateMessage(
+                    props.meetingId,
+                    messageId,
+                    {
+                        content: accumulatedContent,
+                        reasoning: accumulatedReasoning || undefined,
+                    },
+                    { persist: false },
+                );
+            } catch (error) {
+                console.warn("会议消息流式同步失败:", error);
+            }
         }, 80);
     };
 
@@ -249,7 +273,10 @@ async function streamToMeetingMessage(params: StreamToMessageParams) {
         triggerText || "现在轮到你发言。请基于会议背景与历史讨论继续推进。";
 
     try {
-        const sendPromise = (chat as any).sendMessage(
+        // 参考 AI SDK / ai-elements 的用法：sendMessage 往往是“触发请求”，
+        // 不保证返回一个可 await 的 Promise（工作区会话也不会 await）。
+        // 因此这里不要依赖返回值来判断流是否结束。
+        void (chat as any).sendMessage(
             { text: effectiveTriggerText },
             {
                 body: {
@@ -260,10 +287,20 @@ async function streamToMeetingMessage(params: StreamToMessageParams) {
             },
         );
 
+        // 注意：ai-sdk 的 chat.status 初始为 "ready"，且状态切换是异步的。
+        // 如果这里直接按 status 判断，很容易在请求刚发出时读到 "ready"，
+        // 导致循环提前退出，从而“看不到流式输出”。
+        const startedAt = performance.now();
+        let seenSubmittedOrStreaming = false;
+
         // streaming 同步回 meeting store
         while (true) {
             const s: any = (chat as any).status;
             const statusText = typeof s === "string" ? s : s?.value;
+
+            const isBusy =
+                statusText === "submitted" || statusText === "streaming";
+            if (isBusy) seenSubmittedOrStreaming = true;
 
             const snap = getAssistantSnapshot();
             if (
@@ -275,13 +312,25 @@ async function streamToMeetingMessage(params: StreamToMessageParams) {
                 scheduleFlush();
             }
 
-            if (statusText !== "submitted" && statusText !== "streaming") {
-                break;
+            // 已经进入过 submitted/streaming：以 status 退出为准。
+            if (seenSubmittedOrStreaming) {
+                if (!isBusy) break;
+            } else {
+                // 还没看到 status 变忙：给一个短暂宽限期，避免刚触发时就读到 "ready" 直接退出。
+                const elapsed = performance.now() - startedAt;
+                const hasAnyOutput =
+                    Boolean(accumulatedContent) || Boolean(accumulatedReasoning);
+                if (hasAnyOutput) {
+                    // 已经有输出但 status 仍然非忙，通常表示已经结束
+                    break;
+                }
+                if (elapsed > 2000) {
+                    // 2s 内仍然没进入 streaming/submitted，也没有任何输出，认为本次不会流式更新
+                    break;
+                }
             }
             await new Promise((r) => window.setTimeout(r, 80));
         }
-
-        await sendPromise;
     } finally {
         abortController?.signal?.removeEventListener?.("abort", stopOnAbort);
     }

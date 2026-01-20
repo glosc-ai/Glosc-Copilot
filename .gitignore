@@ -24,7 +24,5 @@ dist-ssr
 *.sw?
 .env
 
-# 自动引入
-/*.d.ts
 
 /docs
