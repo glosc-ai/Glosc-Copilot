@@ -53,6 +53,10 @@ const openMcpManager = () => {
     uiStore.openMcpManager();
 };
 
+const openSettings = () => {
+    uiStore.openSettings();
+};
+
 const handleLogin = async () => {
     await authStore.startLogin();
 };
@@ -176,7 +180,9 @@ const balanceTip = computed(() => {
                             <DropdownMenuItem @click="openMcpManager">
                                 工具
                             </DropdownMenuItem>
-                            <DropdownMenuItem> 设置 </DropdownMenuItem>
+                            <DropdownMenuItem @click="openSettings">
+                                设置
+                            </DropdownMenuItem>
                         </DropdownMenuGroup>
                     </DropdownMenuContent>
                 </DropdownMenu>

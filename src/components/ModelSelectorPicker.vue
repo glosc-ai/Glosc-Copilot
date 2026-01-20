@@ -68,6 +68,16 @@ const selectedId = computed(
     () => props.selectedModel?.id || props.selectedModelId || "",
 );
 
+const settingsStore = useSettingsStore();
+
+const selectableModels = computed(() => {
+    const all = props.models || [];
+    const keepSelectedId = selectedId.value;
+    return all.filter(
+        (m) => !settingsStore.isModelHidden(m.id) || m.id === keepSelectedId,
+    );
+});
+
 const selectedModelSearchTerm = computed(() =>
     selectedId.value ? getModelSearchTermId(selectedId.value) : "",
 );
@@ -78,7 +88,7 @@ const selectedModelOwners = ref<string[]>([]);
 
 const availableModelTypes = computed(() => {
     const types = new Set<string>();
-    for (const m of props.models || []) {
+    for (const m of selectableModels.value || []) {
         if (m?.type) types.add(m.type);
     }
     return Array.from(types).sort((a, b) => a.localeCompare(b));
@@ -86,7 +96,7 @@ const availableModelTypes = computed(() => {
 
 const availableModelTags = computed(() => {
     const tags = new Set<string>();
-    for (const m of props.models || []) {
+    for (const m of selectableModels.value || []) {
         for (const t of m?.tags || []) {
             if (t) tags.add(t);
         }
@@ -96,7 +106,7 @@ const availableModelTags = computed(() => {
 
 const availableModelOwners = computed(() => {
     const owners = new Set<string>();
-    for (const m of props.models || []) {
+    for (const m of selectableModels.value || []) {
         if (m?.owned_by) owners.add(m.owned_by);
     }
     return Array.from(owners).sort((a, b) => a.localeCompare(b));
@@ -141,7 +151,7 @@ function matchesModelFilters(m: ModelInfo) {
 
 const recentModels = computed(() => {
     const usage = props.recentUsage || {};
-    return (props.models || [])
+    return (selectableModels.value || [])
         .filter((m) => !!usage[m.id])
         .filter(matchesModelFilters)
         .sort((a, b) => (usage[b.id] || 0) - (usage[a.id] || 0));
@@ -152,7 +162,7 @@ const recentModelIdSet = computed(
 );
 
 const filteredModels = computed(() =>
-    (props.models || [])
+    (selectableModels.value || [])
         .filter((m) => !recentModelIdSet.value.has(m.id))
         .filter(matchesModelFilters),
 );
@@ -176,7 +186,7 @@ function getModelSearchTerm(item: ModelInfo) {
 }
 
 function getModelSearchTermId(modelId: string) {
-    const hit = (props.models || []).find((m) => m.id === modelId);
+    const hit = (selectableModels.value || []).find((m) => m.id === modelId);
     if (!hit) return modelId.toLowerCase();
     return getModelSearchTerm(hit);
 }

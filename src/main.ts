@@ -21,6 +21,14 @@ const app = createApp(App);
 const pinia = createPinia();
 app.use(pinia);
 app.use(router);
+
+// 全局设置（主题/语言/模型显示）
+try {
+    const settingsStore = useSettingsStore(pinia);
+    void settingsStore.init();
+} catch (e) {
+    console.warn("settings init failed", e);
+}
 app.mount("#app");
 
 async function importMcpServersFromConfigs(configs: McpServerImportConfig[]) {

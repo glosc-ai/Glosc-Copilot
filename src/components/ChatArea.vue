@@ -69,6 +69,7 @@ const {
     availableModels,
     recentModelUsage,
 } = storeToRefs(chatStore);
+const settingsStore = useSettingsStore();
 const mcpStore = useMcpStore();
 const { servers } = storeToRefs(mcpStore);
 const authStore = useAuthStore();
@@ -103,9 +104,17 @@ const selectedModelType = ref<string>("all");
 const selectedModelTags = ref<string[]>([]);
 const selectedModelOwners = ref<string[]>([]);
 
+const selectableModels = computed(() => {
+    const all = availableModels.value || [];
+    const selectedId = selectedModel.value?.id;
+    return all.filter(
+        (m) => !settingsStore.isModelHidden(m.id) || m.id === selectedId,
+    );
+});
+
 const availableModelTypes = computed(() => {
     const types = new Set<string>();
-    for (const m of availableModels.value || []) {
+    for (const m of selectableModels.value || []) {
         if (m?.type) types.add(m.type);
     }
     return Array.from(types).sort((a, b) => a.localeCompare(b));
@@ -113,7 +122,7 @@ const availableModelTypes = computed(() => {
 
 const availableModelTags = computed(() => {
     const tags = new Set<string>();
-    for (const m of availableModels.value || []) {
+    for (const m of selectableModels.value || []) {
         for (const t of m?.tags || []) {
             if (t) tags.add(t);
         }
@@ -123,7 +132,7 @@ const availableModelTags = computed(() => {
 
 const availableModelOwners = computed(() => {
     const owners = new Set<string>();
-    for (const m of availableModels.value || []) {
+    for (const m of selectableModels.value || []) {
         if (m?.owned_by) owners.add(m.owned_by);
     }
     return Array.from(owners).sort((a, b) => a.localeCompare(b));
@@ -168,7 +177,7 @@ function matchesModelFilters(m: ModelInfo) {
 
 const recentModels = computed(() => {
     const usage = recentModelUsage.value || {};
-    return (availableModels.value || [])
+    return (selectableModels.value || [])
         .filter((m) => !!usage[m.id])
         .filter(matchesModelFilters)
         .sort((a, b) => (usage[b.id] || 0) - (usage[a.id] || 0));
@@ -179,7 +188,7 @@ const recentModelIdSet = computed(
 );
 
 const filteredModels = computed(() =>
-    (availableModels.value || [])
+    (selectableModels.value || [])
         .filter((m) => !recentModelIdSet.value.has(m.id))
         .filter(matchesModelFilters),
 );
