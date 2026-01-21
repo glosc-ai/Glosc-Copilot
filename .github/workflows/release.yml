@@ -21,9 +21,9 @@ jobs:
                       args: ""
                     # macOS runners are arm64; we build both arm64 and x64 bundles.
                     - platform: "macos-latest"
-                      args: "--target aarch64-apple-darwin --bundles dmg --max-old-space-size=16384"
+                      args: "--target aarch64-apple-darwin --bundles dmg -- --max-old-space-size=16384"
                     - platform: "macos-latest"
-                      args: "--target x86_64-apple-darwin --bundles dmg --max-old-space-size=16384"
+                      args: "--target x86_64-apple-darwin --bundles dmg -- --max-old-space-size=16384"
 
         runs-on: ${{ matrix.platform }}
 
