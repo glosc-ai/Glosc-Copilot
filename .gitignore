@@ -27,6 +27,4 @@ dist-ssr
 *.sw?
 .env
 
-
-/docs
-/src-tauri/resources/npm
+/src-tauri/resources/

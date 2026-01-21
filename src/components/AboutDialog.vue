@@ -116,8 +116,11 @@ function close() {
                         </div>
 
                         <div class="text-sm text-muted-foreground">
-                            Glosc Copilot 是一个基于 Tauri + Vue 的桌面 AI
-                            助手客户端。
+                            Glosc Copilot 是一款跨平台的 AI 智能助手，目前有
+                            聊天模式、会议模式、工作区模式，支持上百款 AI
+                            模型接入（包括 OpenAI、Anthropic、Azure
+                            OpenAI、Mistral、Claude+、Gemini 等）,适配 MCP 工具
+                            以及 Glosc Store 的高级功能。
                         </div>
 
                         <div class="flex items-center gap-2 flex-wrap">

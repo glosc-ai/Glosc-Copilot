@@ -310,7 +310,7 @@ onUnmounted(() => {
 <template>
     <div class="flex h-full overflow-hidden">
         <!-- 左侧：角色列表 -->
-        <aside class="w-64 border-r bg-muted/10 flex-shrink-0">
+        <aside class="w-64 border-r bg-muted/10 shrink-0">
             <RoleList :meeting-id="meetingId" />
         </aside>
 

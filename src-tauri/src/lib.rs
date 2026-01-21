@@ -85,10 +85,10 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
-#[tauri::command]
-fn is_debug_enabled(state: tauri::State<'_, DebugState>) -> bool {
-    state.enabled
-}
+// #[tauri::command]
+// fn is_debug_enabled(state: tauri::State<'_, DebugState>) -> bool {
+//     state.enabled
+// }
 
 #[tauri::command]
 fn open_devtools(
@@ -128,7 +128,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             greet,
-            is_debug_enabled,
+            // is_debug_enabled,
             open_devtools,
             get_cli_args
         ])
