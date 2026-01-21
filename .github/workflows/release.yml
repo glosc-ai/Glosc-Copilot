@@ -16,15 +16,38 @@ jobs:
             fail-fast: false
             matrix:
                 include:
+                    # Windows x64
                     - platform: "windows-latest"
+                      target: "x86_64-pc-windows-msvc"
                       args: ""
+                    # Windows x86
+                    - platform: "windows-latest"
+                      target: "i686-pc-windows-msvc"
+                      args: "--target i686-pc-windows-msvc"
+                    # Windows ARM64
+                    - platform: "windows-latest"
+                      target: "aarch64-pc-windows-msvc"
+                      args: "--target aarch64-pc-windows-msvc"
+                    # Linux x64
                     - platform: "ubuntu-22.04"
+                      target: "x86_64-unknown-linux-gnu"
                       args: ""
-                    # macOS runners are arm64; we build both arm64 and x64 bundles.
+                    # Linux x86
+                    - platform: "ubuntu-22.04"
+                      target: "i686-unknown-linux-gnu"
+                      args: "--target i686-unknown-linux-gnu"
+                    # Linux ARM64
+                    - platform: "ubuntu-22.04"
+                      target: "aarch64-unknown-linux-gnu"
+                      args: "--target aarch64-unknown-linux-gnu"
+                    # macOS ARM64
                     - platform: "macos-latest"
-                      args: "--target aarch64-apple-darwin --bundles dmg"
+                      target: "aarch64-apple-darwin"
+                      args: "--target aarch64-apple-darwin"
+                    # macOS x64
                     - platform: "macos-latest"
-                      args: "--target x86_64-apple-darwin --bundles dmg"
+                      target: "x86_64-apple-darwin"
+                      args: "--target x86_64-apple-darwin"
 
         runs-on: ${{ matrix.platform }}
 
@@ -41,8 +64,7 @@ jobs:
             - name: Install Rust stable
               uses: dtolnay/rust-toolchain@stable
               with:
-                  # Those targets are only used on macos runners.
-                  targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+                  targets: ${{ matrix.target }}
 
             - name: Rust cache
               uses: swatinem/rust-cache@v2
@@ -57,7 +79,15 @@ jobs:
                     libwebkit2gtk-4.1-dev \
                     libappindicator3-dev \
                     librsvg2-dev \
-                    patchelf
+                    patchelf \
+                    gcc-multilib \
+                    g++-multilib
+              # Install cross-compilation tools for ARM64 if needed
+              if: matrix.target == 'aarch64-unknown-linux-gnu'
+              run: |
+                  sudo apt-get install -y \
+                    gcc-aarch64-linux-gnu \
+                    g++-aarch64-linux-gnu
 
             - name: Install frontend dependencies
               run: yarn install --frozen-lockfile
