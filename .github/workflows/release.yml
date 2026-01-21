@@ -10,7 +10,8 @@ jobs:
     publish-tauri:
         permissions:
             contents: write
-
+        env:
+            NODE_OPTIONS: --max-old-space-size=16384
         strategy:
             fail-fast: false
             matrix:
@@ -21,9 +22,9 @@ jobs:
                       args: ""
                     # macOS runners are arm64; we build both arm64 and x64 bundles.
                     - platform: "macos-latest"
-                      args: "--target aarch64-apple-darwin --bundles dmg -- --max-old-space-size=16384"
+                      args: "--target aarch64-apple-darwin --bundles dmg"
                     - platform: "macos-latest"
-                      args: "--target x86_64-apple-darwin --bundles dmg -- --max-old-space-size=16384"
+                      args: "--target x86_64-apple-darwin --bundles dmg"
 
         runs-on: ${{ matrix.platform }}
 
