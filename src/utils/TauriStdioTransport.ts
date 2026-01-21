@@ -1,8 +1,14 @@
 import { Command, Child } from "@tauri-apps/plugin-shell";
-import { resolveResource, dirname, basename } from "@tauri-apps/api/path";
+import { dirname, basename } from "@tauri-apps/api/path";
+import { ensureBundledNpmExpanded } from "@/utils/NpmResources";
 // import path from "path-browserify";
 
 const utf8Decoder = new TextDecoder("utf-8");
+
+async function ensureBundledNpmExtracted(): Promise<string> {
+    const res = await ensureBundledNpmExpanded();
+    return res.npxCliPath;
+}
 
 function toText(chunk: unknown): string {
     if (typeof chunk === "string") return chunk;
@@ -81,7 +87,7 @@ function splitCommandLine(commandLine: string): {
 
 function repairPythonWindowsScriptArgs(
     command: string,
-    args: string[]
+    args: string[],
 ): string[] {
     const normalized = normalizeCommand(command);
     if (
@@ -99,12 +105,12 @@ function repairPythonWindowsScriptArgs(
     // our splitter will break it into multiple args. Re-join the script path
     // by locating a .py/.pyw token and joining from the first non-flag token.
     const scriptStart = args.findIndex(
-        (a) => a.length > 0 && !a.startsWith("-")
+        (a) => a.length > 0 && !a.startsWith("-"),
     );
     if (scriptStart === -1) return args;
 
     const scriptEnd = args.findIndex(
-        (a, idx) => idx >= scriptStart && /\.pyw?$/i.test(a)
+        (a, idx) => idx >= scriptStart && /\.pyw?$/i.test(a),
     );
     if (scriptEnd === -1) return args;
 
@@ -125,12 +131,15 @@ function isNodeCommand(command: string): boolean {
     return /(^|[\\/])node(\.exe)?$/i.test(command.trim());
 }
 
-function repairNodeWindowsScriptArgs(command: string, args: string[]): string[] {
+function repairNodeWindowsScriptArgs(
+    command: string,
+    args: string[],
+): string[] {
     if (!isNodeCommand(command)) return args;
 
     // If using eval/print, it's not a script path.
     const hasInlineCode = args.some((a) =>
-        ["-e", "-p", "--eval", "--print"].includes(a)
+        ["-e", "-p", "--eval", "--print"].includes(a),
     );
     if (hasInlineCode) return args;
 
@@ -140,12 +149,12 @@ function repairNodeWindowsScriptArgs(command: string, args: string[]): string[] 
     // upstream may split it into multiple args. Re-join the script path by locating
     // the first token that looks like a JS/TS entry file.
     const scriptStart = args.findIndex(
-        (a) => a.length > 0 && !a.startsWith("-")
+        (a) => a.length > 0 && !a.startsWith("-"),
     );
     if (scriptStart === -1) return args;
 
     const scriptEnd = args.findIndex(
-        (a, idx) => idx >= scriptStart && /\.(c|m)?jsx?$|\.tsx?$/i.test(a)
+        (a, idx) => idx >= scriptStart && /\.(c|m)?jsx?$|\.tsx?$/i.test(a),
     );
     if (scriptEnd === -1) return args;
     if (scriptEnd === scriptStart) return args;
@@ -260,9 +269,7 @@ export class TauriStdioTransport {
 
             if (normalized === "npx") {
                 // Use sidecar node to run npx-cli.js
-                const npxPath = await resolveResource(
-                    "resources/npm/bin/npx-cli.js"
-                );
+                const npxPath = await ensureBundledNpmExtracted();
                 console.log("Resolved npx path:", npxPath);
                 cmd = Command.sidecar("binaries/node", [npxPath, ...args], {
                     cwd,
@@ -313,7 +320,7 @@ export class TauriStdioTransport {
                         {
                             cwd,
                             env: pythonEnv,
-                        }
+                        },
                     );
                 } catch {
                     cmd = Command.create(command, pythonArgs, {
@@ -330,7 +337,7 @@ export class TauriStdioTransport {
                         {
                             cwd,
                             env: cmdEnv,
-                        }
+                        },
                     );
                 } catch {
                     cmd = Command.create("uvx", args, {
@@ -359,7 +366,7 @@ export class TauriStdioTransport {
 
             cmd.on("close", (data: any) => {
                 console.log(
-                    `command finished with code ${data.code} and signal ${data.signal}`
+                    `command finished with code ${data.code} and signal ${data.signal}`,
                 );
                 this._process = null;
                 this.onclose?.();
@@ -400,7 +407,7 @@ export class TauriStdioTransport {
             } catch (error) {
                 console.log(
                     "[TauriStdioTransport] Error processing message:",
-                    error
+                    error,
                 );
                 this.onerror?.(error as Error);
             }

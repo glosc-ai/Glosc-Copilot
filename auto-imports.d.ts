@@ -256,6 +256,7 @@ declare global {
   const defineComponent: typeof import('vue').defineComponent
   const defineStore: typeof import('pinia').defineStore
   const effectScope: typeof import('vue').effectScope
+  const ensureBundledNpmExpanded: typeof import('./src/utils/NpmResources').ensureBundledNpmExpanded
   const ensureMonacoWorkers: typeof import('./src/utils/MonacoSetup').ensureMonacoWorkers
   const fetchAvailableModels: typeof import('./src/utils/ModelApi').fetchAvailableModels
   const formatModelName: typeof import('./src/utils/ModelApi').formatModelName
@@ -400,6 +401,9 @@ declare global {
   // @ts-ignore
   export type { MeetingUIMessage } from './src/utils/MeetingUiMessageAdapter'
   import('./src/utils/MeetingUiMessageAdapter')
+  // @ts-ignore
+  export type { EnsureBundledNpmResult } from './src/utils/NpmResources'
+  import('./src/utils/NpmResources')
   // @ts-ignore
   export type { StoreToolAccessStatus, StoreToolAccessInfo } from './src/utils/StoreToolAccess'
   import('./src/utils/StoreToolAccess')

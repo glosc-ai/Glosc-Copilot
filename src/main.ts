@@ -188,6 +188,19 @@ function setupConsoleImporter() {
 setupConsoleImporter();
 handleStartupImports();
 
+// 启动时后台展开 npm 资源（仅 Tauri 环境）。
+// 目标是让安装目录的 resources/npm 存在（npx 使用时无需再解压）。
+void (async () => {
+    try {
+        if (!(window as any).__TAURI_INTERNALS__) return;
+        const { ensureBundledNpmExpanded } =
+            await import("@/utils/NpmResources");
+        await ensureBundledNpmExpanded();
+    } catch (e) {
+        console.warn("startup npm expand failed", e);
+    }
+})();
+
 // 启动时：校验已安装的 Store 工具是否仍在用户库/商店中。
 // 若已过期/失效则自动禁用，避免继续调用到未续费插件。
 (async () => {
