@@ -52,7 +52,7 @@ async function downloadToFile(url, destFile) {
     });
     if (!res.ok) {
         throw new Error(
-            `Failed to download ${url}: ${res.status} ${res.statusText}`
+            `Failed to download ${url}: ${res.status} ${res.statusText}`,
         );
     }
 
@@ -75,83 +75,103 @@ async function findFileRecursive(rootDir, predicate) {
 }
 
 async function main() {
-    const triple = getUvTriple();
     const binariesDir = path.resolve(__dirname, "..", "src-tauri", "binaries");
 
-    const outFile = path.join(
-        binariesDir,
-        process.platform === "win32" ? `uv-${triple}.exe` : `uv-${triple}`
-    );
+    // On macOS, download both x64 and arm64 versions for cross-compilation
+    const triples =
+        process.platform === "darwin"
+            ? [
+                  {
+                      uvTriple: "x86_64-apple-darwin",
+                      tauriTriple: "x86_64-apple-darwin",
+                  },
+                  {
+                      uvTriple: "aarch64-apple-darwin",
+                      tauriTriple: "aarch64-apple-darwin",
+                  },
+              ]
+            : [{ uvTriple: getUvTriple(), tauriTriple: getUvTriple() }];
 
-    if (await fileExists(outFile)) {
-        console.log(
-            `[prepare-uv] Found: ${path.relative(process.cwd(), outFile)}`
+    for (const { uvTriple, tauriTriple } of triples) {
+        const outFile = path.join(
+            binariesDir,
+            process.platform === "win32"
+                ? `uv-${tauriTriple}.exe`
+                : `uv-${tauriTriple}`,
         );
-        return;
-    }
 
-    await fs.mkdir(binariesDir, { recursive: true });
-
-    const artifact =
-        process.platform === "win32"
-            ? `uv-${triple}.zip`
-            : `uv-${triple}.tar.gz`;
-
-    const url = `https://github.com/astral-sh/uv/releases/latest/download/${artifact}`;
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "glosc-uv-"));
-    const archivePath = path.join(tmpDir, artifact);
-
-    console.log(`[prepare-uv] Downloading ${artifact} ...`);
-    await downloadToFile(url, archivePath);
-
-    if (process.platform === "win32") {
-        const zip = new AdmZip(archivePath);
-        const entries = zip.getEntries();
-
-        // Usually contains uv.exe in the root.
-        const uvEntry = entries.find((e) => {
-            const name = e.entryName.replaceAll("\\", "/");
-            return name.endsWith("/uv.exe") || name === "uv.exe";
-        });
-
-        if (!uvEntry) {
-            const names = entries
-                .slice(0, 50)
-                .map((e) => e.entryName)
-                .join("\n");
-            throw new Error(
-                `uv.exe not found in ${artifact}. Entries (first 50):\n${names}`
+        if (await fileExists(outFile)) {
+            console.log(
+                `[prepare-uv] Found: ${path.relative(process.cwd(), outFile)}`,
             );
+            continue;
         }
 
-        const data = uvEntry.getData();
-        await fs.writeFile(outFile, data);
-    } else {
-        console.log(`[prepare-uv] Extracting ${artifact} ...`);
-        const extractDir = path.join(tmpDir, "extract");
-        await fs.mkdir(extractDir, { recursive: true });
-        await tar.x({ file: archivePath, cwd: extractDir });
+        await fs.mkdir(binariesDir, { recursive: true });
 
-        const uvPath = await findFileRecursive(
-            extractDir,
-            async (fullPath, name) => {
-                // Tarballs typically contain a single 'uv' file at root.
-                // Be tolerant of a folder prefix.
-                return name === "uv";
+        const artifact =
+            process.platform === "win32"
+                ? `uv-${uvTriple}.zip`
+                : `uv-${uvTriple}.tar.gz`;
+
+        const url = `https://github.com/astral-sh/uv/releases/latest/download/${artifact}`;
+        const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "glosc-uv-"));
+        const archivePath = path.join(tmpDir, artifact);
+
+        console.log(`[prepare-uv] Downloading ${artifact} ...`);
+        await downloadToFile(url, archivePath);
+
+        if (process.platform === "win32") {
+            const zip = new AdmZip(archivePath);
+            const entries = zip.getEntries();
+
+            // Usually contains uv.exe in the root.
+            const uvEntry = entries.find((e) => {
+                const name = e.entryName.replaceAll("\\", "/");
+                return name.endsWith("/uv.exe") || name === "uv.exe";
+            });
+
+            if (!uvEntry) {
+                const names = entries
+                    .slice(0, 50)
+                    .map((e) => e.entryName)
+                    .join("\n");
+                throw new Error(
+                    `uv.exe not found in ${artifact}. Entries (first 50):\n${names}`,
+                );
             }
-        );
 
-        if (!uvPath) {
-            throw new Error(`uv not found in ${artifact} after extraction.`);
+            const data = uvEntry.getData();
+            await fs.writeFile(outFile, data);
+        } else {
+            console.log(`[prepare-uv] Extracting ${artifact} ...`);
+            const extractDir = path.join(tmpDir, "extract");
+            await fs.mkdir(extractDir, { recursive: true });
+            await tar.x({ file: archivePath, cwd: extractDir });
+
+            const uvPath = await findFileRecursive(
+                extractDir,
+                async (fullPath, name) => {
+                    // Tarballs typically contain a single 'uv' file at root.
+                    // Be tolerant of a folder prefix.
+                    return name === "uv";
+                },
+            );
+
+            if (!uvPath) {
+                throw new Error(
+                    `uv not found in ${artifact} after extraction.`,
+                );
+            }
+
+            await fs.copyFile(uvPath, outFile);
+            await fs.chmod(outFile, 0o755);
         }
 
-        await fs.copyFile(uvPath, outFile);
-        await fs.chmod(outFile, 0o755);
+        console.log(
+            `[prepare-uv] Installed: ${path.relative(process.cwd(), outFile)}`,
+        );
     }
-
-    console.log(
-        `[prepare-uv] Installed: ${path.relative(process.cwd(), outFile)}`
-    );
 }
 
 main().catch((err) => {

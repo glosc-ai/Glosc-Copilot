@@ -164,80 +164,95 @@ async function findFileRecursive(rootDir, predicate) {
 async function main() {
     await ensureNpmResources();
 
-    const nodeTriple = getNodeTriple();
-    const tauriTriple = getTauriTriple();
     const binariesDir = path.resolve(__dirname, "..", "src-tauri", "binaries");
 
-    const outFile = path.join(
-        binariesDir,
-        process.platform === "win32"
-            ? `node-${tauriTriple}.exe`
-            : `node-${tauriTriple}`,
-    );
+    // On macOS, download both x64 and arm64 versions for cross-compilation
+    const triples =
+        process.platform === "darwin"
+            ? [
+                  {
+                      nodeTriple: "darwin-x64",
+                      tauriTriple: "x86_64-apple-darwin",
+                  },
+                  {
+                      nodeTriple: "darwin-arm64",
+                      tauriTriple: "aarch64-apple-darwin",
+                  },
+              ]
+            : [{ nodeTriple: getNodeTriple(), tauriTriple: getTauriTriple() }];
 
-    if (await fileExists(outFile)) {
-        console.log(
-            `[prepare-node] Found: ${path.relative(process.cwd(), outFile)}`,
-        );
-        return;
-    }
-
-    await fs.mkdir(binariesDir, { recursive: true });
-
-    const artifact =
-        process.platform === "win32"
-            ? `node-v${NODE_VERSION}-${nodeTriple}. zip`
-            : `node-v${NODE_VERSION}-${nodeTriple}.tar.gz`;
-
-    const url = `https://nodejs.org/dist/v${NODE_VERSION}/${artifact}`;
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "glosc-node-"));
-    const archivePath = path.join(tmpDir, artifact);
-
-    console.log(`[prepare-node] Downloading ${artifact} ... `);
-    await downloadToFile(url, archivePath);
-
-    if (process.platform === "win32") {
-        const zip = new AdmZip(archivePath);
-        const entries = zip.getEntries();
-
-        const nodeEntry = entries.find((e) => {
-            const name = e.entryName.replaceAll("\\", "/");
-            return name.endsWith("/node.exe") || name === "node.exe";
-        });
-
-        if (!nodeEntry) {
-            throw new Error(`node.exe not found in ${artifact}`);
-        }
-
-        const data = nodeEntry.getData();
-        await fs.writeFile(outFile, data);
-    } else {
-        console.log(`[prepare-node] Extracting ${artifact} ...`);
-        const extractDir = path.join(tmpDir, "extract");
-        await fs.mkdir(extractDir, { recursive: true });
-        await tar.x({ file: archivePath, cwd: extractDir });
-
-        const nodePath = await findFileRecursive(
-            extractDir,
-            async (fullPath, name) => {
-                // Node tarballs contain node binary in bin/node
-                return name === "node" && fullPath.includes("/bin/");
-            },
+    for (const { nodeTriple, tauriTriple } of triples) {
+        const outFile = path.join(
+            binariesDir,
+            process.platform === "win32"
+                ? `node-${tauriTriple}.exe`
+                : `node-${tauriTriple}`,
         );
 
-        if (!nodePath) {
-            throw new Error(
-                `node binary not found in ${artifact} after extraction. `,
+        if (await fileExists(outFile)) {
+            console.log(
+                `[prepare-node] Found: ${path.relative(process.cwd(), outFile)}`,
             );
+            continue;
         }
 
-        await fs.copyFile(nodePath, outFile);
-        await fs.chmod(outFile, 0o755);
-    }
+        await fs.mkdir(binariesDir, { recursive: true });
 
-    console.log(
-        `[prepare-node] Installed:  ${path.relative(process.cwd(), outFile)}`,
-    );
+        const artifact =
+            process.platform === "win32"
+                ? `node-v${NODE_VERSION}-${nodeTriple}.zip`
+                : `node-v${NODE_VERSION}-${nodeTriple}.tar.gz`;
+
+        const url = `https://nodejs.org/dist/v${NODE_VERSION}/${artifact}`;
+        const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "glosc-node-"));
+        const archivePath = path.join(tmpDir, artifact);
+
+        console.log(`[prepare-node] Downloading ${artifact} ... `);
+        await downloadToFile(url, archivePath);
+
+        if (process.platform === "win32") {
+            const zip = new AdmZip(archivePath);
+            const entries = zip.getEntries();
+
+            const nodeEntry = entries.find((e) => {
+                const name = e.entryName.replaceAll("\\", "/");
+                return name.endsWith("/node.exe") || name === "node.exe";
+            });
+
+            if (!nodeEntry) {
+                throw new Error(`node.exe not found in ${artifact}`);
+            }
+
+            const data = nodeEntry.getData();
+            await fs.writeFile(outFile, data);
+        } else {
+            console.log(`[prepare-node] Extracting ${artifact} ...`);
+            const extractDir = path.join(tmpDir, "extract");
+            await fs.mkdir(extractDir, { recursive: true });
+            await tar.x({ file: archivePath, cwd: extractDir });
+
+            const nodePath = await findFileRecursive(
+                extractDir,
+                async (fullPath, name) => {
+                    // Node tarballs contain node binary in bin/node
+                    return name === "node" && fullPath.includes("/bin/");
+                },
+            );
+
+            if (!nodePath) {
+                throw new Error(
+                    `node binary not found in ${artifact} after extraction. `,
+                );
+            }
+
+            await fs.copyFile(nodePath, outFile);
+            await fs.chmod(outFile, 0o755);
+        }
+
+        console.log(
+            `[prepare-node] Installed:  ${path.relative(process.cwd(), outFile)}`,
+        );
+    }
 }
 
 main().catch((err) => {
