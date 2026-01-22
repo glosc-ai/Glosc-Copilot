@@ -12,10 +12,10 @@ export type WorkspaceChatApiMode = "chat" | "agent";
 export type WorkspaceFileContextMode = "none" | "list" | "contents";
 
 export type WorkspaceBuiltinToolKind = "filesystem" | "git";
-export type WorkspaceBuiltinToolsEnabled = Record<
-    WorkspaceBuiltinToolKind,
-    boolean
->;
+// export type WorkspaceBuiltinToolsEnabled = Record<
+//     WorkspaceBuiltinToolKind,
+//     boolean
+// >;
 
 export type WorkspaceConversation = {
     id: string;
@@ -30,7 +30,7 @@ export type WorkspaceConversation = {
 
     modelId?: string;
     enabledMcpServerIds?: string[];
-    enabledBuiltinTools?: WorkspaceBuiltinToolsEnabled;
+    // enabledBuiltinTools?: WorkspaceBuiltinToolsEnabled;
     webSearch?: boolean;
     apiMode?: WorkspaceChatApiMode;
 
@@ -237,7 +237,7 @@ export const useWorkspaceChatStore = defineStore("workspaceChat", {
                 agentSkillsEnabled: true,
                 apiMode: "agent",
                 enabledMcpServerIds: [],
-                enabledBuiltinTools: { filesystem: false, git: false },
+                // enabledBuiltinTools: { filesystem: false, git: false },
             };
 
             this.conversations = {
@@ -269,7 +269,7 @@ export const useWorkspaceChatStore = defineStore("workspaceChat", {
 
                 modelId: this.selectedModel?.id,
                 enabledMcpServerIds: [],
-                enabledBuiltinTools: { filesystem: false, git: false },
+                // enabledBuiltinTools: { filesystem: false, git: false },
                 webSearch: false,
                 apiMode: "agent",
 

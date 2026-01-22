@@ -372,14 +372,11 @@ declare global {
   export type { AuthUserPublic } from './src/stores/auth'
   import('./src/stores/auth')
   // @ts-ignore
-  export type { BuiltinToolKind, BuiltinToolsEnabled } from './src/stores/settings'
+  export type { BuiltinToolKind } from './src/stores/settings'
   import('./src/stores/settings')
   // @ts-ignore
-  export type { WorkspaceChatApiMode, WorkspaceFileContextMode, WorkspaceBuiltinToolKind, WorkspaceBuiltinToolsEnabled, WorkspaceConversation } from './src/stores/workspaceChat'
+  export type { WorkspaceChatApiMode, WorkspaceFileContextMode, WorkspaceBuiltinToolKind, WorkspaceConversation } from './src/stores/workspaceChat'
   import('./src/stores/workspaceChat')
-  // @ts-ignore
-  export type { ClientTool, BuiltinToolsOptions } from './src/utils/BuiltinTools'
-  import('./src/utils/BuiltinTools')
   // @ts-ignore
   export type { ChatUtils } from './src/utils/ChatUtils'
   import('./src/utils/ChatUtils')

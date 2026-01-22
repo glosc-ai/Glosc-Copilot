@@ -48,7 +48,7 @@ import { useMcpStore } from "@/stores/mcp";
 import { useAuthStore } from "@/stores/auth";
 import { useRouter } from "vue-router";
 
-import { createBuiltinTools } from "@/utils/BuiltinTools";
+// import { createBuiltinTools } from "@/utils/BuiltinTools";
 
 const props = withDefaults(
     defineProps<{
@@ -763,14 +763,14 @@ async function handleRegenerate() {
         return;
     }
     const mcpTools = await mcpStore.getCachedTools();
-    const builtinTools = createBuiltinTools({
-        enabled: settingsStore.builtinToolsEnabled,
-        allowedDirectories: settingsStore.allowedDirectories,
-        cwd: settingsStore.allowedDirectories?.[0] || null,
-    });
+    // const builtinTools = createBuiltinTools({
+    //     // enabled: settingsStore.builtinToolsEnabled,
+    //     allowedDirectories: settingsStore.allowedDirectories,
+    //     cwd: settingsStore.allowedDirectories?.[0] || null,
+    // });
     const tools = {
         ...(mcpTools || {}),
-        ...(builtinTools || {}),
+        // ...(builtinTools || {}),
     };
     clientToolsRef.value = tools;
     const toolsEnabled = Object.keys(tools).length > 0;

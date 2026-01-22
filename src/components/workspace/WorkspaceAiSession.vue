@@ -46,7 +46,7 @@ import { storeToRefs } from "pinia";
 
 import { ChatUtils } from "@/utils/ChatUtils";
 import { McpUtils } from "@/utils/McpUtils";
-import { createBuiltinTools } from "@/utils/BuiltinTools";
+// import { createBuiltinTools } from "@/utils/BuiltinTools";
 
 import { readDir, readTextFile } from "@tauri-apps/plugin-fs";
 
@@ -157,18 +157,18 @@ async function handleRegenerate() {
         skipStopDisabled: true,
     });
 
-    const builtinEnabled = {
-        filesystem: Boolean(conv.enabledBuiltinTools?.filesystem),
-        git: Boolean(conv.enabledBuiltinTools?.git),
-    };
-    const allowedDirectories = conv.workspaceRoot ? [conv.workspaceRoot] : [];
-    const builtinTools = createBuiltinTools({
-        enabled: builtinEnabled,
-        allowedDirectories,
-        cwd: conv.workspaceRoot || null,
-    });
+    // const builtinEnabled = {
+    //     filesystem: Boolean(conv.enabledBuiltinTools?.filesystem),
+    //     git: Boolean(conv.enabledBuiltinTools?.git),
+    // };
+    // const allowedDirectories = conv.workspaceRoot ? [conv.workspaceRoot] : [];
+    // const builtinTools = createBuiltinTools({
+    //     // enabled: builtinEnabled,
+    //     allowedDirectories,
+    //     cwd: conv.workspaceRoot || null,
+    // });
 
-    const tools = { ...mcpTools, ...builtinTools };
+    const tools = { ...mcpTools };
     clientToolsRef.value = tools;
 
     const modelId = conv.modelId || selectedModel.value?.id;
@@ -266,18 +266,18 @@ async function sendChatMessage(
         skipStopDisabled: true,
     });
 
-    const builtinEnabled = {
-        filesystem: Boolean(conv.enabledBuiltinTools?.filesystem),
-        git: Boolean(conv.enabledBuiltinTools?.git),
-    };
-    const allowedDirectories = conv.workspaceRoot ? [conv.workspaceRoot] : [];
-    const builtinTools = createBuiltinTools({
-        enabled: builtinEnabled,
-        allowedDirectories,
-        cwd: conv.workspaceRoot || null,
-    });
+    // const builtinEnabled = {
+    //     filesystem: Boolean(conv.enabledBuiltinTools?.filesystem),
+    //     git: Boolean(conv.enabledBuiltinTools?.git),
+    // };
+    // const allowedDirectories = conv.workspaceRoot ? [conv.workspaceRoot] : [];
+    // const builtinTools = createBuiltinTools({
+    //     // enabled: builtinEnabled,
+    //     allowedDirectories,
+    //     cwd: conv.workspaceRoot || null,
+    // });
 
-    const tools = { ...mcpTools, ...builtinTools };
+    const tools = { ...mcpTools };
     clientToolsRef.value = tools;
 
     const modelId = conv.modelId || selectedModel.value?.id;
@@ -353,10 +353,10 @@ const settingsOpen = ref(false);
 const enabledToolCount = computed(() => {
     const conv = selectedConversation.value;
     const mcpCount = (conv?.enabledMcpServerIds || []).length;
-    const builtinCount =
-        (conv?.enabledBuiltinTools?.filesystem ? 1 : 0) +
-        (conv?.enabledBuiltinTools?.git ? 1 : 0);
-    return mcpCount + builtinCount;
+    // const builtinCount =
+    //     (conv?.enabledBuiltinTools?.filesystem ? 1 : 0) +
+    //     (conv?.enabledBuiltinTools?.git ? 1 : 0);
+    return mcpCount;
 });
 
 const activeModelLabel = computed(() => {
@@ -657,7 +657,7 @@ async function syncChatToStore() {
         messages: stored as any,
         modelId: conv.modelId,
         enabledMcpServerIds: conv.enabledMcpServerIds,
-        enabledBuiltinTools: conv.enabledBuiltinTools,
+        // enabledBuiltinTools: conv.enabledBuiltinTools,
         webSearch: conv.webSearch,
         apiMode: conv.apiMode,
         customInstructions: conv.customInstructions,
@@ -704,18 +704,18 @@ async function handleSubmit(msg: PromptInputMessage) {
         skipStopDisabled: true,
     });
 
-    const builtinEnabled = {
-        filesystem: Boolean(conv.enabledBuiltinTools?.filesystem),
-        git: Boolean(conv.enabledBuiltinTools?.git),
-    };
-    const allowedDirectories = conv.workspaceRoot ? [conv.workspaceRoot] : [];
-    const builtinTools = createBuiltinTools({
-        enabled: builtinEnabled,
-        allowedDirectories,
-        cwd: conv.workspaceRoot || null,
-    });
+    // const builtinEnabled = {
+    //     filesystem: Boolean(conv.enabledBuiltinTools?.filesystem),
+    //     git: Boolean(conv.enabledBuiltinTools?.git),
+    // };
+    // const allowedDirectories = conv.workspaceRoot ? [conv.workspaceRoot] : [];
+    // const builtinTools = createBuiltinTools({
+    //     // enabled: builtinEnabled,
+    //     allowedDirectories,
+    //     cwd: conv.workspaceRoot || null,
+    // });
 
-    const tools = { ...mcpTools, ...builtinTools };
+    const tools = { ...mcpTools };
     clientToolsRef.value = tools;
 
     const modelId = conv.modelId || selectedModel.value?.id;
@@ -736,18 +736,18 @@ async function handleSubmit(msg: PromptInputMessage) {
     );
 }
 
-async function toggleBuiltinTool(kind: "filesystem" | "git", checked: boolean) {
-    const conv = selectedConversation.value;
-    if (!conv) return;
+// async function toggleBuiltinTool(kind: "filesystem" | "git", checked: boolean) {
+//     const conv = selectedConversation.value;
+//     if (!conv) return;
 
-    const next = {
-        filesystem: Boolean(conv.enabledBuiltinTools?.filesystem),
-        git: Boolean(conv.enabledBuiltinTools?.git),
-        [kind]: checked,
-    };
-    conv.enabledBuiltinTools = next;
-    await chatStore.updateConversation(conv.id, { enabledBuiltinTools: next });
-}
+//     // const next = {
+//     //     filesystem: Boolean(conv.enabledBuiltinTools?.filesystem),
+//     //     git: Boolean(conv.enabledBuiltinTools?.git),
+//     //     [kind]: checked,
+//     // };
+//     // conv.enabledBuiltinTools = next;
+//     await chatStore.updateConversation(conv.id, {});
+// }
 
 function onPromptError(error: { code: string; message: string }) {
     console.error("PromptInput error", error);
@@ -1319,7 +1319,7 @@ async function toggleServer(serverId: string, checked: boolean) {
                                         按会话启用
                                     </div>
 
-                                    <div class="rounded-md border p-2">
+                                    <!-- <div class="rounded-md border p-2">
                                         <div
                                             class="text-xs text-muted-foreground"
                                         >
@@ -1373,7 +1373,7 @@ async function toggleServer(serverId: string, checked: boolean) {
                                                 <span>Git</span>
                                             </label>
                                         </div>
-                                    </div>
+                                    </div> -->
 
                                     <div
                                         v-if="mcpStore.servers.length === 0"
