@@ -6,6 +6,7 @@ import ModelSelectorPicker from "@/components/ModelSelectorPicker.vue";
 import ChatMessageItem from "@/components/chat/ChatMessageItem.vue";
 
 import { MessageResponse } from "@/components/ai-elements/message";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 
 import {
     Dialog,
@@ -952,7 +953,13 @@ async function toggleServer(serverId: string, checked: boolean) {
                             />
                         </template>
                         <template v-else>
+                            <Shimmer
+                                v-if="isStreaming && !part.text"
+                                class="text-sm text-muted-foreground"
+                                >正在生成回复...</Shimmer
+                            >
                             <MessageResponse
+                                v-else
                                 :id="`${slotMessage.id}-text-${partIndex}`"
                                 :content="part.text"
                                 :is-streaming="isStreaming"
@@ -994,11 +1001,15 @@ async function toggleServer(serverId: string, checked: boolean) {
                     </template>
                 </ChatMessageItem>
 
-                <div
-                    v-if="status === 'streaming'"
-                    class="text-xs text-muted-foreground"
-                >
-                    正在生成回复…
+                <div v-if="status === 'submitted'" class="pl-4 py-2">
+                    <Shimmer class="text-xs text-muted-foreground"
+                        >正在思考...</Shimmer
+                    >
+                </div>
+                <div v-else-if="status === 'streaming'" class="pl-4 py-2">
+                    <Shimmer class="text-xs text-muted-foreground"
+                        >正在生成回复...</Shimmer
+                    >
                 </div>
             </div>
         </div>

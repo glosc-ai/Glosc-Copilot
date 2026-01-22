@@ -3,6 +3,7 @@ import type { ChatStatus, SourceUrlUIPart, UIMessage } from "ai";
 import type { AttachmentFile } from "@/components/ai-elements/prompt-input";
 
 import { Image } from "@/components/ai-elements/image";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 
 import { CopyIcon, RefreshCcwIcon } from "lucide-vue-next";
 
@@ -158,7 +159,13 @@ const timestampTextForMessage = computed(() =>
                         :isLastTextPart="isLastTextPart(partIndex)"
                         :isStreaming="isStreamingPart(partIndex)"
                     >
+                        <Shimmer
+                            v-if="isStreamingPart(partIndex) && !part.text"
+                            class="text-sm text-muted-foreground"
+                            >正在生成回复...</Shimmer
+                        >
                         <MessageResponse
+                            v-else
                             :id="`${message.id}-text-${partIndex}`"
                             :content="part.text"
                             :is-streaming="isStreamingPart(partIndex)"

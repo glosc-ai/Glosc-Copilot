@@ -13,6 +13,7 @@ import { meetingMessagesToUiMessages } from "@/utils/MeetingUiMessageAdapter";
 import { useMcpStore } from "@/stores/mcp";
 import { McpUtils } from "@/utils/McpUtils";
 import { ChatUtils } from "@/utils/ChatUtils";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 
 const props = defineProps<{
     meetingId: string;
@@ -641,7 +642,17 @@ defineExpose({
                                         </span>
                                     </div>
 
+                                    <Shimmer
+                                        v-if="
+                                            (message as any).isGenerating &&
+                                            !part.text
+                                        "
+                                        class="text-sm text-muted-foreground"
+                                    >
+                                        正在生成回复...
+                                    </Shimmer>
                                     <MessageResponse
+                                        v-else
                                         :id="`${message.id}-text-${partIndex}`"
                                         :content="part.text"
                                         :is-streaming="isStreaming"

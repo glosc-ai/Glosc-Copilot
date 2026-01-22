@@ -13,6 +13,7 @@ import { ChatUtils } from "@/utils/ChatUtils";
 import type { StoredChatMessage } from "@/utils/interface";
 import { Textarea } from "@/components/ui/textarea";
 import { Image } from "@/components/ai-elements/image";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 
 import {
     CopyIcon,
@@ -1372,7 +1373,14 @@ watch(
                         </Checkpoint>
                     </template>
 
-                    <Loader v-if="status === 'submitted'" class="mx-auto" />
+                    <div
+                        v-if="status === 'submitted'"
+                        class="flex justify-center py-4"
+                    >
+                        <Shimmer class="text-sm text-muted-foreground"
+                            >正在思考...</Shimmer
+                        >
+                    </div>
                 </ConversationContent>
 
                 <ConversationScrollButton />

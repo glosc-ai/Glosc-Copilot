@@ -218,35 +218,49 @@ void (async () => {
     }
 })();
 
-// async function setupProdDevtoolsHotkey() {
-//     try {
-//         // When running in a normal browser (vite dev), Tauri internals are not available.
-//         if (!(window as any).__TAURI_INTERNALS__) return;
+async function setupProdDevtoolsHotkey() {
+    try {
+        // When running in a normal browser (vite dev), Tauri internals are not available.
+        if (!(window as any).__TAURI_INTERNALS__) return;
 
-//         const { invoke } = await import("@tauri-apps/api/core");
-//         const enabled = await invoke<boolean>("is_debug_enabled");
-//         if (!enabled) return;
+        const { invoke } = await import("@tauri-apps/api/core");
+        const enabled = await invoke<boolean>("is_debug_enabled");
 
-//         window.addEventListener(
-//             "keydown",
-//             (e) => {
-//                 const isF12 = e.key === "F12";
+        window.addEventListener(
+            "keydown",
+            (e) => {
+                const isF12 = e.key === "F12";
 
-//                 if (!isF12) return;
+                if (!isF12) return;
 
-//                 e.preventDefault();
-//                 invoke("open_devtools").catch(() => {
-//                     // ignore
-//                 });
-//             },
-//             { capture: true },
-//         );
-//     } catch {
-//         // ignore
-//     }
-// }
+                // Always prevent default to block native devtools (if any)
+                e.preventDefault();
 
-// setupProdDevtoolsHotkey();
+                if (enabled) {
+                    invoke("open_devtools").catch(() => {
+                        // ignore
+                    });
+                }
+            },
+            { capture: true },
+        );
+
+        // 禁用右键菜单
+        window.addEventListener(
+            "contextmenu",
+            (e) => {
+                if (enabled) {
+                    e.preventDefault();
+                }
+            },
+            { capture: true },
+        );
+    } catch {
+        // ignore
+    }
+}
+
+setupProdDevtoolsHotkey();
 
 // 配置 CORSFetch（仅在 Tauri 环境生效）
 // 用于绕过浏览器 CORS 限制（例如 Store 下载重定向到 R2 时）。
