@@ -80,14 +80,14 @@ const router = useRouter();
 
 const hasEnabledServers = computed(() => servers.value.some((s) => s.enabled));
 
-const hasEnabledBuiltinTools = computed(() => {
-    const t = settingsStore.builtinToolsEnabled;
-    return Boolean(t?.filesystem || t?.git);
-});
+// const hasEnabledBuiltinTools = computed(() => {
+//     const t = settingsStore.builtinToolsEnabled;
+//     return Boolean(t?.filesystem || t?.git);
+// });
 
-const hasEnabledAnyTools = computed(
-    () => hasEnabledServers.value || hasEnabledBuiltinTools.value,
-);
+// const hasEnabledAnyTools = computed(
+//     () => hasEnabledServers.value || hasEnabledBuiltinTools.value,
+// );
 
 // WebSearch 开关（透传给后端）
 const webSearchEnabled = computed(() => chatStore.webSearchEnabled);
@@ -364,15 +364,15 @@ async function sendChatMessage(
 
     sendLock.value = true;
     const mcpTools = await mcpStore.getCachedTools();
-    const builtinTools = createBuiltinTools({
-        enabled: settingsStore.builtinToolsEnabled,
-        // 若用户没有配置 allowedDirectories，则工具本身会拒绝执行。
-        allowedDirectories: settingsStore.allowedDirectories,
-        cwd: settingsStore.allowedDirectories?.[0] || null,
-    });
+    // const builtinTools = createBuiltinTools({
+    //     enabled: settingsStore.builtinToolsEnabled,
+    //     // 若用户没有配置 allowedDirectories，则工具本身会拒绝执行。
+    //     allowedDirectories: settingsStore.allowedDirectories,
+    //     cwd: settingsStore.allowedDirectories?.[0] || null,
+    // });
     const tools = {
         ...(mcpTools || {}),
-        ...(builtinTools || {}),
+        // ...(builtinTools || {}),
     };
     clientToolsRef.value = tools;
     const toolsEnabled = Object.keys(tools).length > 0;
@@ -1460,9 +1460,7 @@ watch(
                         <DropdownMenu>
                             <DropdownMenuTrigger as-child>
                                 <PromptInputButton
-                                    :variant="
-                                        hasEnabledAnyTools ? 'default' : 'ghost'
-                                    "
+                                    variant="ghost"
                                     @contextmenu.prevent="openMcpManager"
                                 >
                                     <Server class="size-4" />

@@ -249,8 +249,9 @@ async function setupProdDevtoolsHotkey() {
         window.addEventListener(
             "contextmenu",
             (e) => {
+                e.preventDefault();
+
                 if (enabled) {
-                    e.preventDefault();
                 }
             },
             { capture: true },
@@ -269,11 +270,12 @@ if (corsFetch?.config) {
     corsFetch.config({
         // 仅拦截“下载插件压缩包”相关请求；其它（例如 https://www.glosc.ai 的常规 API）保持走浏览器原生 fetch。
         include: [
-            // Store 下载接口（可能是本地开发的 http://localhost:3000，也可能是线上域名）
-            /^https?:\/\/[^/]+\/api\/store\/plugins\/[^/]+\/versions\/[^/]+\/download(\?.*)?$/i,
-            // R2 产物直链（Store 会 302/307 到这里）
+            // // Store 下载接口（可能是本地开发的 http://localhost:3000，也可能是线上域名）
+            // /^https?:\/\/[^/]+\/api\/store\/plugins\/[^/]+\/versions\/[^/]+\/download(\?.*)?$/i,
+            // // R2 产物直链（Store 会 302/307 到这里）
             /^https?:\/\/r2\.glosc\.ai\//i,
+            /^https?:\/\/[^/]+/i,
         ],
-        exclude: [],
+        exclude: [/^http?:\/\/localhost(:\d+)?/i, "https://www.glosc.ai/"],
     });
 }
