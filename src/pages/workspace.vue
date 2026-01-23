@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import WorkspaceAiSession from "@/components/workspace/WorkspaceAiSession.vue";
 import MonacoEditorPane from "@/components/workspace/MonacoEditorPane.vue";
 import WorkspaceConsolePanel from "@/components/workspace/WorkspaceConsolePanel.vue";
-import WorkspaceTreeItem from "@/components/workspace/WorkspaceTreeItem.vue";
+import { FileTree } from "@/components/ai-elements/file-tree";
 
 import { open } from "@tauri-apps/plugin-dialog";
 import { readDir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
@@ -600,15 +600,12 @@ watch(
                     </div>
 
                     <div v-else class="space-y-1">
-                        <WorkspaceTreeItem
-                            v-for="node in rootNodes"
-                            :key="node.path"
-                            :node="node"
-                            :depth="0"
-                            :expanded-dirs="expandedDirs"
+                        <FileTree
+                            :nodes="rootNodes"
+                            :expanded="expandedDirs"
                             :children-by-path="childrenByPath"
-                            :loading-dirs="loadingDirs"
-                            :active-file-path="activeFilePath"
+                            :loading="loadingDirs"
+                            :selected-path="activeFilePath"
                             :get-node-icon="getNodeIcon"
                             :on-select="openFile"
                         />

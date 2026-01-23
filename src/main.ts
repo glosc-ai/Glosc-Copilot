@@ -248,8 +248,8 @@ async function setupProdDevtoolsHotkey() {
         // 禁用右键菜单
         window.addEventListener(
             "contextmenu",
-            (e) => {
-                e.preventDefault();
+            () => {
+                // e.preventDefault();
 
                 if (enabled) {
                 }
@@ -276,6 +276,6 @@ if (corsFetch?.config) {
             /^https?:\/\/r2\.glosc\.ai\//i,
             /^https?:\/\/[^/]+/i,
         ],
-        exclude: [/^http?:\/\/localhost(:\d+)?/i, "https://www.glosc.ai/"],
+        exclude: ["http://localhost:3000/", "https://www.glosc.ai/"],
     });
 }

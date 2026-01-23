@@ -56,10 +56,16 @@ import {
     Check,
     ChevronDown,
     MoreHorizontal,
+    Pencil,
     Plus,
+    RefreshCcwIcon,
     Settings2,
     Trash2,
 } from "lucide-vue-next";
+
+import McpPromptInputInsert from "@/components/mcp/McpPromptInputInsert.vue";
+import { InlineCitedText } from "@/components/ai-elements/inline-citation";
+import PromptInputResourceCitationsPreview from "@/components/ai-elements/prompt-input/PromptInputResourceCitationsPreview.vue";
 
 const props = defineProps<{ workspaceRoot: string | null }>();
 
@@ -958,6 +964,12 @@ async function toggleServer(serverId: string, checked: boolean) {
                                 class="text-sm text-muted-foreground"
                                 >正在生成回复...</Shimmer
                             >
+                            <InlineCitedText
+                                v-else-if="slotMessage.role === 'user'"
+                                :content="part.text"
+                                class="text-sm"
+                                trigger-label="mcp"
+                            />
                             <MessageResponse
                                 v-else
                                 :id="`${slotMessage.id}-text-${partIndex}`"
@@ -1028,6 +1040,7 @@ async function toggleServer(serverId: string, checked: boolean) {
                             <PromptInputAttachment :file="file" />
                         </template>
                     </PromptInputAttachments>
+                    <PromptInputResourceCitationsPreview />
                 </PromptInputHeader>
 
                 <PromptInputBody>
@@ -1043,6 +1056,18 @@ async function toggleServer(serverId: string, checked: boolean) {
                             <PromptInputActionMenuTrigger />
                             <PromptInputActionMenuContent>
                                 <PromptInputActionAddAttachments />
+                                <McpPromptInputInsert
+                                    :disabled="
+                                        !activeKey ||
+                                        isChatBusy ||
+                                        !selectedConversation
+                                    "
+                                    :servers="mcpStore.servers"
+                                    :enabled-server-ids="
+                                        selectedConversation?.enabledMcpServerIds ||
+                                        []
+                                    "
+                                />
                             </PromptInputActionMenuContent>
                         </PromptInputActionMenu>
 

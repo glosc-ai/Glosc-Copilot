@@ -89,6 +89,16 @@ export const McpServerSchema = z.discriminatedUnion("type", [
         args: z.array(z.string()),
         cwd: z.string().optional(),
         env: z.record(z.string(), z.string()).optional(),
+        // Optional Glosc Store metadata (not sent to MCP server).
+        store: z
+            .object({
+                slug: z.string(),
+                kind: z.enum(["package", "file", "url"]),
+                version: z.string().optional(),
+                pricingType: z.string().optional(),
+                description: z.string().optional(),
+            })
+            .optional(),
     }),
     z.object({
         id: z.string(),
@@ -97,6 +107,16 @@ export const McpServerSchema = z.discriminatedUnion("type", [
         type: z.literal("http"),
         url: z.string(),
         headers: z.record(z.string(), z.string()).optional(),
+        // Optional Glosc Store metadata (not sent to MCP server).
+        store: z
+            .object({
+                slug: z.string(),
+                kind: z.enum(["package", "file", "url"]),
+                version: z.string().optional(),
+                pricingType: z.string().optional(),
+                description: z.string().optional(),
+            })
+            .optional(),
     }),
 ]);
 

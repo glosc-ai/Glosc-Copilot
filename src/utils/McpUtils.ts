@@ -183,6 +183,182 @@ export class McpUtils {
         }
     }
 
+    private static async readResourceInternal(mcpClient: any, uri: string) {
+        try {
+            if (!mcpClient) return null;
+            if (typeof mcpClient.readResource === "function") {
+                // Common MCP shape: readResource({ uri })
+                try {
+                    return await mcpClient.readResource({ uri });
+                } catch {
+                    // Some clients use readResource(uri)
+                    return await mcpClient.readResource(uri);
+                }
+            }
+            return null;
+        } catch (error) {
+            console.log("Error reading resource from MCP client:", error);
+            return null;
+        }
+    }
+
+    private static async getPromptInternal(
+        mcpClient: any,
+        name: string,
+        args?: Record<string, any>,
+    ) {
+        try {
+            if (!mcpClient) return null;
+            if (typeof mcpClient.getPrompt === "function") {
+                // Common MCP shape: getPrompt({ name, arguments })
+                try {
+                    return await mcpClient.getPrompt({
+                        name,
+                        arguments: args ?? {},
+                    });
+                } catch {
+                    // Some clients use getPrompt(name, args)
+                    return await mcpClient.getPrompt(name, args ?? {});
+                }
+            }
+            return null;
+        } catch (error) {
+            console.log("Error getting prompt from MCP client:", error);
+            return null;
+        }
+    }
+
+    /**
+     * 获取 MCP Servers 的资源列表（会自动启动已启用的 server）。
+     */
+    public static async getResources(
+        servers: McpServer[],
+        options: { skipStopDisabled?: boolean } = {},
+    ) {
+        const result: Array<{ server: McpServer; resources: any[] }> = [];
+
+        for (const server of servers) {
+            if (!server.enabled) {
+                if (!options.skipStopDisabled) {
+                    if (this.activeServers.has(server.id)) {
+                        await this.stopServer(server.id);
+                    }
+                }
+                continue;
+            }
+
+            try {
+                const client = await McpUtils.startServer(server);
+                const payload = await McpUtils.listResources(client);
+                result.push({
+                    server,
+                    resources: payload?.resources || [],
+                });
+            } catch (error) {
+                console.log(
+                    `Failed to fetch MCP resources from ${server.name}:`,
+                    error,
+                );
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 获取 MCP Servers 的 Resource Templates（uriTemplate）。
+     */
+    public static async getResourceTemplates(
+        servers: McpServer[],
+        options: { skipStopDisabled?: boolean } = {},
+    ) {
+        const result: Array<{ server: McpServer; templates: any[] }> = [];
+
+        for (const server of servers) {
+            if (!server.enabled) {
+                if (!options.skipStopDisabled) {
+                    if (this.activeServers.has(server.id)) {
+                        await this.stopServer(server.id);
+                    }
+                }
+                continue;
+            }
+
+            try {
+                const client = await McpUtils.startServer(server);
+                const payload = await McpUtils.listResourceTemplates(client);
+                result.push({
+                    server,
+                    templates: payload?.resourceTemplates || [],
+                });
+            } catch (error) {
+                console.log(
+                    `Failed to fetch MCP resource templates from ${server.name}:`,
+                    error,
+                );
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 获取 MCP Servers 的 Prompts（提示词模板）。
+     */
+    public static async getPrompts(
+        servers: McpServer[],
+        options: { skipStopDisabled?: boolean } = {},
+    ) {
+        const result: Array<{ server: McpServer; prompts: any[] }> = [];
+
+        for (const server of servers) {
+            if (!server.enabled) {
+                if (!options.skipStopDisabled) {
+                    if (this.activeServers.has(server.id)) {
+                        await this.stopServer(server.id);
+                    }
+                }
+                continue;
+            }
+
+            try {
+                const client = await McpUtils.startServer(server);
+                const payload = await McpUtils.listPrompts(client);
+                result.push({
+                    server,
+                    prompts: payload?.prompts || [],
+                });
+            } catch (error) {
+                console.log(
+                    `Failed to fetch MCP prompts from ${server.name}:`,
+                    error,
+                );
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 读取资源内容。
+     */
+    public static async readResource(server: McpServer, uri: string) {
+        const client = await McpUtils.startServer(server);
+        return await McpUtils.readResourceInternal(client, uri);
+    }
+
+    /**
+     * 获取 Prompt 详情（可带参数）。
+     */
+    public static async getPrompt(
+        server: McpServer,
+        name: string,
+        args?: Record<string, any>,
+    ) {
+        const client = await McpUtils.startServer(server);
+        return await McpUtils.getPromptInternal(client, name, args);
+    }
+
     public static async testConnection(server: McpServer) {
         let transport;
         let mcpClient: any;

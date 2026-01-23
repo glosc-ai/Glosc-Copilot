@@ -13,9 +13,14 @@ const props = defineProps<{
     class?: HTMLAttributes["class"];
 }>();
 
-const name = computed(() =>
-    props.title ? props.type.split("-").slice(1).join(" ") : props.type
-);
+const name = computed(() => {
+    if (props.title && String(props.title).trim()) return props.title;
+    const t = String(props.type || "");
+    if (t.startsWith("tool-"))
+        return t.slice("tool-".length).split("_").join(" ");
+    if (t === "dynamic-tool") return "tool";
+    return t;
+});
 </script>
 
 <template>
@@ -23,7 +28,7 @@ const name = computed(() =>
         :class="
             cn(
                 'flex w-full items-center justify-between gap-4 p-3',
-                props.class
+                props.class,
             )
         "
         v-bind="$attrs"

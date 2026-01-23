@@ -70,7 +70,7 @@ interface Props extends /* @vue-ignore */ PromptInputSpeechButtonProps {
 
 const props = defineProps<Props>();
 
-const { textInput, setTextInput } = usePromptInput();
+const { displayTextInput, setDisplayTextInput } = usePromptInput();
 const isListening = ref(false);
 const recognition = ref<SpeechRecognition | null>(null);
 
@@ -99,10 +99,10 @@ onMounted(() => {
 
             if (finalTranscript) {
                 const newValue =
-                    textInput.value +
-                    (textInput.value ? " " : "") +
+                    displayTextInput.value +
+                    (displayTextInput.value ? " " : "") +
                     finalTranscript;
-                setTextInput(newValue);
+                setDisplayTextInput(newValue);
             }
         };
 
@@ -136,7 +136,7 @@ function toggleListening() {
             cn(
                 'relative transition-all duration-200',
                 isListening && 'animate-pulse bg-accent text-accent-foreground',
-                props.class
+                props.class,
             )
         "
         v-bind="props"

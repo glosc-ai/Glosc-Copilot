@@ -1,7 +1,11 @@
 import type { AttachmentFile, PromptInputContext } from "./types";
 import { nanoid } from "nanoid";
-import { inject, onBeforeUnmount, provide, ref } from "vue";
+import { computed, inject, onBeforeUnmount, provide, ref } from "vue";
 import { PROMPT_INPUT_KEY } from "./types";
+import {
+    extractMcpResourceBlocks,
+    extractMcpResourceCitations,
+} from "@/utils/InlineCitationUtils";
 
 export function usePromptInputProvider(props: {
     initialInput?: string;
@@ -30,6 +34,20 @@ export function usePromptInputProvider(props: {
 
     const setTextInput = (val: string) => {
         textInput.value = val;
+    };
+
+    const displayTextInput = computed(() => {
+        return extractMcpResourceCitations(textInput.value).displayText;
+    });
+
+    const setDisplayTextInput = (val: string) => {
+        const blocks = extractMcpResourceBlocks(textInput.value);
+
+        let next = String(val || "").trimEnd();
+        if (blocks.length > 0) {
+            next = `${next}${next ? "\n\n" : ""}${blocks.join("\n\n")}`;
+        }
+        textInput.value = next;
     };
 
     const matchesAccept = (file: File) => {
@@ -118,7 +136,7 @@ export function usePromptInputProvider(props: {
     };
 
     const convertBlobUrlToDataUrl = async (
-        url: string
+        url: string,
     ): Promise<string | null> => {
         try {
             const response = await fetch(url);
@@ -148,7 +166,7 @@ export function usePromptInputProvider(props: {
                     return { ...item, url: dataUrl ?? item.url };
                 }
                 return item;
-            })
+            }),
         );
 
         const message = {
@@ -184,10 +202,12 @@ export function usePromptInputProvider(props: {
 
     const context: PromptInputContext = {
         textInput,
+        displayTextInput,
         files,
         fileInputRef,
         isLoading,
         setTextInput,
+        setDisplayTextInput,
         addFiles,
         removeFile,
         clearFiles,
@@ -204,7 +224,7 @@ export function usePromptInput() {
     const context = inject<PromptInputContext>(PROMPT_INPUT_KEY);
     if (!context) {
         throw new Error(
-            "usePromptInput must be used within a PromptInput component"
+            "usePromptInput must be used within a PromptInput component",
         );
     }
     return context;

@@ -99,11 +99,20 @@ declare global {
   const EffectScope: typeof import('vue').EffectScope
   const ElMessage: typeof import('element-plus/es').ElMessage
   const ElMessageBox: typeof import('element-plus/es').ElMessageBox
+  const FileTree: typeof import('./src/components/ai-elements/file-tree/index').FileTree
   const GloscStoreApi: typeof import('./src/utils/GloscStoreApi').GloscStoreApi
   const HoverCard: typeof import('./src/components/ui/hover-card/index').HoverCard
   const HoverCardContent: typeof import('./src/components/ui/hover-card/index').HoverCardContent
   const HoverCardTrigger: typeof import('./src/components/ui/hover-card/index').HoverCardTrigger
   const Image: typeof import('./src/components/ai-elements/image/index').Image
+  const InlineCitation: typeof import('./src/components/ai-elements/inline-citation/index').InlineCitation
+  const InlineCitationCard: typeof import('./src/components/ai-elements/inline-citation/index').InlineCitationCard
+  const InlineCitationCardBody: typeof import('./src/components/ai-elements/inline-citation/index').InlineCitationCardBody
+  const InlineCitationCardTrigger: typeof import('./src/components/ai-elements/inline-citation/index').InlineCitationCardTrigger
+  const InlineCitationQuote: typeof import('./src/components/ai-elements/inline-citation/index').InlineCitationQuote
+  const InlineCitationResourcesPreview: typeof import('./src/components/ai-elements/inline-citation/index').InlineCitationResourcesPreview
+  const InlineCitationSource: typeof import('./src/components/ai-elements/inline-citation/index').InlineCitationSource
+  const InlineCitedText: typeof import('./src/components/ai-elements/inline-citation/index').InlineCitedText
   const Input: typeof import('./src/components/ui/input/index').Input
   const InputGroup: typeof import('./src/components/ui/input-group/index').InputGroup
   const InputGroupAddon: typeof import('./src/components/ui/input-group/index').InputGroupAddon
@@ -195,7 +204,22 @@ declare global {
   const PromptInputTabsList: typeof import('./src/components/ai-elements/prompt-input/index').PromptInputTabsList
   const PromptInputTextarea: typeof import('./src/components/ai-elements/prompt-input/index').PromptInputTextarea
   const PromptInputTools: typeof import('./src/components/ai-elements/prompt-input/index').PromptInputTools
+  const Queue: typeof import('./src/components/ai-elements/queue/index').Queue
+  const QueueItem: typeof import('./src/components/ai-elements/queue/index').QueueItem
+  const QueueItemAction: typeof import('./src/components/ai-elements/queue/index').QueueItemAction
+  const QueueItemActions: typeof import('./src/components/ai-elements/queue/index').QueueItemActions
+  const QueueItemAttachment: typeof import('./src/components/ai-elements/queue/index').QueueItemAttachment
+  const QueueItemContent: typeof import('./src/components/ai-elements/queue/index').QueueItemContent
+  const QueueItemDescription: typeof import('./src/components/ai-elements/queue/index').QueueItemDescription
+  const QueueItemFile: typeof import('./src/components/ai-elements/queue/index').QueueItemFile
+  const QueueItemImage: typeof import('./src/components/ai-elements/queue/index').QueueItemImage
+  const QueueItemIndicator: typeof import('./src/components/ai-elements/queue/index').QueueItemIndicator
+  const QueueList: typeof import('./src/components/ai-elements/queue/index').QueueList
   const QueueNodeSchema: typeof import('./src/utils/meetingInterface').QueueNodeSchema
+  const QueueSection: typeof import('./src/components/ai-elements/queue/index').QueueSection
+  const QueueSectionContent: typeof import('./src/components/ai-elements/queue/index').QueueSectionContent
+  const QueueSectionLabel: typeof import('./src/components/ai-elements/queue/index').QueueSectionLabel
+  const QueueSectionTrigger: typeof import('./src/components/ai-elements/queue/index').QueueSectionTrigger
   const Reasoning: typeof import('./src/components/ai-elements/reasoning/index').Reasoning
   const ReasoningContent: typeof import('./src/components/ai-elements/reasoning/index').ReasoningContent
   const ReasoningKey: typeof import('./src/components/ai-elements/reasoning/context').ReasoningKey
@@ -219,6 +243,15 @@ declare global {
   const SourcesTrigger: typeof import('./src/components/ai-elements/sources/index').SourcesTrigger
   const StoreUtils: typeof import('./src/utils/StoreUtils').StoreUtils
   const StoredChatMessageSchema: typeof import('./src/utils/interface').StoredChatMessageSchema
+  const Table: typeof import('./src/components/ui/table/index').Table
+  const TableBody: typeof import('./src/components/ui/table/index').TableBody
+  const TableCaption: typeof import('./src/components/ui/table/index').TableCaption
+  const TableCell: typeof import('./src/components/ui/table/index').TableCell
+  const TableEmpty: typeof import('./src/components/ui/table/index').TableEmpty
+  const TableFooter: typeof import('./src/components/ui/table/index').TableFooter
+  const TableHead: typeof import('./src/components/ui/table/index').TableHead
+  const TableHeader: typeof import('./src/components/ui/table/index').TableHeader
+  const TableRow: typeof import('./src/components/ui/table/index').TableRow
   const Tabs: typeof import('./src/components/ui/tabs/index').Tabs
   const TabsContent: typeof import('./src/components/ui/tabs/index').TabsContent
   const TabsList: typeof import('./src/components/ui/tabs/index').TabsList
@@ -229,6 +262,14 @@ declare global {
   const TaskItemFile: typeof import('./src/components/ai-elements/task/index').TaskItemFile
   const TaskTrigger: typeof import('./src/components/ai-elements/task/index').TaskTrigger
   const TauriStdioTransport: typeof import('./src/utils/TauriStdioTransport').TauriStdioTransport
+  const Terminal: typeof import('./src/components/ai-elements/terminal/index').Terminal
+  const TerminalActions: typeof import('./src/components/ai-elements/terminal/index').TerminalActions
+  const TerminalClearButton: typeof import('./src/components/ai-elements/terminal/index').TerminalClearButton
+  const TerminalContent: typeof import('./src/components/ai-elements/terminal/index').TerminalContent
+  const TerminalCopyButton: typeof import('./src/components/ai-elements/terminal/index').TerminalCopyButton
+  const TerminalHeader: typeof import('./src/components/ai-elements/terminal/index').TerminalHeader
+  const TerminalStatus: typeof import('./src/components/ai-elements/terminal/index').TerminalStatus
+  const TerminalTitle: typeof import('./src/components/ai-elements/terminal/index').TerminalTitle
   const Textarea: typeof import('./src/components/ui/textarea/index').Textarea
   const TokensWithCost: typeof import('./src/components/ai-elements/context/index').TokensWithCost
   const Tool: typeof import('./src/components/ai-elements/tool/index').Tool
@@ -243,8 +284,10 @@ declare global {
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
   const alertVariants: typeof import('./src/components/ui/alert/index').alertVariants
   const badgeVariants: typeof import('./src/components/ui/badge/index').badgeVariants
+  const buildMcpResourceBlock: typeof import('./src/utils/InlineCitationUtils').buildMcpResourceBlock
   const buttonGroupVariants: typeof import('./src/components/ui/button-group/index').buttonGroupVariants
   const buttonVariants: typeof import('./src/components/ui/button/index').buttonVariants
+  const cardContextKey: typeof import('./src/components/ui/card/context').cardContextKey
   const computed: typeof import('vue').computed
   const createApp: typeof import('vue').createApp
   const createBuiltinTools: typeof import('./src/utils/BuiltinTools').createBuiltinTools
@@ -258,6 +301,8 @@ declare global {
   const effectScope: typeof import('vue').effectScope
   const ensureBundledNpmExpanded: typeof import('./src/utils/NpmResources').ensureBundledNpmExpanded
   const ensureMonacoWorkers: typeof import('./src/utils/MonacoSetup').ensureMonacoWorkers
+  const extractMcpResourceBlocks: typeof import('./src/utils/InlineCitationUtils').extractMcpResourceBlocks
+  const extractMcpResourceCitations: typeof import('./src/utils/InlineCitationUtils').extractMcpResourceCitations
   const fetchAvailableModels: typeof import('./src/utils/ModelApi').fetchAvailableModels
   const formatModelName: typeof import('./src/utils/ModelApi').formatModelName
   const getActivePinia: typeof import('pinia').getActivePinia
@@ -270,6 +315,7 @@ declare global {
   const getStoreToolAccessInfoFromEnv: typeof import('./src/utils/StoreToolAccess').getStoreToolAccessInfoFromEnv
   const groupModelsByProvider: typeof import('./src/utils/ModelApi').groupModelsByProvider
   const h: typeof import('vue').h
+  const hasMcpResourceBlocks: typeof import('./src/utils/InlineCitationUtils').hasMcpResourceBlocks
   const highlightCode: typeof import('./src/components/ai-elements/code-block/utils').highlightCode
   const inject: typeof import('vue').inject
   const inputGroupAddonVariants: typeof import('./src/components/ui/input-group/index').inputGroupAddonVariants
@@ -307,13 +353,16 @@ declare global {
   const onUnmounted: typeof import('vue').onUnmounted
   const onUpdated: typeof import('vue').onUpdated
   const onWatcherCleanup: typeof import('vue').onWatcherCleanup
+  const parseAnsiToSegments: typeof import('./src/components/ai-elements/terminal/ansi').parseAnsiToSegments
   const parseMcpServerConfigs: typeof import('./src/utils/McpServerImport').parseMcpServerConfigs
+  const parseTextWithInlineCitations: typeof import('./src/utils/InlineCitationUtils').parseTextWithInlineCitations
   const provide: typeof import('vue').provide
   const provideCommandContext: typeof import('./src/components/ui/command/index').provideCommandContext
   const provideCommandGroupContext: typeof import('./src/components/ui/command/index').provideCommandGroupContext
   const reactive: typeof import('vue').reactive
   const readonly: typeof import('vue').readonly
   const ref: typeof import('vue').ref
+  const removeMcpResourceCitation: typeof import('./src/utils/InlineCitationUtils').removeMcpResourceCitation
   const requestGeneratedImage: typeof import('./src/utils/ImageApi').requestGeneratedImage
   const resolveComponent: typeof import('vue').resolveComponent
   const setActivePinia: typeof import('pinia').setActivePinia
@@ -326,6 +375,7 @@ declare global {
   const storeUtils: typeof import('./src/utils/StoreUtils').storeUtils
   const stripJsonComments: typeof import('./src/utils/McpServerImport').stripJsonComments
   const syncInstalledStoreToolsAccess: typeof import('./src/utils/StoreToolAccess').syncInstalledStoreToolsAccess
+  const terminalContextKey: typeof import('./src/components/ai-elements/terminal/context').terminalContextKey
   const toRaw: typeof import('vue').toRaw
   const toRef: typeof import('vue').toRef
   const toRefs: typeof import('vue').toRefs
@@ -358,6 +408,7 @@ declare global {
   const useTemplateRef: typeof import('vue').useTemplateRef
   const useUiStore: typeof import('./src/stores/ui').useUiStore
   const useWorkspaceChatStore: typeof import('./src/stores/workspaceChat').useWorkspaceChatStore
+  const valueUpdater: typeof import('./src/components/ui/table/utils').valueUpdater
   const watch: typeof import('vue').watch
   const watchEffect: typeof import('vue').watchEffect
   const watchPostEffect: typeof import('vue').watchPostEffect
@@ -389,6 +440,9 @@ declare global {
   // @ts-ignore
   export type { GeneratedImageResult, GenerateImageRequest } from './src/utils/ImageApi'
   import('./src/utils/ImageApi')
+  // @ts-ignore
+  export type { InlineCitationItem, ParsedInlineCitationPart } from './src/utils/InlineCitationUtils'
+  import('./src/utils/InlineCitationUtils')
   // @ts-ignore
   export type { McpServerImportConfig } from './src/utils/McpServerImport'
   import('./src/utils/McpServerImport')
@@ -426,17 +480,29 @@ declare global {
   export type { ModelId, ContextContextValue } from './src/components/ai-elements/context/context'
   import('./src/components/ai-elements/context/context')
   // @ts-ignore
+  export type { FileTreeNode } from './src/components/ai-elements/file-tree/types'
+  import('./src/components/ai-elements/file-tree/types')
+  // @ts-ignore
   export type { MessageBranchContextType } from './src/components/ai-elements/message/context'
   import('./src/components/ai-elements/message/context')
   // @ts-ignore
   export type { PromptInputMessage, AttachmentFile, PromptInputContext } from './src/components/ai-elements/prompt-input/types'
   import('./src/components/ai-elements/prompt-input/types')
   // @ts-ignore
+  export type { QueueMessagePart, QueueMessage, QueueTodo } from './src/components/ai-elements/queue/types'
+  import('./src/components/ai-elements/queue/types')
+  // @ts-ignore
   export type { ReasoningContextValue } from './src/components/ai-elements/reasoning/context'
   import('./src/components/ai-elements/reasoning/context')
   // @ts-ignore
   export type { TextShimmerProps } from './src/components/ai-elements/shimmer/Shimmer.vue'
   import('./src/components/ai-elements/shimmer/Shimmer.vue')
+  // @ts-ignore
+  export type { AnsiSegment } from './src/components/ai-elements/terminal/ansi'
+  import('./src/components/ai-elements/terminal/ansi')
+  // @ts-ignore
+  export type { TerminalContext } from './src/components/ai-elements/terminal/context'
+  import('./src/components/ai-elements/terminal/context')
   // @ts-ignore
   export type { AlertVariants } from './src/components/ui/alert/index'
   import('./src/components/ui/alert/index')
@@ -449,6 +515,9 @@ declare global {
   // @ts-ignore
   export type { ButtonVariants } from './src/components/ui/button/index'
   import('./src/components/ui/button/index')
+  // @ts-ignore
+  export type { CardVariant, CardContext } from './src/components/ui/card/context'
+  import('./src/components/ui/card/context')
   // @ts-ignore
   export type { InputGroupVariants, InputGroupButtonVariants, InputGroupButtonProps } from './src/components/ui/input-group/index'
   import('./src/components/ui/input-group/index')

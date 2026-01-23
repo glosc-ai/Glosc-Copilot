@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import type { ChatStatus, SourceUrlUIPart, UIMessage } from "ai";
 import type { AttachmentFile } from "@/components/ai-elements/prompt-input";
-
-import { Image } from "@/components/ai-elements/image";
-import { Shimmer } from "@/components/ai-elements/shimmer";
-
 import { CopyIcon, RefreshCcwIcon } from "lucide-vue-next";
 
 const props = withDefaults(
@@ -204,7 +200,7 @@ const timestampTextForMessage = computed(() =>
                             "
                             :input="(part as any).input"
                         ></ToolInput>
-                        <SequentialThinking
+                        <SequentialThinkingQueue
                             v-if="part.type === 'tool-sequentialthinking'"
                             :input="(part as any).input"
                             :output="(part as any).output"

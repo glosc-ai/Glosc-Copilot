@@ -90,21 +90,29 @@ const isServerBusy = (serverId: string) =>
     updatingServerIds.value.has(serverId);
 
 const getStoreSlug = (server: McpServer) =>
-    server.type === "stdio" ? (server.env?.GLOSC_STORE_SLUG as any) : null;
+    (server as any)?.store?.slug ||
+    (server.type === "stdio" ? (server.env?.GLOSC_STORE_SLUG as any) : null);
 
 const isStoreInstalledServer = (server: McpServer) =>
     Boolean(getStoreSlug(server));
 
 const getStoreKind = (server: McpServer) =>
-    server.type === "stdio" ? (server.env?.GLOSC_STORE_KIND as any) : null;
+    (server as any)?.store?.kind ||
+    (server.type === "stdio" ? (server.env?.GLOSC_STORE_KIND as any) : null);
 
 const getStoreVersion = (server: McpServer) =>
-    server.type === "stdio" ? (server.env?.GLOSC_STORE_VERSION as any) : null;
+    (server as any)?.store?.version ||
+    (server.type === "stdio" ? (server.env?.GLOSC_STORE_VERSION as any) : null);
 
 const getStoreAccess = (server: McpServer) =>
     getStoreToolAccessInfoFromEnv(server);
 
 const getStoreDescription = (server: McpServer) => {
+    const fromMeta = String(
+        ((server as any)?.store?.description as any) || "",
+    ).trim();
+    if (fromMeta) return fromMeta;
+
     if (server.type !== "stdio") return null;
     const raw = server.env?.GLOSC_STORE_DESCRIPTION;
     const text = String(raw || "").trim();
@@ -138,9 +146,9 @@ const openStoreDetailByServer = async (server: McpServer, anchor?: string) => {
 // Capability dialog state
 const capabilityDialogOpen = ref(false);
 const capabilityDialogServerId = ref<string | null>(null);
-const capabilityDialogInitialTab = ref<"tools" | "resources" | "templates">(
-    "tools",
-);
+const capabilityDialogInitialTab = ref<
+    "tools" | "resources" | "templates" | "prompts"
+>("tools");
 
 const capabilityDialogServer = computed(() => {
     const id = capabilityDialogServerId.value;
@@ -156,7 +164,7 @@ const capabilityDialogCaps = computed(() => {
 
 const openCapabilityDialog = (
     serverId: string,
-    tab: "tools" | "resources" | "templates",
+    tab: "tools" | "resources" | "templates" | "prompts",
 ) => {
     capabilityDialogServerId.value = serverId;
     capabilityDialogInitialTab.value = tab;
@@ -790,6 +798,11 @@ const updateStoreInstalledServer = async (server: McpServer) => {
     if (isServerBusy(server.id)) return;
     if (!isStoreInstalledServer(server)) return;
 
+    if (server.type !== "stdio") {
+        ElMessage.info("该 Store 工具为 URL/HTTP 类型，无需更新");
+        return;
+    }
+
     updatingServerIds.value = new Set(updatingServerIds.value).add(server.id);
     try {
         await authStore.init();
@@ -1128,6 +1141,22 @@ watch(
                                             Templates
                                         </DropdownMenuItem>
 
+                                        <DropdownMenuItem
+                                            :disabled="
+                                                !mcpStore.serverCapabilities[
+                                                    server.id
+                                                ]
+                                            "
+                                            @select="
+                                                openCapabilityDialog(
+                                                    server.id,
+                                                    'prompts',
+                                                )
+                                            "
+                                        >
+                                            Prompts
+                                        </DropdownMenuItem>
+
                                         <DropdownMenuSeparator />
 
                                         <DropdownMenuLabel
@@ -1170,6 +1199,7 @@ watch(
                                                 !isStoreInstalledServer(
                                                     server,
                                                 ) ||
+                                                server.type !== 'stdio' ||
                                                 updatingServerIds.has(server.id)
                                             "
                                             @select="
@@ -1237,8 +1267,7 @@ watch(
                                     }}
                                 </DialogTitle>
                                 <DialogDescription>
-                                    Tools / Resources /
-                                    Templates（以弹窗形式查看）。
+                                    Tools / Resources / Templates
                                 </DialogDescription>
                             </div>
                             <div class="flex items-center gap-2">

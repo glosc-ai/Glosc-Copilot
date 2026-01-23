@@ -1,0 +1,27 @@
+<script setup lang="ts">
+import type { HTMLAttributes } from "vue";
+
+import { cn } from "@/lib/utils";
+import { PaperclipIcon } from "lucide-vue-next";
+
+const props = defineProps<{
+    class?: HTMLAttributes["class"];
+}>();
+</script>
+
+<template>
+    <span
+        :class="
+            cn(
+                'flex items-center gap-1 rounded border bg-muted px-2 py-1 text-xs',
+                props.class,
+            )
+        "
+        v-bind="$attrs"
+    >
+        <PaperclipIcon class="size-3" />
+        <span class="max-w-[100px] truncate">
+            <slot />
+        </span>
+    </span>
+</template>

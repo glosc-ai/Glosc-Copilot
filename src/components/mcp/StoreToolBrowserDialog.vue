@@ -45,10 +45,15 @@ const acquiringSlugs = ref<Set<string>>(new Set());
 const installedBySlug = computed(() => {
     const map = new Map<string, { version?: string }>();
     for (const s of mcpStore.servers) {
-        if (s.type !== "stdio") continue;
-        const slug = s.env?.GLOSC_STORE_SLUG;
+        const slug =
+            (s as any)?.store?.slug ||
+            (s.type === "stdio" ? s.env?.GLOSC_STORE_SLUG : null);
         if (!slug) continue;
-        map.set(String(slug), { version: s.env?.GLOSC_STORE_VERSION });
+
+        const version =
+            (s as any)?.store?.version ||
+            (s.type === "stdio" ? s.env?.GLOSC_STORE_VERSION : undefined);
+        map.set(String(slug), { version });
     }
     return map;
 });
@@ -93,7 +98,7 @@ async function load() {
 
         // Fallback: 如果“工具”分类暂无数据，尝试按可安装类型拉取。
         if (!nextItems.length) {
-            const [pkg, file] = await Promise.all([
+            const [pkg, file, url] = await Promise.all([
                 GloscStoreApi.listPlugins({
                     q: q.value.trim() || undefined,
                     sort: "popular",
@@ -108,8 +113,19 @@ async function load() {
                     limit: 50,
                     offset: 0,
                 }),
+                GloscStoreApi.listPlugins({
+                    q: q.value.trim() || undefined,
+                    sort: "popular",
+                    sourceType: "url",
+                    limit: 50,
+                    offset: 0,
+                }),
             ]);
-            const merged = [...(pkg.items || []), ...(file.items || [])];
+            const merged = [
+                ...(pkg.items || []),
+                ...(file.items || []),
+                ...(url.items || []),
+            ];
             const dedup = new Map<string, StorePlugin>();
             for (const p of merged) dedup.set(p.id, p);
             nextItems = Array.from(dedup.values());

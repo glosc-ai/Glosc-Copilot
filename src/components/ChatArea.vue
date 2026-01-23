@@ -1,10 +1,5 @@
 <script setup lang="ts">
-import {
-    type ChatStatus,
-    type LanguageModelUsage,
-    type SourceUrlUIPart,
-    type UIMessage,
-} from "ai";
+import { type ChatStatus, type SourceUrlUIPart, type UIMessage } from "ai";
 import type {
     AttachmentFile,
     PromptInputMessage,
@@ -14,23 +9,7 @@ import type { StoredChatMessage } from "@/utils/interface";
 import { Textarea } from "@/components/ui/textarea";
 import { Image } from "@/components/ai-elements/image";
 import { Shimmer } from "@/components/ai-elements/shimmer";
-
-import {
-    CopyIcon,
-    Server,
-    RefreshCcwIcon,
-    Check,
-    ChevronsUpDown,
-    Bot,
-    Maximize2,
-    MessageSquare,
-    Coins,
-    Settings2,
-    Globe,
-    Pencil,
-    X,
-    Loader2Icon,
-} from "lucide-vue-next";
+import { Pencil, X, Loader2Icon } from "lucide-vue-next";
 
 import { formatModelName, groupModelsByProvider } from "@/utils/ModelApi";
 
@@ -47,6 +26,10 @@ import { storeToRefs } from "pinia";
 import { useMcpStore } from "@/stores/mcp";
 import { useAuthStore } from "@/stores/auth";
 import { useRouter } from "vue-router";
+
+import McpPromptInputInsert from "@/components/mcp/McpPromptInputInsert.vue";
+import { InlineCitedText } from "@/components/ai-elements/inline-citation";
+import PromptInputResourceCitationsPreview from "@/components/ai-elements/prompt-input/PromptInputResourceCitationsPreview.vue";
 
 // import { createBuiltinTools } from "@/utils/BuiltinTools";
 
@@ -79,6 +62,10 @@ const authStore = useAuthStore();
 const router = useRouter();
 
 const hasEnabledServers = computed(() => servers.value.some((s) => s.enabled));
+
+const enabledMcpServerIds = computed(() =>
+    (servers.value || []).filter((s) => s.enabled).map((s) => s.id),
+);
 
 // const hasEnabledBuiltinTools = computed(() => {
 //     const t = settingsStore.builtinToolsEnabled;
@@ -955,17 +942,17 @@ const calculatedUsage = shallowRef({
     totalTokens: 0,
 });
 
-const contextMaxTokens = computed(
-    () => selectedModelData.value?.context_window ?? 0,
-);
+// const contextMaxTokens = computed(
+//     () => selectedModelData.value?.context_window ?? 0,
+// );
 
-const contextUsage = computed<LanguageModelUsage>(() => {
-    return {
-        inputTokens: calculatedUsage.value.inputTokens,
-        outputTokens: calculatedUsage.value.outputTokens,
-        totalTokens: calculatedUsage.value.totalTokens,
-    } as any;
-});
+// const contextUsage = computed<LanguageModelUsage>(() => {
+//     return {
+//         inputTokens: calculatedUsage.value.inputTokens,
+//         outputTokens: calculatedUsage.value.outputTokens,
+//         totalTokens: calculatedUsage.value.totalTokens,
+//     } as any;
+// });
 
 let usageTimer: number | null = null;
 const recalcUsage = () => {
@@ -1038,6 +1025,44 @@ const fileToolTypes = new Set([
 
 function isFileToolType(type: string) {
     return fileToolTypes.has(type);
+}
+
+const gloscGameToolNames = new Set([
+    "get-supported-games-list",
+    "get-manager-games-list",
+    "switch-managed-game",
+    "get-current-managed-game",
+    "fetch-steam-installed-games",
+    "add-game-to-manager",
+    "remove-game-from-manager",
+    "get-current-mod-list",
+    "install-mod-by-id",
+    "remove-mod-by-id",
+    "get-mod-dependencies",
+    "add-tag-to-mod",
+    "remove-tag-from-mod",
+    "rename-mod",
+    "sort-mods",
+    "download-mod",
+]);
+
+function resolveToolName(part: any): string {
+    if (part && typeof part.toolName === "string" && part.toolName.trim()) {
+        return part.toolName;
+    }
+    if (part && typeof part.tool === "string" && part.tool.trim()) {
+        return part.tool;
+    }
+    if (part && typeof part.name === "string" && part.name.trim()) {
+        return part.name;
+    }
+    const t = String(part?.type || "");
+    if (t.startsWith("tool-")) return t.slice("tool-".length);
+    return t;
+}
+
+function isGloscGameTool(part: any): boolean {
+    return gloscGameToolNames.has(resolveToolName(part));
 }
 
 watch(
@@ -1164,7 +1189,14 @@ watch(
                                             />
                                         </template>
                                         <template v-else>
+                                            <InlineCitedText
+                                                v-if="message.role === 'user'"
+                                                :content="part.text"
+                                                class="text-sm"
+                                                trigger-label="mcp"
+                                            />
                                             <MessageResponse
+                                                v-else
                                                 :id="`${message.id}-text-${partIndex}`"
                                                 :content="part.text"
                                                 :is-streaming="
@@ -1189,15 +1221,29 @@ watch(
                                             :content="part.text"
                                         />
                                     </Reasoning>
+                                    <div
+                                        v-if="isGloscGameTool(part)"
+                                        class="not-prose mb-4 max-w-110 rounded-md border bg-background/60"
+                                    >
+                                        <GloscGameToolsOutput
+                                            :toolName="resolveToolName(part)"
+                                            :toolType="part.type"
+                                            :input="(part as any).input"
+                                            :output="(part as any).output"
+                                            :errorText="(part as any).errorText"
+                                        />
+                                    </div>
+
                                     <Tool
-                                        v-if="
+                                        v-else-if="
                                             part.type === 'dynamic-tool' ||
                                             part.type.startsWith('tool-')
                                         "
+                                        class="max-w-110"
                                     >
                                         <ToolHeader
                                             :state="(part as any).state"
-                                            :title="part.type"
+                                            :title="resolveToolName(part)"
                                             :type="part.type as any"
                                         ></ToolHeader>
                                         <ToolContent>
@@ -1209,7 +1255,7 @@ watch(
                                                 "
                                                 :input="(part as any).input"
                                             ></ToolInput>
-                                            <SequentialThinking
+                                            <SequentialThinkingQueue
                                                 v-if="
                                                     part.type ===
                                                     'tool-sequentialthinking'
@@ -1412,6 +1458,7 @@ watch(
                             <PromptInputAttachment :file="file" />
                         </template>
                     </PromptInputAttachments>
+                    <PromptInputResourceCitationsPreview />
                 </PromptInputHeader>
 
                 <PromptInputBody>
@@ -1429,7 +1476,7 @@ watch(
 
                         <PromptInputSpeechButton />
 
-                        <Context
+                        <!-- <Context
                             :used-tokens="calculatedUsage.totalTokens"
                             :max-tokens="contextMaxTokens"
                             :usage="contextUsage"
@@ -1446,7 +1493,7 @@ watch(
                                 </ContextContentBody>
                                 <ContextContentFooter />
                             </ContextContent>
-                        </Context>
+                        </Context> -->
 
                         <PromptInputButton
                             :variant="webSearchEnabled ? 'default' : 'ghost'"
@@ -1626,6 +1673,11 @@ watch(
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
+                        <McpPromptInputInsert
+                            :servers="servers"
+                            :enabled-server-ids="enabledMcpServerIds"
+                            :disabled="!hasEnabledServers || isChatBusy"
+                        />
 
                         <ModelSelector v-model:open="openModelSelector">
                             <ModelSelectorTrigger as-child>

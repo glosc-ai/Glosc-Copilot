@@ -15,8 +15,14 @@ interface Props extends /* @vue-ignore */ PromptInputTextareaProps {
 
 const props = defineProps<Props>();
 
-const { textInput, setTextInput, submitForm, addFiles, files, removeFile } =
-    usePromptInput();
+const {
+    displayTextInput,
+    setDisplayTextInput,
+    submitForm,
+    addFiles,
+    files,
+    removeFile,
+} = usePromptInput();
 const isComposing = ref(false);
 
 function handleKeyDown(e: KeyboardEvent) {
@@ -29,7 +35,7 @@ function handleKeyDown(e: KeyboardEvent) {
     // Remove last attachment on backspace if input is empty
     if (
         e.key === "Backspace" &&
-        textInput.value === "" &&
+        displayTextInput.value === "" &&
         files.value.length > 0
     ) {
         const lastFile = files.value[files.value.length - 1];
@@ -58,8 +64,8 @@ function handlePaste(e: ClipboardEvent) {
 }
 
 const modelValue = computed({
-    get: () => textInput.value,
-    set: (val) => setTextInput(val),
+    get: () => displayTextInput.value,
+    set: (val) => setDisplayTextInput(val),
 });
 </script>
 

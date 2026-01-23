@@ -418,6 +418,32 @@ export async function installStoreTool(params: {
         return { kind: "file" as const, installDir, version: latest.version };
     }
 
+    if (plugin.source.type === "url") {
+        // URL source: install as HTTP MCP server (Streamable HTTP supported by MCP clients).
+        const url = String(plugin.source.url || "").trim();
+        if (!/^https?:\/\//i.test(url)) {
+            throw new Error("该工具 source.url 无效：必须为 http/https URL");
+        }
+
+        // Keep pricing/entitlement behavior consistent with other source types.
+        await ensureStoreEntitlement({ plugin, token: authToken });
+
+        await mcpStore.addServer({
+            type: "http",
+            name: plugin.name,
+            url,
+            enabled: !!params.autoEnable,
+            store: {
+                slug: plugin.slug,
+                kind: "url",
+                pricingType: plugin.pricing?.type || "unknown",
+                description: pickToolDescription(null, plugin),
+            },
+        });
+
+        return { kind: "url" as const, url };
+    }
+
     throw new Error("暂不支持该 source 类型安装");
 }
 

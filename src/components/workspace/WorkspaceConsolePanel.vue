@@ -2,11 +2,22 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+import {
+    Terminal,
+    TerminalActions,
+    TerminalClearButton,
+    TerminalContent,
+    TerminalCopyButton,
+    TerminalHeader,
+    TerminalStatus,
+    TerminalTitle,
+} from "@/components/ai-elements/terminal";
+
 import { readDir } from "@tauri-apps/plugin-fs";
 import { Command, type Child } from "@tauri-apps/plugin-shell";
 import { nanoid } from "nanoid";
 
-import { Plus, X, Square, Trash2 } from "lucide-vue-next";
+import { Plus, X, Square } from "lucide-vue-next";
 
 type OutputKind = "stdout" | "stderr" | "system" | "input";
 
@@ -50,14 +61,14 @@ const props = withDefaults(
     }>(),
     {
         cwd: null,
-    }
+    },
 );
 
 const tabs = ref<TerminalTab[]>([]);
 const activeId = ref<string | null>(null);
 
 const activeTab = computed(() =>
-    activeId.value ? tabs.value.find((t) => t.id === activeId.value) : null
+    activeId.value ? tabs.value.find((t) => t.id === activeId.value) : null,
 );
 
 const activeInput = computed({
@@ -70,8 +81,6 @@ const activeInput = computed({
         tab.input = v;
     },
 });
-
-const outputRef = ref<HTMLElement | null>(null);
 
 const completionOpen = ref(false);
 const completionItems = ref<CompletionItem[]>([]);
@@ -281,7 +290,7 @@ async function computeCompletions() {
 
             const filtered = entries
                 .filter((e) =>
-                    e.name.toLowerCase().startsWith(matchPrefix.toLowerCase())
+                    e.name.toLowerCase().startsWith(matchPrefix.toLowerCase()),
                 )
                 .sort((a, b) => Number(b.isDirectory) - Number(a.isDirectory));
 
@@ -365,15 +374,42 @@ function appendOutput(tabId: string, kind: OutputKind, text: string) {
     }
 
     tab.output = clampOutput(tab.output);
+}
 
-    // auto scroll to bottom when active
-    if (activeId.value === tabId) {
-        nextTick(() => {
-            const el = outputRef.value;
-            if (!el) return;
-            el.scrollTop = el.scrollHeight;
-        });
+function outputItemsToAnsi(items: OutputItem[]) {
+    const lines: string[] = [];
+    for (const it of items) {
+        const text = String(it.text ?? "");
+
+        if (it.kind === "stderr") {
+            lines.push(`\x1b[31m${text}\x1b[0m`);
+            continue;
+        }
+        if (it.kind === "system") {
+            lines.push(`\x1b[90m${text}\x1b[0m`);
+            continue;
+        }
+        if (it.kind === "input") {
+            lines.push(`\x1b[36m> ${text}\x1b[0m`);
+            continue;
+        }
+
+        // stdout
+        lines.push(text);
     }
+    return lines.join("\n");
+}
+
+const activeAnsiOutput = computed(() => {
+    const tab = activeTab.value;
+    if (!tab) return "";
+    return outputItemsToAnsi(tab.output);
+});
+
+function clearActiveOutput() {
+    const tab = activeTab.value;
+    if (!tab) return;
+    clearOutput(tab.id);
 }
 
 async function trySpawnShell(shell: ShellName, tabId: string, cwd?: string) {
@@ -407,7 +443,7 @@ async function trySpawnShell(shell: ShellName, tabId: string, cwd?: string) {
         appendOutput(
             tabId,
             "system",
-            `process exited (code=${data.code}, signal=${data.signal})`
+            `process exited (code=${data.code}, signal=${data.signal})`,
         );
     });
 
@@ -424,7 +460,7 @@ async function trySpawnShell(shell: ShellName, tabId: string, cwd?: string) {
 }
 
 async function createTerminal(
-    shellPreference: ShellName[] = ["pwsh", "powershell", "cmd"]
+    shellPreference: ShellName[] = ["pwsh", "powershell", "cmd"],
 ) {
     const cwd = props.cwd ?? undefined;
 
@@ -457,7 +493,7 @@ async function createTerminal(
             appendOutput(
                 tab.id,
                 "system",
-                `failed to start ${shell}: ${e?.message ?? String(e)}`
+                `failed to start ${shell}: ${e?.message ?? String(e)}`,
             );
         }
     }
@@ -465,7 +501,7 @@ async function createTerminal(
     appendOutput(
         tab.id,
         "system",
-        "无法启动任何 shell（请检查 capabilities 与系统环境）"
+        "无法启动任何 shell（请检查 capabilities 与系统环境）",
     );
 }
 
@@ -504,7 +540,7 @@ async function runCurrentInput() {
         appendOutput(
             tab.id,
             "system",
-            `write failed: ${e?.message ?? String(e)}`
+            `write failed: ${e?.message ?? String(e)}`,
         );
     }
 }
@@ -520,7 +556,7 @@ async function stopTerminal(tabId: string) {
         appendOutput(
             tab.id,
             "system",
-            `kill failed: ${e?.message ?? String(e)}`
+            `kill failed: ${e?.message ?? String(e)}`,
         );
     }
 }
@@ -552,7 +588,7 @@ async function restartTerminal(tabId: string) {
             appendOutput(
                 tab.id,
                 "system",
-                `failed to restart ${shell}: ${e?.message ?? String(e)}`
+                `failed to restart ${shell}: ${e?.message ?? String(e)}`,
             );
         }
     }
@@ -658,7 +694,7 @@ watch(
     () => activeTab.value?.input,
     () => {
         scheduleCompletions();
-    }
+    },
 );
 
 onMounted(() => {
@@ -669,12 +705,7 @@ watch(
     () => activeId.value,
     () => {
         closeCompletions();
-        nextTick(() => {
-            const el = outputRef.value;
-            if (!el) return;
-            el.scrollTop = el.scrollHeight;
-        });
-    }
+    },
 );
 
 onBeforeUnmount(() => {
@@ -689,185 +720,173 @@ onBeforeUnmount(() => {
 
 <template>
     <div class="h-full w-full flex flex-col overflow-hidden">
-        <!-- Tabs bar -->
-        <div
-            class="h-9 shrink-0 border-b flex items-center gap-2 px-2 bg-muted/10"
+        <Terminal
+            class="flex-1 min-h-0"
+            :output="activeAnsiOutput"
+            :is-streaming="Boolean(activeTab?.alive)"
+            :auto-scroll="true"
+            :on-clear="clearActiveOutput"
         >
-            <div class="flex items-center gap-1 overflow-auto">
-                <button
-                    v-for="t in tabs"
-                    :key="t.id"
-                    class="h-7 px-2 rounded-md text-xs flex items-center gap-2 border transition-colors"
-                    :class="
-                        t.id === activeId
-                            ? 'bg-background border-border'
-                            : 'bg-transparent border-transparent hover:bg-accent/50'
-                    "
-                    @click="activeId = t.id"
-                    type="button"
-                >
-                    <span class="max-w-40 truncate">{{ t.title }}</span>
-                    <span class="text-[10px] text-muted-foreground">{{
-                        t.shell
-                    }}</span>
-                    <span
-                        class="text-[10px]"
-                        :class="
-                            t.alive
-                                ? 'text-emerald-500'
-                                : 'text-muted-foreground'
-                        "
-                        >●</span
-                    >
-                    <button
-                        class="rounded hover:bg-accent p-0.5"
-                        type="button"
-                        title="关闭"
-                        @click.stop="closeTerminal(t.id)"
-                    >
-                        <X class="w-3 h-3" />
-                    </button>
-                </button>
-            </div>
-
-            <div class="flex-1" />
-
-            <Button
-                size="sm"
-                variant="outline"
-                class="h-7 px-2"
-                @click="createTerminal()"
-            >
-                <Plus class="w-4 h-4" />
-                新建
-            </Button>
-        </div>
-
-        <!-- Toolbar -->
-        <div class="h-9 shrink-0 border-b flex items-center gap-2 px-2">
-            <div class="text-xs text-muted-foreground truncate">
-                {{ activeTab?.cwd ? `cwd: ${activeTab.cwd}` : "" }}
-            </div>
-            <div class="flex-1" />
-            <Button
-                size="sm"
-                variant="outline"
-                class="h-7 px-2"
-                :disabled="!activeTab"
-                @click="activeTab && restartTerminal(activeTab.id)"
-            >
-                重启
-            </Button>
-            <Button
-                size="sm"
-                variant="outline"
-                class="h-7 px-2"
-                :disabled="!activeTab || !activeTab.alive"
-                @click="activeTab && stopTerminal(activeTab.id)"
-            >
-                <Square class="w-4 h-4" />
-                停止
-            </Button>
-            <Button
-                size="sm"
-                variant="outline"
-                class="h-7 px-2"
-                :disabled="!activeTab"
-                @click="activeTab && clearOutput(activeTab.id)"
-            >
-                <Trash2 class="w-4 h-4" />
-                清空
-            </Button>
-        </div>
-
-        <!-- Output -->
-        <div
-            ref="outputRef"
-            class="flex-1 min-h-0 overflow-auto bg-background font-mono text-xs p-2 space-y-0.5"
-        >
-            <div v-if="!activeTab" class="text-muted-foreground">
-                没有可用终端
-            </div>
-            <template v-else>
-                <div
-                    v-for="item in activeTab.output"
-                    :key="item.id"
-                    class="whitespace-pre-wrap wrap-break-word"
-                    :class="
-                        item.kind === 'stderr'
-                            ? 'text-destructive'
-                            : item.kind === 'system'
-                              ? 'text-muted-foreground'
-                              : item.kind === 'input'
-                                ? 'text-sky-400'
-                                : 'text-foreground'
-                    "
-                >
-                    <span v-if="item.kind === 'input'">&gt; </span
-                    >{{ item.text }}
-                </div>
-            </template>
-        </div>
-
-        <!-- Input -->
-        <div class="shrink-0 border-t p-2 flex items-center gap-2">
-            <div class="flex-1 flex items-center gap-2 relative min-w-0">
-                <div
-                    class="shrink-0 text-xs text-muted-foreground font-mono select-none"
-                    :title="activeTab?.cwd ? String(activeTab.cwd) : ''"
-                >
-                    {{ promptText }}
-                </div>
-
-                <!-- Completion dropdown -->
-                <div
-                    v-if="activeTab && completionOpen"
-                    class="absolute left-0 right-0 bottom-full mb-1 border rounded-md bg-popover shadow-md overflow-hidden"
-                >
+            <TerminalHeader class="px-0 py-0">
+                <div class="w-full flex flex-col">
+                    <!-- Tabs bar -->
                     <div
-                        v-if="completionLoading"
-                        class="px-2 py-1 text-xs text-muted-foreground"
+                        class="h-9 border-b flex items-center gap-2 px-2 bg-muted/10"
                     >
-                        正在加载补全...
-                    </div>
-                    <button
-                        v-for="(it, idx) in completionItems"
-                        :key="it.id"
-                        type="button"
-                        class="w-full text-left px-2 py-1 text-xs font-mono flex items-center gap-2"
-                        :class="
-                            idx === completionIndex
-                                ? 'bg-accent text-accent-foreground'
-                                : 'hover:bg-accent/60'
-                        "
-                        @mousedown.prevent
-                        @click="acceptCompletion(idx)"
-                    >
-                        <span
-                            class="text-[10px] px-1 rounded border text-muted-foreground"
-                            >{{ it.kind }}</span
-                        >
-                        <span class="truncate">{{ it.label }}</span>
-                    </button>
-                </div>
+                        <div class="flex items-center gap-1 overflow-auto">
+                            <button
+                                v-for="t in tabs"
+                                :key="t.id"
+                                class="h-7 px-2 rounded-md text-xs flex items-center gap-2 border transition-colors"
+                                :class="
+                                    t.id === activeId
+                                        ? 'bg-background border-border'
+                                        : 'bg-transparent border-transparent hover:bg-accent/50'
+                                "
+                                @click="activeId = t.id"
+                                type="button"
+                            >
+                                <span class="max-w-40 truncate">{{
+                                    t.title
+                                }}</span>
+                                <span
+                                    class="text-[10px] text-muted-foreground"
+                                    >{{ t.shell }}</span
+                                >
+                                <span
+                                    class="text-[10px]"
+                                    :class="
+                                        t.alive
+                                            ? 'text-emerald-500'
+                                            : 'text-muted-foreground'
+                                    "
+                                    >●</span
+                                >
+                                <button
+                                    class="rounded hover:bg-accent p-0.5"
+                                    type="button"
+                                    title="关闭"
+                                    @click.stop="closeTerminal(t.id)"
+                                >
+                                    <X class="w-3 h-3" />
+                                </button>
+                            </button>
+                        </div>
 
-                <Input
-                    v-model="activeInput"
+                        <div class="flex-1" />
+
+                        <TerminalStatus class="hidden sm:inline-flex" />
+
+                        <TerminalActions>
+                            <TerminalCopyButton />
+                            <TerminalClearButton />
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                class="h-7 px-2 ml-1"
+                                @click="createTerminal()"
+                            >
+                                <Plus class="w-4 h-4" />
+                                新建
+                            </Button>
+                        </TerminalActions>
+                    </div>
+
+                    <!-- Toolbar -->
+                    <div class="h-9 border-b flex items-center gap-2 px-2">
+                        <TerminalTitle class="text-xs text-muted-foreground">
+                            {{ activeTab?.cwd ? `cwd: ${activeTab.cwd}` : "" }}
+                        </TerminalTitle>
+                        <div class="flex-1" />
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            class="h-7 px-2"
+                            :disabled="!activeTab"
+                            @click="activeTab && restartTerminal(activeTab.id)"
+                        >
+                            重启
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            class="h-7 px-2"
+                            :disabled="!activeTab || !activeTab.alive"
+                            @click="activeTab && stopTerminal(activeTab.id)"
+                        >
+                            <Square class="w-4 h-4" />
+                            停止
+                        </Button>
+                    </div>
+                </div>
+            </TerminalHeader>
+
+            <TerminalContent>
+                <div v-if="!activeTab" class="text-muted-foreground">
+                    没有可用终端
+                </div>
+            </TerminalContent>
+
+            <!-- Input -->
+            <div class="shrink-0 border-t p-2 flex items-center gap-2">
+                <div class="flex-1 flex items-center gap-2 relative min-w-0">
+                    <div
+                        class="shrink-0 text-xs text-muted-foreground font-mono select-none"
+                        :title="activeTab?.cwd ? String(activeTab.cwd) : ''"
+                    >
+                        {{ promptText }}
+                    </div>
+
+                    <!-- Completion dropdown -->
+                    <div
+                        v-if="activeTab && completionOpen"
+                        class="absolute left-0 right-0 bottom-full mb-1 border rounded-md bg-popover shadow-md overflow-hidden"
+                    >
+                        <div
+                            v-if="completionLoading"
+                            class="px-2 py-1 text-xs text-muted-foreground"
+                        >
+                            正在加载补全...
+                        </div>
+                        <button
+                            v-for="(it, idx) in completionItems"
+                            :key="it.id"
+                            type="button"
+                            class="w-full text-left px-2 py-1 text-xs font-mono flex items-center gap-2"
+                            :class="
+                                idx === completionIndex
+                                    ? 'bg-accent text-accent-foreground'
+                                    : 'hover:bg-accent/60'
+                            "
+                            @mousedown.prevent
+                            @click="acceptCompletion(idx)"
+                        >
+                            <span
+                                class="text-[10px] px-1 rounded border text-muted-foreground"
+                                >{{ it.kind }}</span
+                            >
+                            <span class="truncate">{{ it.label }}</span>
+                        </button>
+                    </div>
+
+                    <Input
+                        v-model="activeInput"
+                        :disabled="!activeTab"
+                        placeholder="输入命令，回车执行（Tab 补全，↑↓ 选择/历史）"
+                        class="h-8 font-mono flex-1 min-w-0"
+                        @keydown="onInputKeydown"
+                        @focus="onInputFocus"
+                    />
+                </div>
+                <Button
+                    size="sm"
+                    class="h-8"
                     :disabled="!activeTab"
-                    placeholder="输入命令，回车执行（Tab 补全，↑↓ 选择/历史）"
-                    class="h-8 font-mono flex-1 min-w-0"
-                    @keydown="onInputKeydown"
-                    @focus="onInputFocus"
-                />
+                    @click="runCurrentInput"
+                >
+                    执行
+                </Button>
             </div>
-            <Button
-                size="sm"
-                class="h-8"
-                :disabled="!activeTab"
-                @click="runCurrentInput"
-            >
-                执行
-            </Button>
-        </div>
+        </Terminal>
     </div>
 </template>
