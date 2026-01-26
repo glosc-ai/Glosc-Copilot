@@ -1046,6 +1046,14 @@ const gloscGameToolNames = new Set([
     "download-mod",
 ]);
 
+const fileOpsToolNames = new Set([
+    "readFile",
+    "renameFile",
+    "moveFile",
+    "listFilesRecursive",
+    "writeFile",
+]);
+
 function resolveToolName(part: any): string {
     if (part && typeof part.toolName === "string" && part.toolName.trim()) {
         return part.toolName;
@@ -1063,6 +1071,10 @@ function resolveToolName(part: any): string {
 
 function isGloscGameTool(part: any): boolean {
     return gloscGameToolNames.has(resolveToolName(part));
+}
+
+function isFileOpsTool(part: any): boolean {
+    return fileOpsToolNames.has(resolveToolName(part));
 }
 
 watch(
@@ -1226,6 +1238,19 @@ watch(
                                         class="not-prose mb-4 max-w-110 rounded-md border bg-background/60"
                                     >
                                         <GloscGameToolsOutput
+                                            :toolName="resolveToolName(part)"
+                                            :toolType="part.type"
+                                            :input="(part as any).input"
+                                            :output="(part as any).output"
+                                            :errorText="(part as any).errorText"
+                                        />
+                                    </div>
+
+                                    <div
+                                        v-else-if="isFileOpsTool(part)"
+                                        class="not-prose mb-4 max-w-110"
+                                    >
+                                        <FileOpsCommitOutput
                                             :toolName="resolveToolName(part)"
                                             :toolType="part.type"
                                             :input="(part as any).input"

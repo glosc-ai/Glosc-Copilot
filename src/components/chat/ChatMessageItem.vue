@@ -102,6 +102,39 @@ function isFileToolType(type: string) {
     return fileToolTypes.has(type);
 }
 
+const fileOpsToolNames = new Set([
+    "readFile",
+    "renameFile",
+    "moveFile",
+    "listFilesRecursive",
+    "writeFile",
+]);
+
+function resolveToolName(part: any): string {
+    if (part && typeof part.toolName === "string" && part.toolName.trim()) {
+        return part.toolName;
+    }
+    if (part && typeof part.tool === "string" && part.tool.trim()) {
+        return part.tool;
+    }
+    if (part && typeof part.name === "string" && part.name.trim()) {
+        return part.name;
+    }
+    const t = String(part?.type || "");
+    if (t.startsWith("tool-")) return t.slice("tool-".length);
+    return t;
+}
+
+function isFileOpsTool(part: any): boolean {
+    return fileOpsToolNames.has(resolveToolName(part));
+}
+
+function toolHeaderTitle(part: any): string {
+    const name = resolveToolName(part);
+    if (name && name !== "dynamic-tool") return name;
+    return String(part?.type || "tool");
+}
+
 const timestampTextForMessage = computed(() =>
     typeof props.getTimestampText === "function"
         ? props.getTimestampText(props.message.id)
@@ -180,23 +213,31 @@ const timestampTextForMessage = computed(() =>
                         :content="part.text"
                     />
                 </Reasoning>
-
+                <FileOpsCommitOutput
+                    v-if="isFileOpsTool(part)"
+                    :toolName="resolveToolName(part)"
+                    :toolType="part.type"
+                    :input="(part as any).input"
+                    :output="(part as any).output"
+                    :errorText="(part as any).errorText"
+                />
                 <Tool
-                    v-if="
+                    v-else-if="
                         part.type === 'dynamic-tool' ||
                         part.type.startsWith('tool-')
                     "
                 >
                     <ToolHeader
                         :state="(part as any).state"
-                        :title="part.type"
+                        :title="toolHeaderTitle(part)"
                         :type="part.type as any"
                     ></ToolHeader>
                     <ToolContent>
                         <ToolInput
                             v-if="
                                 part.type !== 'tool-sequentialthinking' &&
-                                !isFileToolType(part.type)
+                                !isFileToolType(part.type) &&
+                                !isFileOpsTool(part)
                             "
                             :input="(part as any).input"
                         ></ToolInput>

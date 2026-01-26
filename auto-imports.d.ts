@@ -42,6 +42,28 @@ declare global {
   const CommandList: typeof import('./src/components/ui/command/index').CommandList
   const CommandSeparator: typeof import('./src/components/ui/command/index').CommandSeparator
   const CommandShortcut: typeof import('./src/components/ui/command/index').CommandShortcut
+  const Commit: typeof import('./src/components/ai-elements/commit/index').Commit
+  const CommitActions: typeof import('./src/components/ai-elements/commit/index').CommitActions
+  const CommitAuthor: typeof import('./src/components/ai-elements/commit/index').CommitAuthor
+  const CommitAuthorAvatar: typeof import('./src/components/ai-elements/commit/index').CommitAuthorAvatar
+  const CommitContent: typeof import('./src/components/ai-elements/commit/index').CommitContent
+  const CommitCopyButton: typeof import('./src/components/ai-elements/commit/index').CommitCopyButton
+  const CommitFile: typeof import('./src/components/ai-elements/commit/index').CommitFile
+  const CommitFileAdditions: typeof import('./src/components/ai-elements/commit/index').CommitFileAdditions
+  const CommitFileChanges: typeof import('./src/components/ai-elements/commit/index').CommitFileChanges
+  const CommitFileDeletions: typeof import('./src/components/ai-elements/commit/index').CommitFileDeletions
+  const CommitFileIcon: typeof import('./src/components/ai-elements/commit/index').CommitFileIcon
+  const CommitFileInfo: typeof import('./src/components/ai-elements/commit/index').CommitFileInfo
+  const CommitFilePath: typeof import('./src/components/ai-elements/commit/index').CommitFilePath
+  const CommitFileStatus: typeof import('./src/components/ai-elements/commit/index').CommitFileStatus
+  const CommitFiles: typeof import('./src/components/ai-elements/commit/index').CommitFiles
+  const CommitHash: typeof import('./src/components/ai-elements/commit/index').CommitHash
+  const CommitHeader: typeof import('./src/components/ai-elements/commit/index').CommitHeader
+  const CommitInfo: typeof import('./src/components/ai-elements/commit/index').CommitInfo
+  const CommitMessage: typeof import('./src/components/ai-elements/commit/index').CommitMessage
+  const CommitMetadata: typeof import('./src/components/ai-elements/commit/index').CommitMetadata
+  const CommitSeparator: typeof import('./src/components/ai-elements/commit/index').CommitSeparator
+  const CommitTimestamp: typeof import('./src/components/ai-elements/commit/index').CommitTimestamp
   const Confirmation: typeof import('./src/components/ai-elements/confirmation/index').Confirmation
   const ConfirmationAccepted: typeof import('./src/components/ai-elements/confirmation/index').ConfirmationAccepted
   const ConfirmationAction: typeof import('./src/components/ai-elements/confirmation/index').ConfirmationAction
@@ -473,6 +495,9 @@ declare global {
   // @ts-ignore
   export type { CodeBlockContext } from './src/components/ai-elements/code-block/context'
   import('./src/components/ai-elements/code-block/context')
+  // @ts-ignore
+  export type { CommitFileStatusType } from './src/components/ai-elements/commit/CommitFileStatus.vue'
+  import('./src/components/ai-elements/commit/CommitFileStatus.vue')
   // @ts-ignore
   export type { ToolUIPartApproval, ConfirmationContextValue } from './src/components/ai-elements/confirmation/context'
   import('./src/components/ai-elements/confirmation/context')
