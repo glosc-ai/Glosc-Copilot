@@ -144,6 +144,21 @@ export class ChatUtils {
                         messageId: options.messageId,
                     };
 
+                    // 用户自定义模型：除了放在 body 里，也额外放到 header 里。
+                    // 这样后端可以用 header 直接组装 OpenAI-compatible 请求（baseUrl + apiKey）。
+                    // 注意：这里发送的是用户本地配置的 Key，本质上就是要交给后端用于转发。
+                    const useUserKey = Boolean((body as any)?.useUserKey);
+                    const userModelApiKey = String(
+                        (body as any)?.userModelApiKey || "",
+                    ).trim();
+                    const userModelBaseUrl = String(
+                        (body as any)?.userModelBaseUrl || "",
+                    ).trim();
+                    if (useUserKey && userModelApiKey && userModelBaseUrl) {
+                        headers.set("X-User-Model-Api-Key", userModelApiKey);
+                        headers.set("X-User-Model-Base-Url", userModelBaseUrl);
+                    }
+
                     return { headers, body };
                 },
                 prepareReconnectToStreamRequest: (options) => {
@@ -213,5 +228,75 @@ export class ChatUtils {
             },
         });
         return chat;
+    }
+
+    /**
+     * 从 AI SDK 抛出的未知错误中尽量提取可展示的错误文本。
+     * 兼容后端在流式传输中直接发送 JSON 帧：{"type":"error","errorText":"..."}
+     */
+    static extractStreamErrorText(err: unknown): string | null {
+        const tryParseJson = (text: string): any | null => {
+            const trimmed = (text || "").trim();
+            if (!trimmed) return null;
+            if (!(trimmed.startsWith("{") || trimmed.startsWith("[")))
+                return null;
+            try {
+                return JSON.parse(trimmed);
+            } catch {
+                return null;
+            }
+        };
+
+        const extractFromAny = (value: any): string | null => {
+            if (!value) return null;
+
+            if (typeof value === "string") {
+                const parsed = tryParseJson(value);
+                if (parsed && typeof parsed === "object") {
+                    const t = (parsed as any).type;
+                    const errorText = (parsed as any).errorText;
+                    if (
+                        t === "error" &&
+                        typeof errorText === "string" &&
+                        errorText.trim()
+                    ) {
+                        return errorText.trim();
+                    }
+                }
+
+                // 兜底：从字符串中抓取 errorText 字段（避免 message 前后包了一些额外内容）
+                const m = value.match(/"errorText"\s*:\s*"([^"]+)"/i);
+                if (m && m[1]) return m[1];
+                return value.trim() || null;
+            }
+
+            if (typeof value === "object") {
+                const type = (value as any).type;
+                const errorText = (value as any).errorText;
+                if (
+                    type === "error" &&
+                    typeof errorText === "string" &&
+                    errorText.trim()
+                ) {
+                    return errorText.trim();
+                }
+
+                const message = (value as any).message;
+                if (typeof message === "string") {
+                    const fromMessage = extractFromAny(message);
+                    if (fromMessage) return fromMessage;
+                }
+
+                const cause = (value as any).cause;
+                if (cause) {
+                    const fromCause = extractFromAny(cause);
+                    if (fromCause) return fromCause;
+                }
+            }
+
+            return null;
+        };
+
+        return extractFromAny(err);
     }
 }

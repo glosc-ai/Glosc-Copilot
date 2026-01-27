@@ -6,8 +6,17 @@ import MonacoEditorPane from "@/components/workspace/MonacoEditorPane.vue";
 import WorkspaceConsolePanel from "@/components/workspace/WorkspaceConsolePanel.vue";
 import { FileTree } from "@/components/ai-elements/file-tree";
 
+import { useColorMode, useDebounceFn, useIntervalFn } from "@vueuse/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { readDir, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import {
+    readDir,
+    readTextFile,
+    writeTextFile,
+    mkdir,
+    remove,
+    rename,
+    exists,
+} from "@tauri-apps/plugin-fs";
 
 import { storeUtils } from "@/utils/StoreUtils";
 
@@ -56,9 +65,69 @@ const rightPaneWidth = ref<number>(320);
 const consoleHeight = ref<number>(220);
 const consoleVisible = ref<boolean>(true);
 
+type WorkspaceLayoutState = {
+    leftPaneWidth: number;
+    rightPaneWidth: number;
+    consoleHeight: number;
+    consoleVisible: boolean;
+};
+
+const WORKSPACE_LAYOUT_KEY = "workspace_layout_v1";
+
+const colorMode = useColorMode();
+const editorTheme = computed(() =>
+    colorMode.value === "dark" ? "vs-dark" : "vs",
+);
+
 function clamp(n: number, min: number, max: number) {
     return Math.max(min, Math.min(max, n));
 }
+
+function clampLayout(layout: Partial<WorkspaceLayoutState>) {
+    const left =
+        typeof layout.leftPaneWidth === "number"
+            ? clamp(layout.leftPaneWidth, 200, 520)
+            : leftPaneWidth.value;
+    const right =
+        typeof layout.rightPaneWidth === "number"
+            ? clamp(layout.rightPaneWidth, 220, 520)
+            : rightPaneWidth.value;
+    const consoleH =
+        typeof layout.consoleHeight === "number"
+            ? clamp(layout.consoleHeight, 120, 520)
+            : consoleHeight.value;
+    const visible =
+        typeof layout.consoleVisible === "boolean"
+            ? layout.consoleVisible
+            : consoleVisible.value;
+
+    leftPaneWidth.value = left;
+    rightPaneWidth.value = right;
+    consoleHeight.value = consoleH;
+    consoleVisible.value = visible;
+}
+
+const persistLayout = useDebounceFn(async () => {
+    const data: WorkspaceLayoutState = {
+        leftPaneWidth: leftPaneWidth.value,
+        rightPaneWidth: rightPaneWidth.value,
+        consoleHeight: consoleHeight.value,
+        consoleVisible: consoleVisible.value,
+    };
+    try {
+        await storeUtils.set(WORKSPACE_LAYOUT_KEY, data);
+    } catch {
+        // ignore
+    }
+}, 200);
+
+watch(
+    [leftPaneWidth, rightPaneWidth, consoleHeight, consoleVisible],
+    () => {
+        void persistLayout();
+    },
+    { deep: false },
+);
 
 type DragKind = "left" | "right" | "console";
 
@@ -114,11 +183,36 @@ function joinPath(base: string, name: string) {
     return `${base}${sep}${name}`;
 }
 
-async function loadDir(dirPath: string) {
+function basename(p: string) {
+    const idx = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+    return idx >= 0 ? p.slice(idx + 1) : p;
+}
+
+function dirname(p: string) {
+    const idx = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+    return idx > 0 ? p.slice(0, idx) : "";
+}
+
+function normalizePathForCompare(p: string) {
+    // Windows 默认大小写不敏感；统一成 / 并转小写，便于前缀判断
+    return (p || "").replace(/\\/g, "/").toLowerCase();
+}
+
+function isDescendantPath(parent: string, child: string) {
+    const a = normalizePathForCompare(parent);
+    const b = normalizePathForCompare(child);
+    if (!a || !b) return false;
+    if (a === b) return true;
+    return b.startsWith(a.endsWith("/") ? a : a + "/");
+}
+
+async function loadDir(dirPath: string, silent = false) {
     if (loadingDirs.value.has(dirPath)) return;
 
-    dirLoadError.value = null;
-    loadingDirs.value = new Set(loadingDirs.value).add(dirPath);
+    if (!silent) {
+        dirLoadError.value = null;
+        loadingDirs.value = new Set(loadingDirs.value).add(dirPath);
+    }
     try {
         const entries = await readDir(dirPath);
         const nodes: TreeNode[] = (entries || [])
@@ -144,18 +238,30 @@ async function loadDir(dirPath: string) {
             [dirPath]: nodes,
         };
     } catch (e: any) {
-        dirLoadError.value =
-            e instanceof Error
-                ? e.message
-                : typeof e === "string"
-                  ? e
-                  : "读取目录失败";
+        if (!silent) {
+            dirLoadError.value =
+                e instanceof Error
+                    ? e.message
+                    : typeof e === "string"
+                      ? e
+                      : "读取目录失败";
+        }
     } finally {
-        const next = new Set(loadingDirs.value);
-        next.delete(dirPath);
-        loadingDirs.value = next;
+        if (!silent) {
+            const next = new Set(loadingDirs.value);
+            next.delete(dirPath);
+            loadingDirs.value = next;
+        }
     }
 }
+
+useIntervalFn(() => {
+    if (!workspaceRoot.value) return;
+    loadDir(workspaceRoot.value, true);
+    for (const dir of expandedDirs.value) {
+        loadDir(dir, true);
+    }
+}, 3000);
 
 async function toggleDir(node: TreeNode) {
     if (!node.isDir) return;
@@ -331,6 +437,8 @@ async function openFile(node: TreeNode) {
         return;
     }
 
+    if (activeFilePath.value === node.path) return;
+
     if (isDirty.value) {
         try {
             await ElMessageBox.confirm(
@@ -384,8 +492,294 @@ async function saveActiveFile() {
     }
 }
 
+function applyPathReplace(oldBase: string, newBase: string, p: string) {
+    const oldN = normalizePathForCompare(oldBase);
+    const pN = normalizePathForCompare(p);
+    if (!oldN || !pN) return p;
+    if (pN === oldN) return newBase;
+    if (!pN.startsWith(oldN.endsWith("/") ? oldN : oldN + "/")) return p;
+
+    // 保留原始路径的剩余部分（使用原字符串切片，避免破坏分隔符风格）
+    // 这里用旧 base 的长度做切分：旧 base 可能是 \，但 normalize 后长度不同。
+    // 所以用“按原字符串”前缀判断：再做一次更保守的替换。
+    if (p.startsWith(oldBase)) return newBase + p.slice(oldBase.length);
+    const oldAlt = oldBase.includes("\\")
+        ? oldBase.replace(/\\/g, "/")
+        : oldBase.replace(/\//g, "\\");
+    if (p.startsWith(oldAlt)) return newBase + p.slice(oldAlt.length);
+    return p;
+}
+
+function updateActivePathAfterRenameOrMove(oldPath: string, newPath: string) {
+    if (!activeFilePath.value) return;
+    const updated = applyPathReplace(oldPath, newPath, activeFilePath.value);
+    if (updated !== activeFilePath.value) {
+        activeFilePath.value = updated;
+    }
+}
+
+function updateExpandedAfterRenameOrMove(oldPath: string, newPath: string) {
+    const next = new Set<string>();
+    for (const p of expandedDirs.value) {
+        const updated = applyPathReplace(oldPath, newPath, p);
+        next.add(updated);
+    }
+    expandedDirs.value = next;
+}
+
+function maybeClearOpenFileIfRemoved(removedPath: string) {
+    if (!activeFilePath.value) return;
+    if (isDescendantPath(removedPath, activeFilePath.value)) {
+        activeFilePath.value = null;
+        editorValue.value = "";
+        lastSavedValue.value = "";
+        fileLoadError.value = null;
+    }
+}
+
+async function revealInExplorer(path: string, isDir: boolean) {
+    // Vite 浏览器预览下无法调用系统资源管理器
+    if (!(window as any).__TAURI_INTERNALS__) {
+        ElMessage.warning("浏览器预览模式不支持打开资源管理器");
+        return;
+    }
+
+    // 使用 plugin-shell 的 Command（需要在 capabilities 里 allow-spawn 对应程序）
+    try {
+        const { Command } = await import("@tauri-apps/plugin-shell");
+
+        const ua = navigator.userAgent || "";
+        const platform = /Windows/i.test(ua)
+            ? "windows"
+            : /Mac OS|Macintosh/i.test(ua)
+              ? "macos"
+              : /Linux/i.test(ua)
+                ? "linux"
+                : "";
+
+        if (platform === "windows") {
+            if (isDir) {
+                await Command.create("explorer.exe", [path]).spawn();
+            } else {
+                await Command.create("explorer.exe", [
+                    `/select,${path}`,
+                ]).spawn();
+            }
+            return;
+        }
+
+        // macOS: open -R
+        if (platform === "macos") {
+            if (isDir) {
+                await Command.create("open", [path]).spawn();
+            } else {
+                await Command.create("open", ["-R", path]).spawn();
+            }
+            return;
+        }
+
+        // linux / others: xdg-open folder
+        const folder = isDir ? path : dirname(path);
+        if (folder) {
+            await Command.create("xdg-open", [folder]).spawn();
+            return;
+        }
+    } catch (e) {
+        // 这里不再降级到 plugin-opener：opener 会拒绝本地路径（会报 Not allowed to open url）
+        console.log(e);
+        ElMessage.error(
+            "打开资源管理器失败：请检查 Tauri capabilities 是否允许 shell spawn（explorer.exe/open/xdg-open）",
+        );
+    }
+}
+
+async function createFileInDir(dirPath: string, name: string) {
+    if (!dirPath) return;
+    const filePath = joinPath(dirPath, name);
+    if (await exists(filePath)) {
+        ElMessage.warning("同名文件已存在");
+        return;
+    }
+    try {
+        await writeTextFile(filePath, "", { create: true });
+        await loadDir(dirPath, true);
+        await openFile({ name, path: filePath, isDir: false });
+    } catch (e: any) {
+        const msg =
+            e instanceof Error
+                ? e.message
+                : typeof e === "string"
+                  ? e
+                  : "新建文件失败";
+        ElMessage.error(msg);
+    }
+}
+
+async function createFolderInDir(dirPath: string, name: string) {
+    if (!dirPath) return;
+    const folderPath = joinPath(dirPath, name);
+    if (await exists(folderPath)) {
+        ElMessage.warning("同名文件夹已存在");
+        return;
+    }
+    try {
+        await mkdir(folderPath);
+        await loadDir(dirPath, true);
+        expandedDirs.value = new Set(expandedDirs.value).add(folderPath);
+        await loadDir(folderPath, true);
+    } catch (e: any) {
+        const msg =
+            e instanceof Error
+                ? e.message
+                : typeof e === "string"
+                  ? e
+                  : "新建文件夹失败";
+        ElMessage.error(msg);
+    }
+}
+
+async function deletePath(path: string, isDir: boolean) {
+    try {
+        // 如果删除的是当前文件且有未保存修改，先确认
+        if (
+            activeFilePath.value &&
+            isDescendantPath(path, activeFilePath.value) &&
+            isDirty.value
+        ) {
+            await ElMessageBox.confirm(
+                "当前打开的文件有未保存修改，仍然要删除吗？",
+                "提示",
+                {
+                    type: "warning",
+                    confirmButtonText: "继续删除",
+                    cancelButtonText: "取消",
+                },
+            );
+        }
+
+        await remove(path, { recursive: isDir });
+        maybeClearOpenFileIfRemoved(path);
+
+        // 收起/清理展开状态
+        if (isDir) {
+            const next = new Set<string>();
+            for (const p of expandedDirs.value) {
+                if (!isDescendantPath(path, p)) next.add(p);
+            }
+            expandedDirs.value = next;
+        }
+
+        // 为保证 childrenByPath key 一致性，结构性变更后直接重载
+        await reloadWorkspaceTree();
+    } catch (e: any) {
+        const msg =
+            e instanceof Error
+                ? e.message
+                : typeof e === "string"
+                  ? e
+                  : "删除失败";
+        ElMessage.error(msg);
+    }
+}
+
+async function renamePath(path: string, newName: string) {
+    const parent = dirname(path);
+    if (!parent) return;
+    const newPath = joinPath(parent, newName);
+    if (await exists(newPath)) {
+        ElMessage.warning("目标名称已存在");
+        return;
+    }
+
+    try {
+        await rename(path, newPath);
+        updateActivePathAfterRenameOrMove(path, newPath);
+        updateExpandedAfterRenameOrMove(path, newPath);
+        await reloadWorkspaceTree();
+    } catch (e: any) {
+        const msg =
+            e instanceof Error
+                ? e.message
+                : typeof e === "string"
+                  ? e
+                  : "重命名失败";
+        ElMessage.error(msg);
+    }
+}
+
+async function movePath(srcPath: string, destDirPath: string) {
+    if (!srcPath || !destDirPath) return;
+    const name = basename(srcPath);
+    const destPath = joinPath(destDirPath, name);
+
+    if (normalizePathForCompare(srcPath) === normalizePathForCompare(destPath))
+        return;
+
+    // 禁止把文件夹拖进自己/子目录
+    if (isDescendantPath(srcPath, destDirPath)) {
+        ElMessage.warning("不能移动到自身或其子目录");
+        return;
+    }
+
+    if (await exists(destPath)) {
+        ElMessage.warning("目标位置已存在同名项");
+        return;
+    }
+
+    try {
+        await rename(srcPath, destPath);
+        updateActivePathAfterRenameOrMove(srcPath, destPath);
+        updateExpandedAfterRenameOrMove(srcPath, destPath);
+        await reloadWorkspaceTree();
+    } catch (e: any) {
+        const msg =
+            e instanceof Error
+                ? e.message
+                : typeof e === "string"
+                  ? e
+                  : "移动失败";
+        ElMessage.error(msg);
+    }
+}
+
+watch(activeFilePath, (path) => {
+    if (path) {
+        void storeUtils.set("last_open_file", path);
+    }
+});
+
 function updateEditorValue(v: string) {
     editorValue.value = v;
+}
+
+async function tryOpenDefaultFile(root: string) {
+    // 1. Last opened
+    try {
+        const lastFile = await storeUtils.get<string>("last_open_file");
+        if (lastFile && lastFile.startsWith(root) && (await exists(lastFile))) {
+            await openFile({ name: "", path: lastFile, isDir: false });
+            return;
+        }
+    } catch {}
+
+    // 2. Index / Readme
+    // We rely on childrenByPath[root] being populated.
+    const nodes = childrenByPath.value[root] || [];
+    const candidates = [
+        /^readme\.md$/i,
+        /^index\.(ts|js|html|vue)$/i,
+        /^main\.(ts|js|rs|go|py)$/i,
+        /^cargo\.toml$/i,
+        /^package\.json$/i,
+    ];
+
+    for (const pattern of candidates) {
+        const found = nodes.find((n) => !n.isDir && pattern.test(n.name));
+        if (found) {
+            await openFile(found);
+            return;
+        }
+    }
 }
 
 async function createWorkspace() {
@@ -429,6 +823,7 @@ async function createWorkspace() {
         expandedDirs.value = new Set([workspaceRoot.value]);
         await loadDir(workspaceRoot.value);
         await storeUtils.set("workspace_root", workspaceRoot.value);
+        await tryOpenDefaultFile(workspaceRoot.value);
     }
 }
 
@@ -441,6 +836,7 @@ async function openLastWorkspaceIfAny() {
     dirLoadError.value = null;
     try {
         await loadDir(savedRoot);
+        await tryOpenDefaultFile(savedRoot);
         return true;
     } catch {
         // 兜底：路径失效时清理（onMounted 也会处理）
@@ -457,10 +853,17 @@ async function reloadWorkspaceTree() {
     const root = workspaceRoot.value;
     if (!root) return;
     dirLoadError.value = null;
-    childrenByPath.value = {};
-    expandedDirs.value = new Set([root]);
     try {
+        // 保留展开状态，但确保根目录在展开集合中
+        if (!expandedDirs.value.has(root)) {
+            expandedDirs.value = new Set(expandedDirs.value).add(root);
+        }
+
         await loadDir(root);
+        for (const dir of expandedDirs.value) {
+            if (dir === root) continue;
+            await loadDir(dir, true);
+        }
     } catch (e: any) {
         dirLoadError.value =
             e instanceof Error
@@ -484,11 +887,21 @@ function clearWorkspace() {
 }
 
 onMounted(async () => {
+    // 恢复布局（与具体 workspaceRoot 无关，作为全局偏好）
+    try {
+        const layout =
+            await storeUtils.get<WorkspaceLayoutState>(WORKSPACE_LAYOUT_KEY);
+        if (layout) clampLayout(layout);
+    } catch {
+        // ignore
+    }
+
     const savedRoot = await storeUtils.get<string>("workspace_root");
     if (!savedRoot) return;
     workspaceRoot.value = savedRoot;
     childrenByPath.value = {};
     expandedDirs.value = new Set([savedRoot]);
+    await tryOpenDefaultFile(savedRoot);
     try {
         await loadDir(savedRoot);
     } catch {
@@ -532,18 +945,24 @@ watch(
         <div class="flex flex-1 overflow-hidden">
             <!-- 左侧：工作区文件树 -->
             <aside
-                class="shrink-0 border-r bg-muted/10"
+                class="shrink-0 border-r bg-sidebar flex flex-col"
                 :style="{ width: leftPaneWidth + 'px' }"
             >
-                <div class="p-3 border-b flex items-center gap-2">
+                <div
+                    class="h-10 px-3 border-b flex items-center justify-between bg-sidebar-accent/50"
+                >
                     <DropdownMenu>
                         <DropdownMenuTrigger as-child>
-                            <Button size="sm" class="gap-2">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                class="-ml-2 h-8 gap-2 px-2 text-sidebar-foreground/80 hover:text-sidebar-foreground"
+                            >
                                 <FolderOpen class="w-4 h-4" />
-                                工作区
+                                <span class="truncate font-medium">工作区</span>
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent class="w-40" align="start">
+                        <DropdownMenuContent class="w-48" align="start">
                             <DropdownMenuGroup>
                                 <DropdownMenuItem @click="createWorkspace">
                                     <Plus class="w-4 h-4 mr-2" />
@@ -572,34 +991,47 @@ watch(
                         </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <div class="ml-auto text-xs text-muted-foreground truncate">
-                        {{ workspaceRoot || "未选择" }}
+                    <div
+                        class="text-xs text-muted-foreground truncate max-w-[120px]"
+                        :title="workspaceRoot || ''"
+                    >
+                        {{
+                            workspaceRoot
+                                ? workspaceRoot.split(/[\\/]/).pop()
+                                : "未选择"
+                        }}
                     </div>
                 </div>
 
-                <div v-if="!workspaceRoot" class="p-3 border-b">
-                    <div class="text-xs text-muted-foreground">提示</div>
-                    <div class="mt-1 text-sm text-muted-foreground">
-                        首次需要选择文件夹，之后会默认打开上次目录。
+                <div
+                    v-if="!workspaceRoot"
+                    class="p-4 flex flex-col items-center justify-center h-40 text-center"
+                >
+                    <div class="text-sm font-medium text-foreground">
+                        未打开工作区
                     </div>
+                    <div class="mt-2 text-xs text-muted-foreground w-3/4">
+                        点击上方按钮选择文件夹，之后会自动记住位置。
+                    </div>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        class="mt-4"
+                        @click="createWorkspace"
+                    >
+                        打开文件夹
+                    </Button>
                 </div>
 
                 <div class="flex-1 overflow-auto p-2">
                     <div
-                        v-if="!workspaceRoot"
-                        class="p-2 text-sm text-muted-foreground"
-                    >
-                        请选择一个文件夹作为工作区。
-                    </div>
-
-                    <div
-                        v-else-if="dirLoadError"
-                        class="p-2 text-sm text-destructive"
+                        v-if="dirLoadError"
+                        class="p-2 text-sm text-destructive bg-destructive/10 rounded-md m-2"
                     >
                         {{ dirLoadError }}
                     </div>
 
-                    <div v-else class="space-y-1">
+                    <div v-else-if="workspaceRoot" class="space-y-0.5">
                         <FileTree
                             :nodes="rootNodes"
                             :expanded="expandedDirs"
@@ -608,6 +1040,12 @@ watch(
                             :selected-path="activeFilePath"
                             :get-node-icon="getNodeIcon"
                             :on-select="openFile"
+                            :on-create-file="createFileInDir"
+                            :on-create-folder="createFolderInDir"
+                            :on-reveal-in-explorer="revealInExplorer"
+                            :on-delete="deletePath"
+                            :on-rename="renamePath"
+                            :on-move="movePath"
                         />
                     </div>
                 </div>
@@ -620,27 +1058,43 @@ watch(
             />
 
             <!-- 中间：编辑器 + 控制台 -->
-            <main class="flex-1 min-w-0 flex flex-col overflow-hidden">
-                <div class="px-4 py-2 border-b flex items-center gap-2">
-                    <div class="min-w-0 flex-1">
-                        <div class="text-sm font-medium truncate">
-                            {{ activeFilePath || "未打开文件" }}
-                            <span v-if="isDirty" class="text-muted-foreground"
-                                >（未保存）</span
-                            >
-                        </div>
-                        <div class="text-xs text-muted-foreground">
+            <main
+                class="flex-1 min-w-0 flex flex-col overflow-hidden bg-background"
+            >
+                <div
+                    class="h-10 px-4 border-b flex items-center gap-3 bg-background/50 backdrop-blur-sm z-10"
+                >
+                    <div class="min-w-0 flex-1 flex items-center gap-2">
+                        <span class="text-sm font-medium truncate">
+                            {{
+                                activeFilePath
+                                    ? activeFilePath.split(/[\\/]/).pop()
+                                    : "无文件"
+                            }}
+                        </span>
+                        <span
+                            v-if="activeFilePath && isDirty"
+                            class="w-2 h-2 rounded-full bg-yellow-500"
+                            title="未保存"
+                        ></span>
+                        <span
+                            v-if="activeFilePath"
+                            class="text-xs text-muted-foreground/50 border px-1.5 rounded-sm uppercase tracking-wider scale-90 origin-left"
+                        >
                             {{ activeLanguage }}
-                        </div>
+                        </span>
                     </div>
                     <DropdownMenu>
                         <DropdownMenuTrigger as-child>
-                            <Button size="sm" variant="outline" class="gap-2">
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                class="h-8 w-8 p-0"
+                            >
                                 <MoreHorizontal class="w-4 h-4" />
-                                操作
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent class="w-44" align="end">
+                        <DropdownMenuContent align="end">
                             <DropdownMenuGroup>
                                 <DropdownMenuItem
                                     :disabled="
@@ -663,9 +1117,7 @@ watch(
                                     }}
                                 </DropdownMenuItem>
                             </DropdownMenuGroup>
-
                             <DropdownMenuSeparator />
-
                             <DropdownMenuGroup>
                                 <DropdownMenuItem @click="createWorkspace">
                                     <Plus class="w-4 h-4 mr-2" />
@@ -694,40 +1146,57 @@ watch(
                     {{ fileLoadError }}
                 </div>
 
-                <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
-                    <div class="flex-1 min-h-0">
-                        <MonacoEditorPane
-                            :value="editorValue"
-                            :language="activeLanguage"
-                            @update:value="updateEditorValue"
-                            @save="saveActiveFile"
-                        />
-                    </div>
-
-                    <template v-if="consoleVisible">
-                        <!-- 横向拖拽条（编辑器/控制台） -->
-                        <div
-                            class="h-1 cursor-row-resize bg-border/50 hover:bg-border"
-                            @mousedown="startDrag('console', $event)"
-                        />
-
-                        <div
-                            class="shrink-0 border-t bg-muted/5"
-                            :style="{ height: consoleHeight + 'px' }"
-                        >
-                            <WorkspaceConsolePanel :cwd="workspaceRoot" />
+                <div
+                    class="flex-1 min-h-0 flex flex-col overflow-hidden relative"
+                >
+                    <div class="absolute inset-0 flex flex-col">
+                        <div class="flex-1 min-h-0">
+                            <div
+                                v-if="!activeFilePath"
+                                class="h-full flex flex-col items-center justify-center text-muted-foreground"
+                            >
+                                <div
+                                    class="w-16 h-16 rounded-xl bg-muted/40 flex items-center justify-center mb-4"
+                                >
+                                    <FileText class="w-8 h-8 opacity-50" />
+                                </div>
+                                <div class="text-sm">选择左侧文件以编辑</div>
+                            </div>
+                            <MonacoEditorPane
+                                v-else
+                                :value="editorValue"
+                                :language="activeLanguage"
+                                :theme="editorTheme"
+                                @update:value="updateEditorValue"
+                                @save="saveActiveFile"
+                            />
                         </div>
-                    </template>
+
+                        <template v-if="consoleVisible">
+                            <!-- 横向拖拽条（编辑器/控制台） -->
+                            <div
+                                class="h-1 cursor-row-resize bg-border/20 hover:bg-primary/50 transition-colors z-10"
+                                @mousedown="startDrag('console', $event)"
+                            />
+
+                            <div
+                                class="shrink-0 border-t bg-black"
+                                :style="{ height: consoleHeight + 'px' }"
+                            >
+                                <WorkspaceConsolePanel :cwd="workspaceRoot" />
+                            </div>
+                        </template>
+                    </div>
                 </div>
             </main>
 
             <!-- 竖向拖拽条（中/右） -->
             <div
-                class="w-1 shrink-0 cursor-col-resize bg-border/50 hover:bg-border"
+                class="w-1 shrink-0 cursor-col-resize bg-border/20 hover:bg-primary/50 transition-colors z-10"
                 @mousedown="startDrag('right', $event)"
             />
 
-            <!-- 右侧：AI 会话（占位） -->
+            <!-- 右侧：AI 会话 -->
             <aside
                 class="shrink-0 border-l bg-muted/10"
                 :style="{ width: rightPaneWidth + 'px' }"

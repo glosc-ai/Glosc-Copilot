@@ -26,6 +26,7 @@ import { storeToRefs } from "pinia";
 import { useMcpStore } from "@/stores/mcp";
 import { useAuthStore } from "@/stores/auth";
 import { useRouter } from "vue-router";
+import { parseCustomModelId } from "@/utils/CustomModelId";
 
 import McpPromptInputInsert from "@/components/mcp/McpPromptInputInsert.vue";
 import { InlineCitedText } from "@/components/ai-elements/inline-citation";
@@ -365,11 +366,43 @@ async function sendChatMessage(
     const toolsEnabled = Object.keys(tools).length > 0;
 
     try {
+        const selectedId = selectedModel.value?.id;
+        const parsedCustom = parseCustomModelId(selectedId);
+
+        if (parsedCustom) {
+            const provider = settingsStore.getCustomModelProviderById(
+                parsedCustom.providerId,
+            );
+            if (!provider) {
+                ElMessage.error(
+                    "自定义模型配置不存在或已被删除，请在设置中重新配置。",
+                );
+                return;
+            }
+        }
+
         await chat.sendMessage(
             { text, messageId, files },
             {
                 body: {
-                    model: selectedModel.value?.id,
+                    model: parsedCustom ? parsedCustom.rawModelId : selectedId,
+                    ...(parsedCustom
+                        ? (() => {
+                              const provider =
+                                  settingsStore.getCustomModelProviderById(
+                                      parsedCustom.providerId,
+                                  );
+                              if (!provider) return {};
+                              return {
+                                  useUserKey: true,
+                                  userModelProviderId: provider.id,
+                                  userModelProvider: "openai-compatible",
+                                  userModelGroupName: provider.name,
+                                  userModelApiKey: provider.apiKey,
+                                  userModelBaseUrl: provider.baseUrl,
+                              };
+                          })()
+                        : {}),
                     // 后端若仅在 mcpEnabled=true 时启用 tools，这里扩展为“任意工具可用”。
                     mcpEnabled: toolsEnabled,
                     tools,
@@ -456,6 +489,74 @@ async function confirmEditAndResendUserMessage() {
 watch(error, (newError) => {
     if (newError) {
         console.error("Chat error:", newError);
+
+        const errorText =
+            ChatUtils.extractStreamErrorText(newError) ||
+            (newError instanceof Error
+                ? newError.message
+                : typeof newError === "string"
+                  ? newError
+                  : "流式传输发生错误");
+
+        const trimmed = String(errorText || "").trim();
+        if (trimmed) {
+            try {
+                ElMessage.error(trimmed);
+            } catch {
+                // ignore
+            }
+
+            // 把错误落到最后一条 assistant 消息里，避免用户只看到控制台报错。
+            try {
+                const current = (chat.messages as any[]) || [];
+                for (let i = current.length - 1; i >= 0; i -= 1) {
+                    const m: any = current[i];
+                    if (m?.role !== "assistant") continue;
+
+                    const parts: any[] = Array.isArray(m.parts)
+                        ? [...m.parts]
+                        : [{ type: "text", text: m.content ?? "" }];
+
+                    let lastTextIndex = -1;
+                    for (let j = parts.length - 1; j >= 0; j -= 1) {
+                        if (parts[j]?.type === "text") {
+                            lastTextIndex = j;
+                            break;
+                        }
+                    }
+
+                    const errorLine = `（错误：${trimmed}）`;
+                    if (lastTextIndex < 0) {
+                        parts.push({ type: "text", text: errorLine });
+                    } else {
+                        const prevText = String(
+                            parts[lastTextIndex]?.text ?? "",
+                        );
+                        if (!prevText.includes(trimmed)) {
+                            const nextText = prevText
+                                ? `${prevText}\n\n${errorLine}`
+                                : errorLine;
+                            parts[lastTextIndex] = {
+                                ...parts[lastTextIndex],
+                                text: nextText,
+                            };
+                        }
+                    }
+
+                    const nextMessages = current.slice();
+                    nextMessages[i] = { ...m, parts };
+                    chat.messages = nextMessages as any;
+                    break;
+                }
+            } catch {
+                // ignore
+            }
+        }
+
+        // 尽量停止当前流，避免 UI 卡在 streaming 状态
+        if (status.value === "submitted" || status.value === "streaming") {
+            void chat.stop();
+        }
     }
 });
 
@@ -661,7 +762,31 @@ async function handleSubmit(message: PromptInputMessage) {
             },
             {
                 body: {
-                    model: selectedModel.value?.id,
+                    ...(function () {
+                        const selectedId = selectedModel.value?.id;
+                        const parsedCustom = parseCustomModelId(selectedId);
+                        if (!parsedCustom) return { model: selectedId };
+
+                        const provider =
+                            settingsStore.getCustomModelProviderById(
+                                parsedCustom.providerId,
+                            );
+                        if (!provider) {
+                            ElMessage.error(
+                                "自定义模型配置不存在或已被删除，请在设置中重新配置。",
+                            );
+                            return { model: selectedId };
+                        }
+                        return {
+                            model: parsedCustom.rawModelId,
+                            useUserKey: true,
+                            userModelProviderId: provider.id,
+                            userModelProvider: "openai-compatible",
+                            userModelGroupName: provider.name,
+                            userModelApiKey: provider.apiKey,
+                            userModelBaseUrl: provider.baseUrl,
+                        };
+                    })(),
                     mcpEnabled: hasEnabledServers.value,
                     tools,
                     ...(webSearchEnabled.value ? { webSearch: true } : {}),
@@ -686,6 +811,17 @@ function handlePromptError(error: { code: string; message: string }) {
 const promptInput = usePromptInputProvider({
     onSubmit: handleSubmit,
     onError: handlePromptError,
+});
+
+onMounted(() => {
+    if (chatStore.content) {
+        promptInput.setTextInput(chatStore.content);
+        // Optional: clear it if you want it to be a one-time handoff
+        // chatStore.content = "";
+        // However, keeping it might be useful if the user navigates away and back?
+        // But for now let's clear it to avoid it sticking around.
+        chatStore.content = "";
+    }
 });
 
 const hasPendingInput = computed(() => {
@@ -763,7 +899,30 @@ async function handleRegenerate() {
     const toolsEnabled = Object.keys(tools).length > 0;
     chat.regenerate({
         body: {
-            model: selectedModel.value?.id,
+            ...(function () {
+                const selectedId = selectedModel.value?.id;
+                const parsedCustom = parseCustomModelId(selectedId);
+                if (!parsedCustom) return { model: selectedId };
+
+                const provider = settingsStore.getCustomModelProviderById(
+                    parsedCustom.providerId,
+                );
+                if (!provider) {
+                    ElMessage.error(
+                        "自定义模型配置不存在或已被删除，请在设置中重新配置。",
+                    );
+                    return { model: selectedId };
+                }
+                return {
+                    model: parsedCustom.rawModelId,
+                    useUserKey: true,
+                    userModelProviderId: provider.id,
+                    userModelProvider: "openai-compatible",
+                    userModelGroupName: provider.name,
+                    userModelApiKey: provider.apiKey,
+                    userModelBaseUrl: provider.baseUrl,
+                };
+            })(),
             mcpEnabled: toolsEnabled,
             tools,
             ...(webSearchEnabled.value ? { webSearch: true } : {}),

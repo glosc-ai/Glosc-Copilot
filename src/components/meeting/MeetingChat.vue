@@ -14,6 +14,7 @@ import { useMcpStore } from "@/stores/mcp";
 import { McpUtils } from "@/utils/McpUtils";
 import { ChatUtils } from "@/utils/ChatUtils";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { parseCustomModelId } from "@/utils/CustomModelId";
 
 const props = defineProps<{
     meetingId: string;
@@ -22,6 +23,7 @@ const props = defineProps<{
 const meetingStore = useMeetingStore();
 const { currentMessages, activeMeeting } = storeToRefs(meetingStore);
 const mcpStore = useMcpStore();
+const settingsStore = useSettingsStore();
 
 onMounted(() => {
     void mcpStore.init();
@@ -274,6 +276,17 @@ async function streamToMeetingMessage(params: StreamToMessageParams) {
         triggerText || "现在轮到你发言。请基于会议背景与历史讨论继续推进。";
 
     try {
+        const parsedCustom = parseCustomModelId(model);
+        const customProvider = parsedCustom
+            ? settingsStore.getCustomModelProviderById(parsedCustom.providerId)
+            : null;
+        if (parsedCustom && !customProvider) {
+            (window as any).ElMessage?.error?.(
+                "自定义模型配置不存在或已被删除，请在设置中重新配置。",
+            );
+            throw new Error("自定义模型配置缺失");
+        }
+
         // 参考 AI SDK / ai-elements 的用法：sendMessage 往往是“触发请求”，
         // 不保证返回一个可 await 的 Promise（工作区会话也不会 await）。
         // 因此这里不要依赖返回值来判断流是否结束。
@@ -281,7 +294,17 @@ async function streamToMeetingMessage(params: StreamToMessageParams) {
             { text: effectiveTriggerText },
             {
                 body: {
-                    model,
+                    model: parsedCustom ? parsedCustom.rawModelId : model,
+                    ...(parsedCustom && customProvider
+                        ? {
+                              useUserKey: true,
+                              userModelProviderId: customProvider.id,
+                              userModelProvider: "openai-compatible",
+                              userModelGroupName: customProvider.name,
+                              userModelApiKey: customProvider.apiKey,
+                              userModelBaseUrl: customProvider.baseUrl,
+                          }
+                        : {}),
                     mcpEnabled: Object.keys(tools || {}).length > 0,
                     tools,
                 },

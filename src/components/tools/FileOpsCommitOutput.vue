@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from "vue";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 
 type ToolEnvelope = {
     content?: Array<{ type?: string; text?: string }>;
@@ -609,6 +617,20 @@ const statusBadgeClass = computed(() => {
         return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
     return "bg-muted/40 text-muted-foreground";
 });
+
+const hasOutputContent = computed(() => {
+    return !!(
+        previewImageSrc.value ||
+        replaceDiff.value ||
+        (showJson.value && outputJson.value) ||
+        outputText.value
+    );
+});
+
+const handleCopy = (code: string) => {
+    navigator.clipboard.writeText(code);
+    ElMessage.success("已复制到剪贴板");
+};
 </script>
 
 <template>
@@ -660,7 +682,7 @@ const statusBadgeClass = computed(() => {
                     title="变更项"
                 >
                     <CommitFile v-for="f in files" :key="f.path">
-                        <CommitFileInfo>
+                        <CommitFileInfo :title="f.path">
                             <CommitFileStatus :status="f.status" />
                             <CommitFileIcon />
                             <CommitFilePath>{{ f.path }}</CommitFilePath>
@@ -673,40 +695,63 @@ const statusBadgeClass = computed(() => {
                     </CommitFile>
                 </CommitFiles>
 
-                <div class="mt-3 space-y-2">
-                    <div class="text-xs text-muted-foreground">输出</div>
+                <div class="mt-3">
+                    <Dialog v-if="hasOutputContent">
+                        <DialogTrigger as-child>
+                            <Button variant="outline" size="sm">
+                                查看详细输出
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent class="max-h-[80vh]">
+                            <DialogHeader>
+                                <DialogTitle>工具输出详情</DialogTitle>
+                            </DialogHeader>
+                            <div class="space-y-4">
+                                <img
+                                    v-if="previewImageSrc"
+                                    :src="previewImageSrc"
+                                    class="max-w-full rounded-md border"
+                                    alt="readFile preview"
+                                />
 
-                    <img
-                        v-if="previewImageSrc"
-                        :src="previewImageSrc"
-                        class="max-w-full rounded-md border"
-                        alt="readFile preview"
-                    />
-
-                    <div v-if="replaceDiff" class="space-y-2">
-                        <div class="text-xs text-muted-foreground">
-                            差分：+{{ replaceDiff.additions }} -{{
-                                replaceDiff.deletions
-                            }}
-                            <span v-if="replaceDiff.clipped">（已截断）</span>
-                        </div>
-                        <CodeBlock
-                            :code="replaceDiff.diffText"
-                            language="diff"
-                            class="rounded-md"
-                        />
-                    </div>
-                    <CodeBlock
-                        v-if="showJson && outputJson"
-                        :code="outputJson"
-                        language="json"
-                        class="rounded-md"
-                    />
-                    <pre
-                        v-else-if="outputText"
-                        class="w-full overflow-x-auto rounded-md border bg-background p-3 text-xs text-foreground whitespace-pre-wrap"
-                    ><code>{{ outputText }}</code></pre>
-
+                                <div v-if="replaceDiff" class="space-y-2">
+                                    <div class="text-xs text-muted-foreground">
+                                        差分：+{{ replaceDiff.additions }} -{{
+                                            replaceDiff.deletions
+                                        }}
+                                        <span v-if="replaceDiff.clipped"
+                                            >（已截断）</span
+                                        >
+                                    </div>
+                                    <CodeBlock
+                                        :code="replaceDiff.diffText"
+                                        language="diff"
+                                        class="rounded-md overflow-auto max-w-115"
+                                    >
+                                        <CodeBlockCopyButton
+                                            @copy="
+                                                handleCopy(replaceDiff.diffText)
+                                            "
+                                        />
+                                    </CodeBlock>
+                                </div>
+                                <CodeBlock
+                                    v-if="showJson && outputJson"
+                                    :code="outputJson"
+                                    language="json"
+                                    class="rounded-md overflow-auto max-w-115"
+                                >
+                                    <CodeBlockCopyButton
+                                        @copy="handleCopy(outputJson)"
+                                    />
+                                </CodeBlock>
+                                <pre
+                                    v-else-if="outputText"
+                                    class="w-full overflow-x-auto rounded-md border bg-background p-3 text-xs text-foreground whitespace-pre-wrap"
+                                ><code>{{ outputText }}</code></pre>
+                            </div>
+                        </DialogContent>
+                    </Dialog>
                     <div v-else class="text-xs text-muted-foreground">
                         （无输出）
                     </div>

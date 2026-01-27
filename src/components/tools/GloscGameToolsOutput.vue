@@ -1053,7 +1053,7 @@ const getStatusTextColor = (text: string) => {
                     <CodeBlock :code="scrubbedRawOutput" language="json">
                         <CodeBlockCopyButton
                             @copy="handleCopy(scrubbedRawOutput)"
-                        ></CodeBlockCopyButton>
+                        />
                     </CodeBlock>
                 </div>
             </div>

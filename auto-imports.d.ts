@@ -91,6 +91,8 @@ declare global {
   const ConversationSchema: typeof import('./src/utils/interface').ConversationSchema
   const ConversationScrollButton: typeof import('./src/components/ai-elements/conversation/index').ConversationScrollButton
   const Cryption: typeof import('./src/utils/Cryption').Cryption
+  const CustomModelProviderKindSchema: typeof import('./src/utils/interface').CustomModelProviderKindSchema
+  const CustomModelProviderSchema: typeof import('./src/utils/interface').CustomModelProviderSchema
   const DEFAULT_AVATARS: typeof import('./src/utils/meetingInterface').DEFAULT_AVATARS
   const DEFAULT_COLORS: typeof import('./src/utils/meetingInterface').DEFAULT_COLORS
   const Dialog: typeof import('./src/components/ui/dialog/index').Dialog
@@ -343,6 +345,7 @@ declare global {
   const inputGroupAddonVariants: typeof import('./src/components/ui/input-group/index').inputGroupAddonVariants
   const inputGroupButtonVariants: typeof import('./src/components/ui/input-group/index').inputGroupButtonVariants
   const installStoreTool: typeof import('./src/utils/StoreToolInstaller').installStoreTool
+  const isCustomModelId: typeof import('./src/utils/CustomModelId').isCustomModelId
   const isMcpServerEqual: typeof import('./src/utils/McpServerImport').isMcpServerEqual
   const isProxy: typeof import('vue').isProxy
   const isReactive: typeof import('vue').isReactive
@@ -376,8 +379,10 @@ declare global {
   const onUpdated: typeof import('vue').onUpdated
   const onWatcherCleanup: typeof import('vue').onWatcherCleanup
   const parseAnsiToSegments: typeof import('./src/components/ai-elements/terminal/ansi').parseAnsiToSegments
+  const parseCustomModelId: typeof import('./src/utils/CustomModelId').parseCustomModelId
   const parseMcpServerConfigs: typeof import('./src/utils/McpServerImport').parseMcpServerConfigs
   const parseTextWithInlineCitations: typeof import('./src/utils/InlineCitationUtils').parseTextWithInlineCitations
+  const probeThirdPartyModels: typeof import('./src/utils/ThirdPartyModelApi').probeThirdPartyModels
   const provide: typeof import('vue').provide
   const provideCommandContext: typeof import('./src/components/ui/command/index').provideCommandContext
   const provideCommandGroupContext: typeof import('./src/components/ui/command/index').provideCommandGroupContext
@@ -457,6 +462,9 @@ declare global {
   export type { Cryption } from './src/utils/Cryption'
   import('./src/utils/Cryption')
   // @ts-ignore
+  export type { ParsedCustomModelId } from './src/utils/CustomModelId'
+  import('./src/utils/CustomModelId')
+  // @ts-ignore
   export type { StorePluginSource, StorePlugin, StorePluginVersion } from './src/utils/GloscStoreApi'
   import('./src/utils/GloscStoreApi')
   // @ts-ignore
@@ -487,7 +495,7 @@ declare global {
   export type { TauriStdioTransport } from './src/utils/TauriStdioTransport'
   import('./src/utils/TauriStdioTransport')
   // @ts-ignore
-  export type { ModelInfo, ModelsResponse, StoredChatMessage, ConversationItem, CheckpointType, McpServer, ClientToolRegistry, CreateChatClientOptions } from './src/utils/interface'
+  export type { ModelInfo, ModelsResponse, CustomModelProvider, StoredChatMessage, ConversationItem, CheckpointType, McpServer, ClientToolRegistry, CreateChatClientOptions } from './src/utils/interface'
   import('./src/utils/interface')
   // @ts-ignore
   export type { MeetingRole, MeetingStatus, SpeakerType, QueueNode, MeetingMessage, Meeting, MeetingItem } from './src/utils/meetingInterface'

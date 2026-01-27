@@ -18,6 +18,12 @@ export type StorePlugin = {
     screenshots: string[];
     category: string;
     tags: string[];
+    envVars?: Array<{
+        key: string;
+        defaultValue?: string;
+        placeholder?: string;
+        description?: string;
+    }>;
     source?: StorePluginSource;
     author: { id: string; name: string; avatarUrl?: string };
     ratingAvg: number;

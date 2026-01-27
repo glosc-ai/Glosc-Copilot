@@ -16,7 +16,7 @@ const props = withDefaults(
     }>(),
     {
         showLineNumbers: false,
-    }
+    },
 );
 
 const delegatedProps = reactiveOmit(
@@ -24,7 +24,7 @@ const delegatedProps = reactiveOmit(
     "code",
     "language",
     "showLineNumbers",
-    "class"
+    "class",
 );
 
 const html = ref("");
@@ -44,7 +44,7 @@ const HIGHLIGHT_TIMEOUT_MS = 200;
 const scheduleHighlight = (
     code: string,
     language: BundledLanguage,
-    showLineNumbers: boolean
+    showLineNumbers: boolean,
 ) => {
     // Cancel any pending idle callback
     if (idleCallbackId !== null && typeof cancelIdleCallback !== "undefined") {
@@ -60,7 +60,7 @@ const scheduleHighlight = (
             const [light, dark] = await highlightCode(
                 code,
                 language,
-                showLineNumbers
+                showLineNumbers,
             );
 
             if (currentId === requestId && !isUnmounted) {
@@ -78,7 +78,7 @@ const scheduleHighlight = (
             () => {
                 performHighlight();
             },
-            { timeout: HIGHLIGHT_TIMEOUT_MS }
+            { timeout: HIGHLIGHT_TIMEOUT_MS },
         );
     } else {
         // Fallback for browsers without requestIdleCallback
@@ -91,7 +91,7 @@ const updateHighlight = useDebounceFn(
     (code: string, language: BundledLanguage, showLineNumbers: boolean) => {
         scheduleHighlight(code, language, showLineNumbers);
     },
-    100
+    100,
 );
 
 watch(
@@ -99,7 +99,7 @@ watch(
     ([code, language, showLineNumbers]) => {
         updateHighlight(code, language, showLineNumbers);
     },
-    { immediate: true }
+    { immediate: true },
 );
 
 onBeforeUnmount(() => {
@@ -116,8 +116,8 @@ onBeforeUnmount(() => {
         v-bind="delegatedProps"
         :class="
             cn(
-                'group relative w-full overflow-hidden rounded-md border bg-background text-foreground',
-                props.class
+                'group relative w-full overflow-hidden rounded-md border bg-background text-foreground ',
+                props.class,
             )
         "
     >

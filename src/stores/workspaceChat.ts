@@ -447,7 +447,11 @@ export const useWorkspaceChatStore = defineStore("workspaceChat", {
             this.isLoadingModels = true;
             this.modelsError = null;
             try {
-                this.availableModels = await fetchAvailableModels();
+                const gloscModels = await fetchAvailableModels();
+                const settingsStore = useSettingsStore();
+                await settingsStore.init();
+                const customModels = settingsStore.getCustomSelectableModels();
+                this.availableModels = [...gloscModels, ...customModels];
 
                 if (this.availableModels.length > 0) {
                     const persisted = await this.loadPersistedSelectedModelId();

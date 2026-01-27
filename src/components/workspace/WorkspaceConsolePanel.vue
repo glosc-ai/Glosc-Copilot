@@ -733,43 +733,43 @@ onBeforeUnmount(() => {
                     <div
                         class="h-9 border-b flex items-center gap-2 px-2 bg-muted/10"
                     >
-                        <div class="flex items-center gap-1 overflow-auto">
+                        <div
+                            class="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[calc(100%-200px)]"
+                        >
                             <button
                                 v-for="t in tabs"
                                 :key="t.id"
-                                class="h-7 px-2 rounded-md text-xs flex items-center gap-2 border transition-colors"
+                                class="h-7 pl-2 pr-1 rounded-t-md text-xs flex items-center gap-2 border-t border-x transition-colors min-w-[120px]"
                                 :class="
                                     t.id === activeId
-                                        ? 'bg-background border-border'
-                                        : 'bg-transparent border-transparent hover:bg-accent/50'
+                                        ? 'bg-background border-border text-foreground -mb-px pb-px z-10'
+                                        : 'bg-muted/50 border-transparent text-muted-foreground hover:bg-muted'
                                 "
                                 @click="activeId = t.id"
                                 type="button"
                             >
-                                <span class="max-w-40 truncate">{{
+                                <span class="flex-1 truncate text-left">{{
                                     t.title
                                 }}</span>
+                                <span class="text-[10px] opacity-70">{{
+                                    t.shell
+                                }}</span>
                                 <span
-                                    class="text-[10px] text-muted-foreground"
-                                    >{{ t.shell }}</span
-                                >
-                                <span
-                                    class="text-[10px]"
+                                    class="text-[10px] w-1.5 h-1.5 rounded-full"
                                     :class="
                                         t.alive
-                                            ? 'text-emerald-500'
-                                            : 'text-muted-foreground'
+                                            ? 'bg-emerald-500'
+                                            : 'bg-muted-foreground'
                                     "
-                                    >●</span
-                                >
-                                <button
-                                    class="rounded hover:bg-accent p-0.5"
-                                    type="button"
+                                    title="Status"
+                                ></span>
+                                <div
+                                    class="rounded-sm hover:bg-destructive/10 hover:text-destructive p-0.5 ml-0.5 shrink-0 transition-colors"
                                     title="关闭"
                                     @click.stop="closeTerminal(t.id)"
                                 >
                                     <X class="w-3 h-3" />
-                                </button>
+                                </div>
                             </button>
                         </div>
 

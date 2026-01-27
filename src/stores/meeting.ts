@@ -799,7 +799,11 @@ export const useMeetingStore = defineStore("meeting", {
             this.isLoadingModels = true;
             this.modelsError = null;
             try {
-                this.availableModels = await fetchAvailableModels();
+                const gloscModels = await fetchAvailableModels();
+                const settingsStore = useSettingsStore();
+                await settingsStore.init();
+                const customModels = settingsStore.getCustomSelectableModels();
+                this.availableModels = [...gloscModels, ...customModels];
             } catch (error) {
                 this.modelsError =
                     error instanceof Error ? error.message : "加载模型失败";

@@ -261,8 +261,19 @@ export async function installStoreTool(params: {
     authToken: string | null;
     mcpStore: ReturnType<typeof useMcpStore>;
     autoEnable?: boolean;
+    envOverrides?: Record<string, string> | null;
 }) {
     const { plugin, authToken, mcpStore } = params;
+
+    const envOverrides: Record<string, string> = {};
+    if (params.envOverrides && typeof params.envOverrides === "object") {
+        for (const [k, v] of Object.entries(params.envOverrides)) {
+            const key = String(k || "").trim();
+            if (!key) continue;
+            if (/^GLOSC_/i.test(key)) continue;
+            envOverrides[key] = String(v ?? "");
+        }
+    }
 
     if (!plugin.source) {
         throw new Error("该工具缺少 source 配置，无法安装");
@@ -283,6 +294,7 @@ export async function installStoreTool(params: {
             command,
             args,
             env: {
+                ...envOverrides,
                 GLOSC_STORE_SLUG: plugin.slug,
                 GLOSC_STORE_KIND: "package",
                 GLOSC_STORE_MANAGER: plugin.source.manager,
@@ -385,6 +397,7 @@ export async function installStoreTool(params: {
                 cwd,
                 env: {
                     ...env,
+                    ...envOverrides,
                     GLOSC_STORE_SLUG: plugin.slug,
                     GLOSC_STORE_KIND: "file",
                     GLOSC_STORE_VERSION: latest.version,
@@ -404,6 +417,7 @@ export async function installStoreTool(params: {
                 cwd,
                 env: {
                     ...env,
+                    ...envOverrides,
                     GLOSC_STORE_SLUG: plugin.slug,
                     GLOSC_STORE_KIND: "file",
                     GLOSC_STORE_VERSION: latest.version,

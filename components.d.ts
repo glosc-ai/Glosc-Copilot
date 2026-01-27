@@ -280,6 +280,7 @@ declare module 'vue' {
     SourcesContent: typeof import('./src/components/ai-elements/sources/SourcesContent.vue')['default']
     SourcesTrigger: typeof import('./src/components/ai-elements/sources/SourcesTrigger.vue')['default']
     SpeakerQueue: typeof import('./src/components/meeting/SpeakerQueue.vue')['default']
+    StoreEnvVarsDialog: typeof import('./src/components/mcp/StoreEnvVarsDialog.vue')['default']
     StoreToolBrowserDialog: typeof import('./src/components/mcp/StoreToolBrowserDialog.vue')['default']
     StreamdownCodeBlock: typeof import('./src/components/ai-elements/code-block/StreamdownCodeBlock.vue')['default']
     Table: typeof import('./src/components/ui/table/Table.vue')['default']

@@ -42,6 +42,10 @@ const libraryItems = ref<StorePlugin[]>([]);
 const installingSlugs = ref<Set<string>>(new Set());
 const acquiringSlugs = ref<Set<string>>(new Set());
 
+const envDialogOpen = ref(false);
+const envDialogPlugin = ref<StorePlugin | null>(null);
+const envDialogBusy = ref(false);
+
 const installedBySlug = computed(() => {
     const map = new Map<string, { version?: string }>();
     for (const s of mcpStore.servers) {
@@ -192,6 +196,31 @@ async function onInstall(plugin: StorePlugin) {
         return;
     }
 
+    const envDefs = Array.isArray((plugin as any)?.envVars)
+        ? ((plugin as any).envVars as any[])
+              .map((x) => ({
+                  key: String(x?.key || "").trim(),
+                  defaultValue: String(x?.defaultValue || "").trim(),
+                  placeholder: String(x?.placeholder || "").trim(),
+                  description: String(x?.description || "").trim(),
+              }))
+              .filter((x) => x.key)
+        : [];
+
+    // 如果定义了可配置环境变量，则先弹窗收集。
+    if (envDefs.length) {
+        envDialogPlugin.value = plugin;
+        envDialogOpen.value = true;
+        return;
+    }
+
+    await doInstall(plugin, null);
+}
+
+async function doInstall(
+    plugin: StorePlugin,
+    envOverrides: Record<string, string> | null,
+) {
     installingSlugs.value = new Set(installingSlugs.value).add(plugin.slug);
     try {
         await installStoreTool({
@@ -199,6 +228,7 @@ async function onInstall(plugin: StorePlugin) {
             authToken: authStore.token,
             mcpStore,
             autoEnable: true,
+            envOverrides,
         });
 
         ElMessage.success(`已安装：${plugin.name}`);
@@ -214,6 +244,22 @@ async function onInstall(plugin: StorePlugin) {
         const next = new Set(installingSlugs.value);
         next.delete(plugin.slug);
         installingSlugs.value = next;
+    }
+}
+
+async function onEnvDialogConfirm(values: Record<string, string>) {
+    const plugin = envDialogPlugin.value;
+    envDialogOpen.value = false;
+    if (!plugin) return;
+
+    // 防止用户连点导致重复安装
+    if (envDialogBusy.value) return;
+    envDialogBusy.value = true;
+    try {
+        await doInstall(plugin, values || {});
+    } finally {
+        envDialogBusy.value = false;
+        envDialogPlugin.value = null;
     }
 }
 
@@ -605,4 +651,15 @@ function close() {
             </div>
         </DialogContent>
     </Dialog>
+
+    <StoreEnvVarsDialog
+        v-model:open="envDialogOpen"
+        :title="
+            envDialogPlugin
+                ? `安装：${envDialogPlugin.name}`
+                : '安装前配置环境变量'
+        "
+        :env-vars="(envDialogPlugin?.envVars as any) || []"
+        @confirm="onEnvDialogConfirm"
+    />
 </template>

@@ -7,11 +7,13 @@ import type { ModelInfo } from "@/utils/interface";
 const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
 const chatStore = useChatStore();
+const authStore = useAuthStore();
 const { availableModels, isLoadingModels, modelsError } =
     storeToRefs(chatStore);
 const { hiddenModelIds } = storeToRefs(settingsStore);
+const { customModelProviders } = storeToRefs(settingsStore);
 
-type SettingsView = "main" | "models";
+type SettingsView = "main" | "models" | "custom-models";
 const view = ref<SettingsView>("main");
 
 const themeModeProxy = computed({
@@ -92,8 +94,153 @@ async function openModelManager() {
     await ensureModelsLoaded();
 }
 
+async function openCustomModelManager() {
+    view.value = "custom-models";
+    void settingsStore.init();
+}
+
 function closeSettings() {
     uiStore.closeSettings();
+}
+
+const customProviderCount = computed(
+    () => (customModelProviders.value || []).length,
+);
+
+const enabledCustomProviderCount = computed(
+    () => (customModelProviders.value || []).filter((p) => p.enabled).length,
+);
+
+const customDraft = ref({
+    name: "",
+    apiKey: "",
+    baseUrl: "https://api.openai.com/v1",
+});
+
+const customSaving = ref(false);
+
+function maskKey(key: string) {
+    const k = String(key || "");
+    if (k.length <= 8) return "********";
+    return `${k.slice(0, 3)}********${k.slice(-4)}`;
+}
+
+function newProviderId() {
+    try {
+        return crypto.randomUUID();
+    } catch {
+        return `cmp_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    }
+}
+
+async function addCustomProviderAndProbe() {
+    if (customSaving.value) return;
+
+    if (!authStore.isLoggedIn) {
+        ElMessage.warning("请先登录后再配置自定义模型");
+        void authStore.startLogin();
+        return;
+    }
+
+    const name = customDraft.value.name.trim();
+    const apiKey = customDraft.value.apiKey.trim();
+    const baseUrl = customDraft.value.baseUrl.trim();
+
+    if (!name) {
+        ElMessage.warning("请填写配置名称");
+        return;
+    }
+    if (!apiKey) {
+        ElMessage.warning("请填写 API Key");
+        return;
+    }
+    if (!baseUrl) {
+        ElMessage.warning("请填写 Base URL（OpenAI 兼容 /v1）");
+        return;
+    }
+
+    customSaving.value = true;
+    const id = newProviderId();
+    try {
+        await settingsStore.upsertCustomModelProvider({
+            id,
+            name,
+            enabled: true,
+            apiKey,
+            baseUrl,
+            models: [],
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            lastValidatedAt: undefined,
+        } as any);
+
+        const models =
+            await settingsStore.probeAndUpdateCustomModelProviderModels(id);
+
+        ElMessage.success(`验证成功，发现 ${models.length} 个模型`);
+
+        // 刷新模型列表（合并自定义分组）
+        await chatStore.loadAvailableModels();
+
+        // 清空表单
+        customDraft.value = {
+            name: "",
+            apiKey: "",
+            baseUrl: "https://api.openai.com/v1",
+        };
+    } catch (e: any) {
+        const msg =
+            e instanceof Error
+                ? e.message
+                : typeof e === "string"
+                  ? e
+                  : "验证失败";
+        ElMessage.error(msg);
+        // 失败时保留配置，方便用户修改/重试
+    } finally {
+        customSaving.value = false;
+    }
+}
+
+async function refreshCustomProvider(id: string) {
+    if (!authStore.isLoggedIn) {
+        ElMessage.warning("请先登录后再验证 Key");
+        void authStore.startLogin();
+        return;
+    }
+    try {
+        const models =
+            await settingsStore.probeAndUpdateCustomModelProviderModels(id);
+        ElMessage.success(`已刷新，发现 ${models.length} 个模型`);
+        await chatStore.loadAvailableModels();
+    } catch (e: any) {
+        ElMessage.error(
+            e instanceof Error
+                ? e.message
+                : typeof e === "string"
+                  ? e
+                  : "刷新失败",
+        );
+    }
+}
+
+async function removeCustomProvider(id: string) {
+    try {
+        await ElMessageBox.confirm(
+            "确定要删除该自定义模型配置吗？（本地加密保存的 Key 也会一并删除）",
+            "提示",
+            {
+                type: "warning",
+                confirmButtonText: "删除",
+                cancelButtonText: "取消",
+            },
+        );
+    } catch {
+        return;
+    }
+
+    await settingsStore.removeCustomModelProvider(id);
+    await chatStore.loadAvailableModels();
 }
 
 function resetModelFilters() {
@@ -147,7 +294,7 @@ watch(
             <DialogHeader>
                 <DialogTitle class="flex items-center gap-2">
                     <Button
-                        v-if="view === 'models'"
+                        v-if="view !== 'main'"
                         variant="ghost"
                         size="sm"
                         class="h-8 px-2"
@@ -155,7 +302,15 @@ watch(
                     >
                         返回
                     </Button>
-                    <span>{{ view === "models" ? "模型管理" : "设置" }}</span>
+                    <span>
+                        {{
+                            view === "models"
+                                ? "模型管理"
+                                : view === "custom-models"
+                                  ? "自定义模型"
+                                  : "设置"
+                        }}
+                    </span>
                 </DialogTitle>
             </DialogHeader>
 
@@ -214,9 +369,37 @@ watch(
                             </Button>
                         </div>
                     </div>
+
+                    <div class="grid gap-2">
+                        <div class="text-xs text-muted-foreground">
+                            自定义模型
+                        </div>
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="text-sm">
+                                <span class="text-muted-foreground">配置</span>
+                                {{ enabledCustomProviderCount }}
+                                <span class="text-muted-foreground">/</span>
+                                {{ customProviderCount }}
+                                <span class="text-muted-foreground"
+                                    >已启用</span
+                                >
+                            </div>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                @click="openCustomModelManager"
+                            >
+                                管理自定义模型
+                            </Button>
+                        </div>
+                        <div class="text-xs text-muted-foreground">
+                            自定义模型使用你的第三方 Key，不消耗 Glosc
+                            额度/余额；仍需要登录。
+                        </div>
+                    </div>
                 </div>
 
-                <div v-else class="space-y-4">
+                <div v-else-if="view === 'models'" class="space-y-4">
                     <div class="flex items-center gap-2 flex-wrap">
                         <Select v-model="modelFilterType">
                             <SelectTrigger class="h-8 w-48">
@@ -351,6 +534,149 @@ watch(
                                 已隐藏
                             </Badge>
                         </label>
+                    </div>
+                </div>
+
+                <div v-else class="space-y-4">
+                    <div class="text-sm text-muted-foreground">
+                        支持 OpenAI 兼容接口（`GET {baseUrl}/models`）。Key
+                        将加密存储在本地。
+                    </div>
+
+                    <div class="rounded-md border p-3 space-y-3">
+                        <div class="text-sm font-medium">添加新配置</div>
+
+                        <div class="grid grid-cols-1 gap-3">
+                            <div class="grid gap-2">
+                                <div class="text-xs text-muted-foreground">
+                                    组名
+                                </div>
+                                <Input
+                                    v-model="customDraft.name"
+                                    class="h-8"
+                                    placeholder="例如：我的私有模型组"
+                                />
+                            </div>
+
+                            <div class="grid gap-2">
+                                <div class="text-xs text-muted-foreground">
+                                    API Key
+                                </div>
+                                <Input
+                                    v-model="customDraft.apiKey"
+                                    class="h-8"
+                                    placeholder="粘贴你的 Key（本地加密保存）"
+                                    type="password"
+                                />
+                            </div>
+
+                            <div class="grid gap-2">
+                                <div class="text-xs text-muted-foreground">
+                                    Base URL
+                                </div>
+                                <Input
+                                    v-model="customDraft.baseUrl"
+                                    class="h-8"
+                                    placeholder="例如：https://api.openai.com/v1（必须包含 /v1）"
+                                />
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <Button
+                                    size="sm"
+                                    variant="default"
+                                    :disabled="customSaving"
+                                    @click="addCustomProviderAndProbe"
+                                >
+                                    {{
+                                        customSaving
+                                            ? "验证中..."
+                                            : "验证并保存"
+                                    }}
+                                </Button>
+                                <div class="text-xs text-muted-foreground">
+                                    验证会调用第三方接口拉取模型列表
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-md border overflow-hidden">
+                        <div
+                            v-if="(customModelProviders || []).length === 0"
+                            class="text-sm text-muted-foreground py-6 text-center"
+                        >
+                            暂无自定义模型配置
+                        </div>
+
+                        <div
+                            v-for="p in customModelProviders"
+                            :key="p.id"
+                            class="px-3 py-3 border-b last:border-b-0 flex items-start gap-3"
+                        >
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <div class="text-sm font-medium truncate">
+                                        {{ p.name }}
+                                    </div>
+                                    <Badge v-if="p.enabled" variant="secondary">
+                                        已启用
+                                    </Badge>
+                                    <Badge v-else variant="outline"
+                                        >已禁用</Badge
+                                    >
+                                </div>
+                                <div class="text-xs text-muted-foreground mt-1">
+                                    Key：{{ maskKey(p.apiKey) }}
+                                </div>
+                                <div
+                                    v-if="p.baseUrl"
+                                    class="text-xs text-muted-foreground truncate"
+                                >
+                                    BaseUrl：{{ p.baseUrl }}
+                                </div>
+                                <div class="text-xs text-muted-foreground mt-1">
+                                    模型数：{{ (p.models || []).length }}
+                                    <span v-if="p.lastValidatedAt">
+                                        · 最近验证：{{
+                                            new Date(
+                                                p.lastValidatedAt,
+                                            ).toLocaleString()
+                                        }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    @click="
+                                        settingsStore.setCustomModelProviderEnabled(
+                                            p.id,
+                                            !p.enabled,
+                                        )
+                                    "
+                                >
+                                    {{ p.enabled ? "禁用" : "启用" }}
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    @click="refreshCustomProvider(p.id)"
+                                >
+                                    验证/刷新
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    class="text-destructive"
+                                    @click="removeCustomProvider(p.id)"
+                                >
+                                    删除
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

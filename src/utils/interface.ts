@@ -32,6 +32,36 @@ export const ModelsResponseSchema = z.object({
 
 export type ModelsResponse = z.infer<typeof ModelsResponseSchema>;
 
+// ============ 自定义模型（第三方 Key）===========
+export const CustomModelProviderSchema = z.object({
+    id: z.string(),
+    /**
+     * 用户自定义组名（用于模型列表分组展示）。
+     */
+    name: z.string(),
+    enabled: z.boolean(),
+    /**
+     * 用户提供的第三方 Key。
+     * 注意：该字段在本地持久化时必须加密存储（StoreUtils 默认 encrypt=true）。
+     */
+    apiKey: z.string(),
+    /**
+     * OpenAI 兼容接口 baseURL。
+     * 例：https://api.openai.com/v1
+     *     https://your-proxy.example.com/v1
+     */
+    baseUrl: z.string(),
+    /**
+     * 最近一次探测到的可用模型列表（缓存）。
+     */
+    models: z.array(ModelInfoSchema).optional(),
+    lastValidatedAt: z.number().optional(),
+    createdAt: z.number(),
+    updatedAt: z.number(),
+});
+
+export type CustomModelProvider = z.infer<typeof CustomModelProviderSchema>;
+
 // StoredChatMessage schema
 export const StoredChatMessageSchema = z.object({
     id: z.string(),

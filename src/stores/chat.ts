@@ -881,7 +881,13 @@ export const useChatStore = defineStore("chat", {
             this.isLoadingModels = true;
             this.modelsError = null;
             try {
-                this.availableModels = await fetchAvailableModels();
+                // Glosc 模型 + 用户自定义模型（本地加密存储的第三方 Key 配置）
+                const gloscModels = await fetchAvailableModels();
+                const settingsStore = useSettingsStore();
+                // 兜底：确保 settings 初始化（main.ts 会先 init，但这里避免时序问题）
+                await settingsStore.init();
+                const customModels = settingsStore.getCustomSelectableModels();
+                this.availableModels = [...gloscModels, ...customModels];
 
                 if (this.availableModels.length > 0) {
                     const persistedModelId =

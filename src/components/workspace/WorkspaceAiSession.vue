@@ -14,13 +14,22 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
 } from "@/components/ui/dialog";
 
 import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import {
     PromptInput,
@@ -46,6 +55,7 @@ import { storeToRefs } from "pinia";
 
 import { ChatUtils } from "@/utils/ChatUtils";
 import { McpUtils } from "@/utils/McpUtils";
+import { parseCustomModelId } from "@/utils/CustomModelId";
 // import { createBuiltinTools } from "@/utils/BuiltinTools";
 
 import { readDir, readTextFile } from "@tauri-apps/plugin-fs";
@@ -55,7 +65,6 @@ import type { ChatStatus, SourceUrlUIPart, UIMessage } from "ai";
 import {
     Check,
     ChevronDown,
-    MoreHorizontal,
     Pencil,
     Plus,
     RefreshCcwIcon,
@@ -70,6 +79,7 @@ import PromptInputResourceCitationsPreview from "@/components/ai-elements/prompt
 const props = defineProps<{ workspaceRoot: string | null }>();
 
 const chatStore = useWorkspaceChatStore();
+const settingsStore = useSettingsStore();
 const mcpStore = useMcpStore();
 const authStore = useAuthStore();
 
@@ -101,6 +111,7 @@ const chat = ChatUtils.getChat({
 
 const status = computed<ChatStatus>(() => chat.status);
 const rawMessages = computed<UIMessage[]>(() => chat.messages);
+const error = computed(() => (chat as any).error);
 
 // UI 里隐藏 system 消息，但发送给后端时依然保留
 const visibleMessages = computed(() =>
@@ -179,9 +190,28 @@ async function handleRegenerate() {
 
     const modelId = conv.modelId || selectedModel.value?.id;
 
+    const parsedCustom = parseCustomModelId(modelId);
+    const customProvider = parsedCustom
+        ? settingsStore.getCustomModelProviderById(parsedCustom.providerId)
+        : null;
+    if (parsedCustom && !customProvider) {
+        ElMessage.error("自定义模型配置不存在或已被删除，请在设置中重新配置。");
+        return;
+    }
+
     chat.regenerate({
         body: {
-            model: modelId,
+            model: parsedCustom ? parsedCustom.rawModelId : modelId,
+            ...(parsedCustom && customProvider
+                ? {
+                      useUserKey: true,
+                      userModelProviderId: customProvider.id,
+                      userModelProvider: "openai-compatible",
+                      userModelGroupName: customProvider.name,
+                      userModelApiKey: customProvider.apiKey,
+                      userModelBaseUrl: customProvider.baseUrl,
+                  }
+                : {}),
             // 兼容后端：只要启用了任意 tools，就把开关打开
             mcpEnabled: Object.keys(tools).length > 0,
             tools,
@@ -288,18 +318,129 @@ async function sendChatMessage(
 
     const modelId = conv.modelId || selectedModel.value?.id;
 
-    await chat.sendMessage(
-        { text, messageId, files },
-        {
-            body: {
-                model: modelId,
-                mcpEnabled: Object.keys(tools).length > 0,
-                tools,
-                ...(conv.webSearch ? { webSearch: true } : {}),
+    const parsedCustom = parseCustomModelId(modelId);
+    const customProvider = parsedCustom
+        ? settingsStore.getCustomModelProviderById(parsedCustom.providerId)
+        : null;
+    if (parsedCustom && !customProvider) {
+        ElMessage.error("自定义模型配置不存在或已被删除，请在设置中重新配置。");
+        return;
+    }
+
+    try {
+        await chat.sendMessage(
+            { text, messageId, files },
+            {
+                body: {
+                    model: parsedCustom ? parsedCustom.rawModelId : modelId,
+                    ...(parsedCustom && customProvider
+                        ? {
+                              useUserKey: true,
+                              userModelProviderId: customProvider.id,
+                              userModelProvider: "openai-compatible",
+                              userModelGroupName: customProvider.name,
+                              userModelApiKey: customProvider.apiKey,
+                              userModelBaseUrl: customProvider.baseUrl,
+                          }
+                        : {}),
+                    mcpEnabled: Object.keys(tools).length > 0,
+                    tools,
+                    ...(conv.webSearch ? { webSearch: true } : {}),
+                },
             },
-        },
-    );
+        );
+    } catch (e) {
+        const errorText =
+            ChatUtils.extractStreamErrorText(e) ||
+            (e instanceof Error
+                ? e.message
+                : typeof e === "string"
+                  ? e
+                  : "流式传输发生错误");
+        if (String(errorText || "").trim()) {
+            ElMessage.error(String(errorText).trim());
+        }
+        try {
+            void (chat as any).stop?.();
+        } catch {
+            // ignore
+        }
+        throw e;
+    }
 }
+
+watch(error, (newError) => {
+    if (!newError) return;
+
+    const errorText =
+        ChatUtils.extractStreamErrorText(newError) ||
+        (newError instanceof Error
+            ? newError.message
+            : typeof newError === "string"
+              ? newError
+              : "流式传输发生错误");
+
+    const trimmed = String(errorText || "").trim();
+    if (trimmed) {
+        try {
+            ElMessage.error(trimmed);
+        } catch {
+            // ignore
+        }
+
+        // 追加到最后一条 assistant 消息，便于用户在对话里看到原因
+        try {
+            const current = ((chat as any).messages as any[]) || [];
+            for (let i = current.length - 1; i >= 0; i -= 1) {
+                const m: any = current[i];
+                if (m?.role !== "assistant") continue;
+
+                const parts: any[] = Array.isArray(m.parts)
+                    ? [...m.parts]
+                    : [{ type: "text", text: m.content ?? "" }];
+
+                let lastTextIndex = -1;
+                for (let j = parts.length - 1; j >= 0; j -= 1) {
+                    if (parts[j]?.type === "text") {
+                        lastTextIndex = j;
+                        break;
+                    }
+                }
+
+                const errorLine = `（错误：${trimmed}）`;
+                if (lastTextIndex < 0) {
+                    parts.push({ type: "text", text: errorLine });
+                } else {
+                    const prevText = String(parts[lastTextIndex]?.text ?? "");
+                    if (!prevText.includes(trimmed)) {
+                        const nextText = prevText
+                            ? `${prevText}\n\n${errorLine}`
+                            : errorLine;
+                        parts[lastTextIndex] = {
+                            ...parts[lastTextIndex],
+                            text: nextText,
+                        };
+                    }
+                }
+
+                const nextMessages = current.slice();
+                nextMessages[i] = { ...m, parts };
+                (chat as any).messages = nextMessages as any;
+                break;
+            }
+        } catch {
+            // ignore
+        }
+    }
+
+    if (status.value === "submitted" || status.value === "streaming") {
+        try {
+            void (chat as any).stop?.();
+        } catch {
+            // ignore
+        }
+    }
+});
 
 function startEditUserMessage(message: UIMessage) {
     if (status.value === "streaming" || status.value === "submitted") return;
@@ -384,16 +525,37 @@ const selectedConversationModelInfo = computed(() => {
 });
 
 // ========== workspace root 绑定 ==========
+async function ensureActiveSession() {
+    if (!props.workspaceRoot) return;
+
+    // 如果没有活动会话
+    if (!chatStore.activeKey) {
+        if (chatStore.conversationsItems.length > 0) {
+            // 如果有历史会话，自动选择最近的一个（第一个）
+            const first = chatStore.conversationsItems[0];
+            await chatStore.selectConversation(first.key);
+        } else {
+            // 如果没有任何会话，自动新建
+            await createNewSession();
+        }
+    } else {
+        // 确保选中的会话被加载
+        await chatStore.selectConversation(chatStore.activeKey);
+    }
+}
+
 onMounted(async () => {
     await mcpStore.init();
     void mcpStore.checkConnections();
     await chatStore.setWorkspaceRoot(props.workspaceRoot);
+    await ensureActiveSession();
 });
 
 watch(
     () => props.workspaceRoot,
     async (next) => {
         await chatStore.setWorkspaceRoot(next);
+        await ensureActiveSession();
     },
 );
 
@@ -837,95 +999,125 @@ async function toggleServer(serverId: string, checked: boolean) {
 </script>
 
 <template>
-    <div class="h-full w-full flex flex-col">
-        <div class="px-3 py-2 border-b">
-            <div class="flex items-center gap-2">
-                <div class="min-w-0 flex-1">
-                    <div class="text-sm font-medium truncate">
-                        工作区 AI 会话
-                    </div>
-                    <div class="text-xs text-muted-foreground truncate">
-                        {{ props.workspaceRoot || "未选择工作区" }}
-                    </div>
-                    <div class="text-xs text-muted-foreground truncate">
-                        当前会话：{{ activeSessionLabel }}
-                    </div>
+    <div class="h-full w-full flex flex-col bg-background">
+        <div
+            class="px-4 py-3 border-b bg-card/50 flex items-center justify-between gap-4 shrink-0"
+        >
+            <div class="min-w-0 flex flex-col gap-1.5 flex-1">
+                <div
+                    class="flex items-center gap-2 text-sm font-semibold leading-none"
+                >
+                    <span class="truncate">工作区会话</span>
+                    <Badge
+                        variant="outline"
+                        class="font-normal text-xs h-5 px-1.5 gap-1 shrink-0 bg-muted/50 truncate max-w-[200px]"
+                    >
+                        {{
+                            props.workspaceRoot
+                                ? props.workspaceRoot.split(/[/\\]/).pop()
+                                : "未选择"
+                        }}
+                    </Badge>
                 </div>
-                <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            class="shrink-0 gap-2"
+                <div
+                    class="flex items-center gap-2 text-xs text-muted-foreground min-w-0"
+                >
+                    <span class="truncate">{{ activeSessionLabel }}</span>
+                    <span v-if="props.workspaceRoot" class="opacity-40">|</span>
+                    <span
+                        v-if="props.workspaceRoot"
+                        class="truncate opacity-70 max-w-75"
+                        :title="props.workspaceRoot"
+                        >{{ props.workspaceRoot }}</span
+                    >
+                </div>
+            </div>
+
+            <DropdownMenu>
+                <DropdownMenuTrigger as-child>
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        class="h-8 gap-2 shrink-0 shadow-sm"
+                    >
+                        <Settings2 class="w-4 h-4" />
+                        <span class="hidden sm:inline">会话管理</span>
+                        <ChevronDown class="w-3 h-3 opacity-50" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent class="w-56" align="end">
+                    <DropdownMenuGroup>
+                        <DropdownMenuItem @click="createNewSession">
+                            <Plus class="w-4 h-4 mr-2" />
+                            新建会话
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            :disabled="!activeKey"
+                            @click="settingsOpen = true"
                         >
-                            <MoreHorizontal class="w-4 h-4" />
-                            会话
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent class="w-56" align="end">
-                        <DropdownMenuGroup>
-                            <DropdownMenuItem @click="createNewSession">
-                                <Plus class="w-4 h-4 mr-2" />
-                                新建会话
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                :disabled="!activeKey"
-                                @click="settingsOpen = true"
-                            >
-                                <Settings2 class="w-4 h-4 mr-2" />
-                                会话设置
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                :disabled="!activeKey"
-                                @click="confirmDeleteSession"
-                            >
-                                <Trash2 class="w-4 h-4 mr-2" />
-                                删除当前会话
-                            </DropdownMenuItem>
-                        </DropdownMenuGroup>
+                            <Settings2 class="w-4 h-4 mr-2" />
+                            会话设置
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            :disabled="!activeKey"
+                            @click="confirmDeleteSession"
+                        >
+                            <Trash2 class="w-4 h-4 mr-2" />
+                            删除当前会话
+                        </DropdownMenuItem>
+                    </DropdownMenuGroup>
 
-                        <DropdownMenuSeparator />
+                    <DropdownMenuSeparator />
 
-                        <DropdownMenuLabel>切换会话</DropdownMenuLabel>
+                    <DropdownMenuLabel>切换会话</DropdownMenuLabel>
 
-                        <template v-if="conversationsItems.length === 0">
-                            <DropdownMenuItem disabled>
-                                暂无会话（请先新建）
-                            </DropdownMenuItem>
-                        </template>
-                        <template v-else>
-                            <DropdownMenuItem
-                                v-for="it in conversationsItems"
-                                :key="it.key"
-                                @click="switchSession(it.key)"
-                            >
-                                <Check
-                                    v-if="it.key === activeKey"
-                                    class="w-4 h-4 mr-2"
-                                />
-                                <span
-                                    v-else
-                                    class="inline-block w-4 h-4 mr-2"
-                                />
-                                <span class="truncate">{{ it.label }}</span>
-                            </DropdownMenuItem>
-                        </template>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
-
-            <div class="mt-2 text-xs text-muted-foreground">
-                模型/工具/Web 搜索/指令等设置已移到下方输入框。
-            </div>
+                    <template v-if="conversationsItems.length === 0">
+                        <DropdownMenuItem disabled>
+                            暂无会话（请先新建）
+                        </DropdownMenuItem>
+                    </template>
+                    <template v-else>
+                        <DropdownMenuItem
+                            v-for="it in conversationsItems"
+                            :key="it.key"
+                            @click="switchSession(it.key)"
+                        >
+                            <Check
+                                v-if="it.key === activeKey"
+                                class="w-4 h-4 mr-2"
+                            />
+                            <span v-else class="inline-block w-4 h-4 mr-2" />
+                            <span class="truncate">{{ it.label }}</span>
+                        </DropdownMenuItem>
+                    </template>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
-
-        <div class="flex-1 min-h-0 overflow-auto p-3">
-            <div v-if="!activeKey" class="text-sm text-muted-foreground">
-                请选择或新建一个会话。
+        <div class="flex-1 min-h-0 overflow-auto p-4 scroll-smooth">
+            <div
+                v-if="!activeKey"
+                class="h-full flex flex-col items-center justify-center p-8 text-center text-muted-foreground space-y-4"
+            >
+                <div
+                    class="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center"
+                >
+                    <RefreshCcwIcon class="w-6 h-6 opacity-50" />
+                </div>
+                <div class="space-y-1">
+                    <h3 class="font-medium text-foreground">没有活动的会话</h3>
+                    <p class="text-sm">
+                        请从右上角菜单选择或新建一个会话开始工作。
+                    </p>
+                </div>
+                <Button variant="outline" @click="createNewSession">
+                    <Plus class="w-4 h-4 mr-2" />
+                    新建会话
+                </Button>
             </div>
 
-            <div v-else class="space-y-3">
+            <Conversation v-else class="h-[calc(100vh-320px)]!">
                 <ChatMessageItem
+                    v-if="visibleMessages.length > 0"
                     v-for="(m, idx) in visibleMessages"
                     :key="m.id"
                     :message="m"
@@ -1012,474 +1204,541 @@ async function toggleServer(serverId: string, checked: boolean) {
                         </MessageActions>
                     </template>
                 </ChatMessageItem>
+                <ConversationEmptyState v-else>
+                    <div
+                        class="flex flex-col items-center justify-center space-y-4"
+                    >
+                        <div class="bg-primary/10 p-6 rounded-full">
+                            <Bot class="w-12 h-12 text-primary" />
+                        </div>
+                        <h1 class="text-2xl font-bold tracking-tight">
+                            欢迎使用 Glosc Copilot
+                        </h1>
+                        <p class="text-muted-foreground max-w-md text-center">
+                            您的 AI 智能助手。开始一个新的对话吧。
+                        </p>
+                    </div>
+                </ConversationEmptyState>
 
-                <div v-if="status === 'submitted'" class="pl-4 py-2">
+                <div
+                    v-if="status === 'submitted'"
+                    class="pl-4 py-2 flex items-center gap-2"
+                >
+                    <span class="relative flex h-2 w-2">
+                        <span
+                            class="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"
+                        ></span>
+                        <span
+                            class="relative inline-flex rounded-full h-2 w-2 bg-sky-500"
+                        ></span>
+                    </span>
                     <Shimmer class="text-xs text-muted-foreground"
                         >正在思考...</Shimmer
                     >
                 </div>
-                <div v-else-if="status === 'streaming'" class="pl-4 py-2">
+                <div
+                    v-else-if="status === 'streaming'"
+                    class="pl-4 py-2 flex items-center gap-2"
+                >
+                    <span class="relative flex h-2 w-2">
+                        <span
+                            class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"
+                        ></span>
+                        <span
+                            class="relative inline-flex rounded-full h-2 w-2 bg-green-500"
+                        ></span>
+                    </span>
                     <Shimmer class="text-xs text-muted-foreground"
                         >正在生成回复...</Shimmer
                     >
                 </div>
-            </div>
-        </div>
+            </Conversation>
 
-        <div class="border-t p-2">
-            <PromptInput
-                class="w-full"
-                global-drop
-                multiple
-                @submit="handleSubmit"
-                @error="onPromptError"
-            >
-                <PromptInputHeader>
-                    <PromptInputAttachments>
-                        <template #default="{ file }">
-                            <PromptInputAttachment :file="file" />
-                        </template>
-                    </PromptInputAttachments>
-                    <PromptInputResourceCitationsPreview />
-                </PromptInputHeader>
+            <div class="p-4 border-t bg-card/30">
+                <PromptInput
+                    class="w-full max-w-4xl mx-auto shadow-sm border rounded-lg overflow-hidden bg-background focus-within:ring-1 focus-within:ring-ring transition-all"
+                    global-drop
+                    multiple
+                    @submit="handleSubmit"
+                    @error="onPromptError"
+                >
+                    <PromptInputHeader>
+                        <PromptInputAttachments>
+                            <template #default="{ file }">
+                                <PromptInputAttachment :file="file" />
+                            </template>
+                        </PromptInputAttachments>
+                        <PromptInputResourceCitationsPreview />
+                    </PromptInputHeader>
 
-                <PromptInputBody>
-                    <PromptInputTextarea
-                        :disabled="!activeKey || isChatBusy"
-                        placeholder="在工作区里提需求：修改文件、解释代码、生成补丁…"
-                    />
-                </PromptInputBody>
-
-                <PromptInputFooter>
-                    <PromptInputTools>
-                        <PromptInputActionMenu>
-                            <PromptInputActionMenuTrigger />
-                            <PromptInputActionMenuContent>
-                                <PromptInputActionAddAttachments />
-                                <McpPromptInputInsert
-                                    :disabled="
-                                        !activeKey ||
-                                        isChatBusy ||
-                                        !selectedConversation
-                                    "
-                                    :servers="mcpStore.servers"
-                                    :enabled-server-ids="
-                                        selectedConversation?.enabledMcpServerIds ||
-                                        []
-                                    "
-                                />
-                            </PromptInputActionMenuContent>
-                        </PromptInputActionMenu>
-
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            class="h-8 px-2"
-                            :disabled="!activeKey"
-                            @click="settingsOpen = true"
-                            title="会话设置"
-                        >
-                            <Settings2 class="w-4 h-4" />
-                        </Button>
-
-                        <div class="flex-1" />
-
-                        <div
-                            class="text-[11px] text-muted-foreground mr-2 truncate"
-                            :title="`模型：${activeModelLabel}；工具：${enabledToolCount}`"
-                        >
-                            模型：{{ activeModelLabel }}；工具：{{
-                                enabledToolCount
-                            }}
-                        </div>
-
-                        <PromptInputSubmit
+                    <PromptInputBody>
+                        <PromptInputTextarea
                             :disabled="!activeKey || isChatBusy"
-                            :status="status"
+                            placeholder="在工作区里提需求：修改文件、解释代码、生成补丁…"
                         />
-                    </PromptInputTools>
-                </PromptInputFooter>
-            </PromptInput>
-        </div>
+                    </PromptInputBody>
 
-        <Dialog v-model:open="settingsOpen">
-            <DialogContent
-                class="w-[92vw] max-w-lg max-h-[80vh] overflow-hidden flex flex-col"
-            >
-                <DialogHeader>
-                    <DialogTitle>会话设置</DialogTitle>
-                </DialogHeader>
+                    <PromptInputFooter>
+                        <PromptInputTools>
+                            <PromptInputActionMenu>
+                                <PromptInputActionMenuTrigger />
+                                <PromptInputActionMenuContent>
+                                    <PromptInputActionAddAttachments />
+                                    <McpPromptInputInsert
+                                        :disabled="
+                                            !activeKey ||
+                                            isChatBusy ||
+                                            !selectedConversation
+                                        "
+                                        :servers="mcpStore.servers"
+                                        :enabled-server-ids="
+                                            selectedConversation?.enabledMcpServerIds ||
+                                            []
+                                        "
+                                    />
+                                </PromptInputActionMenuContent>
+                            </PromptInputActionMenu>
 
-                <div class="flex-1 overflow-y-auto pr-1 space-y-4">
+                            <Separator
+                                orientation="vertical"
+                                class="h-4 mx-1"
+                            />
+
+                            <div
+                                class="text-[10px] text-muted-foreground/70 flex items-center gap-2 px-2 select-none"
+                                :title="`模型：${activeModelLabel}；工具：${enabledToolCount}`"
+                            >
+                                <Badge
+                                    variant="outline"
+                                    class="h-4 text-[9px] px-1 font-normal bg-muted/50 border-0"
+                                >
+                                    {{ activeModelLabel }}
+                                </Badge>
+                                <span
+                                    v-if="enabledToolCount > 0"
+                                    class="flex items-center gap-0.5"
+                                >
+                                    工具: {{ enabledToolCount }}
+                                </span>
+                            </div>
+
+                            <div class="flex-1" />
+
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                class="h-7 w-7 rounded-sm text-muted-foreground hover:text-foreground"
+                                :disabled="!activeKey"
+                                @click="settingsOpen = true"
+                                title="会话设置"
+                            >
+                                <Settings2 class="w-4 h-4" />
+                            </Button>
+
+                            <PromptInputSubmit
+                                :disabled="!activeKey || isChatBusy"
+                                :status="status"
+                                class="ml-1"
+                            />
+                        </PromptInputTools>
+                    </PromptInputFooter>
+                </PromptInput>
+            </div>
+
+            <Dialog v-model:open="settingsOpen">
+                <DialogContent
+                    class="max-w-[700px] h-[800px] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden"
+                >
+                    <DialogHeader
+                        class="px-6 py-4 border-b shrink-0 bg-muted/20"
+                    >
+                        <DialogTitle>会话设置</DialogTitle>
+                        <DialogDescription>
+                            配置当前会话 "{{ activeSessionLabel }}" 的参数与能力
+                        </DialogDescription>
+                    </DialogHeader>
+
                     <div
                         v-if="!selectedConversation"
-                        class="text-sm text-muted-foreground"
+                        class="p-8 text-center text-muted-foreground"
                     >
-                        请先选择或新建一个会话。
+                        没有选中的会话
                     </div>
 
-                    <template v-else>
-                        <Collapsible
-                            v-slot="{ open }"
-                            :default-open="true"
-                            class="rounded-md border"
-                        >
-                            <CollapsibleTrigger as-child>
-                                <Button
-                                    variant="ghost"
-                                    class="w-full justify-between px-3"
-                                >
-                                    <span class="text-sm font-medium"
-                                        >基础</span
-                                    >
-                                    <ChevronDown
-                                        class="w-4 h-4 opacity-70 transition-transform"
-                                        :class="open ? 'rotate-180' : ''"
-                                    />
-                                </Button>
-                            </CollapsibleTrigger>
-                            <CollapsibleContent class="px-3 pb-3 space-y-4">
-                                <div class="grid gap-2">
-                                    <div class="text-xs text-muted-foreground">
-                                        会话标题
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <Input
-                                            v-model="sessionTitleDraft"
-                                            class="h-8"
-                                            placeholder="会话标题"
-                                        />
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            @click="renameSession"
-                                        >
-                                            保存
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                <div class="grid gap-2">
-                                    <div class="text-xs text-muted-foreground">
-                                        模型
-                                    </div>
-                                    <ModelSelectorPicker
-                                        :models="availableModels"
-                                        :selected-model="
-                                            selectedConversationModelInfo
-                                        "
-                                        :selected-model-id="
-                                            selectedConversationModelId
-                                        "
-                                        @select="
-                                            (m) => setConversationModel(m.id)
-                                        "
-                                    />
-                                </div>
-                            </CollapsibleContent>
-                        </Collapsible>
-
-                        <Collapsible
-                            v-slot="{ open }"
-                            :default-open="true"
-                            class="rounded-md border"
-                        >
-                            <CollapsibleTrigger as-child>
-                                <Button
-                                    variant="ghost"
-                                    class="w-full justify-between px-3"
-                                >
-                                    <span class="text-sm font-medium"
-                                        >上下文</span
-                                    >
-                                    <ChevronDown
-                                        class="w-4 h-4 opacity-70 transition-transform"
-                                        :class="open ? 'rotate-180' : ''"
-                                    />
-                                </Button>
-                            </CollapsibleTrigger>
-                            <CollapsibleContent class="px-3 pb-3 space-y-4">
-                                <div class="grid gap-2">
-                                    <div class="text-xs text-muted-foreground">
-                                        文件上下文注入
-                                    </div>
-                                    <select
-                                        class="h-8 w-full rounded-md border bg-background px-2 text-sm"
-                                        v-model="
-                                            selectedConversation.fileContextMode
-                                        "
-                                        @change="
-                                            chatStore.updateConversation(
-                                                selectedConversation!.id,
-                                                {
-                                                    fileContextMode:
-                                                        selectedConversation!
-                                                            .fileContextMode,
-                                                },
-                                            )
-                                        "
-                                    >
-                                        <option value="none">不注入</option>
-                                        <option value="list">
-                                            注入文件列表（截断）
-                                        </option>
-                                        <option value="contents">
-                                            注入文件内容（截断）
-                                        </option>
-                                    </select>
-                                </div>
-
-                                <div class="grid gap-2">
-                                    <div class="text-xs text-muted-foreground">
-                                        自定义工作区指令
-                                    </div>
-                                    <Textarea
-                                        :model-value="
-                                            selectedConversation.customInstructions ||
-                                            ''
-                                        "
-                                        rows="4"
-                                        placeholder="例如：优先修改 typescript 文件；回答用中文；输出时给出文件路径与命令等"
-                                        @update:model-value="
-                                            (v) =>
-                                                chatStore.updateConversation(
-                                                    selectedConversation!.id,
-                                                    {
-                                                        customInstructions:
-                                                            String(v),
-                                                    },
-                                                )
-                                        "
-                                    />
-                                </div>
-                            </CollapsibleContent>
-                        </Collapsible>
-
-                        <Collapsible
-                            v-slot="{ open }"
-                            class="rounded-md border"
-                        >
-                            <CollapsibleTrigger as-child>
-                                <Button
-                                    variant="ghost"
-                                    class="w-full justify-between px-3"
-                                >
-                                    <span class="text-sm font-medium"
-                                        >能力</span
-                                    >
-                                    <ChevronDown
-                                        class="w-4 h-4 opacity-70 transition-transform"
-                                        :class="open ? 'rotate-180' : ''"
-                                    />
-                                </Button>
-                            </CollapsibleTrigger>
-                            <CollapsibleContent class="px-3 pb-3 space-y-3">
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input
-                                        type="checkbox"
-                                        :checked="
-                                            selectedConversation.agentSkillsEnabled !==
-                                            false
-                                        "
-                                        @change="
-                                            chatStore.updateConversation(
-                                                selectedConversation!.id,
-                                                {
-                                                    agentSkillsEnabled: (
-                                                        $event.target as HTMLInputElement
-                                                    ).checked,
-                                                },
-                                            )
-                                        "
-                                    />
-                                    <span>启用 Agent Skills 指令</span>
-                                </label>
-
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input
-                                        type="checkbox"
-                                        :checked="
-                                            Boolean(
-                                                selectedConversation.webSearch,
-                                            )
-                                        "
-                                        @change="
-                                            chatStore.updateConversation(
-                                                selectedConversation!.id,
-                                                {
-                                                    webSearch: (
-                                                        $event.target as HTMLInputElement
-                                                    ).checked,
-                                                },
-                                            )
-                                        "
-                                    />
-                                    <span>启用 Web 搜索</span>
-                                </label>
-                            </CollapsibleContent>
-                        </Collapsible>
-
-                        <Collapsible
-                            v-slot="{ open }"
-                            :default-open="true"
-                            class="rounded-md border"
-                        >
-                            <CollapsibleTrigger as-child>
-                                <Button
-                                    variant="ghost"
-                                    class="w-full justify-between px-3"
-                                >
-                                    <span class="text-sm font-medium"
-                                        >工具</span
-                                    >
-                                    <ChevronDown
-                                        class="w-4 h-4 opacity-70 transition-transform"
-                                        :class="open ? 'rotate-180' : ''"
-                                    />
-                                </Button>
-                            </CollapsibleTrigger>
-                            <CollapsibleContent class="px-3 pb-3 space-y-4">
-                                <div class="grid gap-2">
-                                    <div class="text-xs text-muted-foreground">
-                                        按会话启用
-                                    </div>
-
-                                    <!-- <div class="rounded-md border p-2">
-                                        <div
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            内置工具（本地执行；仅允许访问工作区目录）
-                                        </div>
-                                        <div class="mt-2 grid gap-2">
-                                            <label
-                                                class="flex items-center gap-2 text-sm"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    :checked="
-                                                        Boolean(
-                                                            selectedConversation
-                                                                .enabledBuiltinTools
-                                                                ?.filesystem,
-                                                        )
-                                                    "
-                                                    @change="
-                                                        toggleBuiltinTool(
-                                                            'filesystem',
-                                                            (
-                                                                $event.target as HTMLInputElement
-                                                            ).checked,
-                                                        )
-                                                    "
-                                                />
-                                                <span>文件系统</span>
-                                            </label>
-                                            <label
-                                                class="flex items-center gap-2 text-sm"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    :checked="
-                                                        Boolean(
-                                                            selectedConversation
-                                                                .enabledBuiltinTools
-                                                                ?.git,
-                                                        )
-                                                    "
-                                                    @change="
-                                                        toggleBuiltinTool(
-                                                            'git',
-                                                            (
-                                                                $event.target as HTMLInputElement
-                                                            ).checked,
-                                                        )
-                                                    "
-                                                />
-                                                <span>Git</span>
-                                            </label>
-                                        </div>
-                                    </div> -->
-
-                                    <div
-                                        v-if="mcpStore.servers.length === 0"
-                                        class="text-xs text-muted-foreground"
-                                    >
-                                        未配置 MCP Server（可到 MCP 页面配置）
-                                    </div>
-                                    <div
-                                        v-else
-                                        class="max-h-56 overflow-auto rounded-md border p-2"
-                                    >
-                                        <label
-                                            v-for="s in mcpStore.servers"
-                                            :key="s.id"
-                                            class="flex items-center gap-2 text-sm py-1"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                :checked="
-                                                    (
-                                                        selectedConversation.enabledMcpServerIds ||
-                                                        []
-                                                    ).includes(s.id)
-                                                "
-                                                @change="
-                                                    toggleServer(
-                                                        s.id,
-                                                        (
-                                                            $event.target as HTMLInputElement
-                                                        ).checked,
-                                                    )
-                                                "
-                                            />
-                                            <span class="truncate">{{
-                                                s.name
-                                            }}</span>
-                                        </label>
-                                    </div>
-                                </div>
-                            </CollapsibleContent>
-                        </Collapsible>
-
-                        <Collapsible
-                            v-slot="{ open }"
-                            class="rounded-md border border-destructive/30"
-                        >
-                            <CollapsibleTrigger as-child>
-                                <Button
-                                    variant="ghost"
-                                    class="w-full justify-between px-3 text-destructive"
-                                >
-                                    <span class="text-sm font-medium"
-                                        >危险操作</span
-                                    >
-                                    <ChevronDown
-                                        class="w-4 h-4 opacity-70 transition-transform"
-                                        :class="open ? 'rotate-180' : ''"
-                                    />
-                                </Button>
-                            </CollapsibleTrigger>
-                            <CollapsibleContent class="px-3 pb-3">
-                                <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    class="gap-2"
-                                    @click="confirmDeleteSession"
-                                >
-                                    <Trash2 class="w-4 h-4" />
-                                    删除当前会话
-                                </Button>
-                            </CollapsibleContent>
-                        </Collapsible>
-                    </template>
-                </div>
-
-                <DialogFooter>
-                    <Button variant="ghost" @click="settingsOpen = false"
-                        >关闭</Button
+                    <div
+                        v-else
+                        class="flex-1 overflow-hidden flex flex-col bg-background"
                     >
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                        <Tabs
+                            default-value="general"
+                            class="flex-1 flex flex-col h-full"
+                        >
+                            <div class="px-6 pt-4 shrink-0">
+                                <TabsList
+                                    class="w-full justify-start overflow-x-auto h-auto p-1 bg-muted/50"
+                                >
+                                    <TabsTrigger
+                                        value="general"
+                                        class="px-4 py-2"
+                                        >常规设置</TabsTrigger
+                                    >
+                                    <TabsTrigger
+                                        value="context"
+                                        class="px-4 py-2"
+                                        >上下文控制</TabsTrigger
+                                    >
+                                    <TabsTrigger
+                                        value="capabilities"
+                                        class="px-4 py-2"
+                                        >能力与工具</TabsTrigger
+                                    >
+                                    <TabsTrigger
+                                        value="danger"
+                                        class="px-4 py-2 text-destructive data-[state=active]:text-destructive hover:text-destructive"
+                                        >危险区域</TabsTrigger
+                                    >
+                                </TabsList>
+                            </div>
+
+                            <div class="flex-1 overflow-y-auto p-6 min-h-0">
+                                <!-- General Tab -->
+                                <TabsContent
+                                    value="general"
+                                    class="space-y-6 mt-0"
+                                >
+                                    <div class="grid gap-4">
+                                        <div class="grid gap-2">
+                                            <Label>会话标题</Label>
+                                            <div class="flex gap-2">
+                                                <Input
+                                                    v-model="sessionTitleDraft"
+                                                    placeholder="会话标题"
+                                                    class="flex-1"
+                                                />
+                                                <Button
+                                                    variant="outline"
+                                                    @click="renameSession"
+                                                    >保存</Button
+                                                >
+                                            </div>
+                                        </div>
+
+                                        <div class="grid gap-2">
+                                            <Label>模型选择</Label>
+                                            <ModelSelectorPicker
+                                                :models="availableModels"
+                                                :selected-model="
+                                                    selectedConversationModelInfo
+                                                "
+                                                :selected-model-id="
+                                                    selectedConversationModelId
+                                                "
+                                                @select="
+                                                    (m) =>
+                                                        setConversationModel(
+                                                            m.id,
+                                                        )
+                                                "
+                                                class="w-full"
+                                            />
+                                        </div>
+                                    </div>
+                                </TabsContent>
+
+                                <!-- Context Tab -->
+                                <TabsContent
+                                    value="context"
+                                    class="space-y-6 mt-0"
+                                >
+                                    <div class="grid gap-2">
+                                        <Label
+                                            >自定义工作区指令 (System
+                                            Prompt)</Label
+                                        >
+                                        <Textarea
+                                            :model-value="
+                                                selectedConversation.customInstructions ||
+                                                ''
+                                            "
+                                            rows="6"
+                                            placeholder="例如：优先修改 typescript 文件；回答用中文；输出时给出文件路径与命令等"
+                                            class="resize-none"
+                                            @update:model-value="
+                                                (v) =>
+                                                    chatStore.updateConversation(
+                                                        selectedConversation!
+                                                            .id,
+                                                        {
+                                                            customInstructions:
+                                                                String(v),
+                                                        },
+                                                    )
+                                            "
+                                        />
+                                    </div>
+
+                                    <Separator />
+
+                                    <div class="grid gap-2">
+                                        <Label>文件上下文注入模式</Label>
+                                        <div
+                                            class="text-xs text-muted-foreground mb-2"
+                                        >
+                                            控制引用文件时是注入文件路径列表还是完整内容。
+                                        </div>
+                                        <Select
+                                            :model-value="
+                                                selectedConversation.fileContextMode
+                                            "
+                                            @update:model-value="
+                                                (v) =>
+                                                    chatStore.updateConversation(
+                                                        selectedConversation!
+                                                            .id,
+                                                        {
+                                                            fileContextMode:
+                                                                v as any,
+                                                        },
+                                                    )
+                                            "
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue
+                                                    placeholder="选择模式"
+                                                />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none"
+                                                    >不自动注入</SelectItem
+                                                >
+                                                <SelectItem value="list"
+                                                    >仅注入文件列表 (节省
+                                                    Token)</SelectItem
+                                                >
+                                                <SelectItem value="contents"
+                                                    >注入文件内容
+                                                    (高消耗)</SelectItem
+                                                >
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </TabsContent>
+
+                                <!-- Capabilities Tab -->
+                                <TabsContent
+                                    value="capabilities"
+                                    class="space-y-6 mt-0"
+                                >
+                                    <div class="space-y-4">
+                                        <div
+                                            class="flex items-center justify-between border rounded-lg p-4"
+                                        >
+                                            <div class="space-y-0.5">
+                                                <Label class="text-base"
+                                                    >Web 搜索</Label
+                                                >
+                                                <div
+                                                    class="text-sm text-muted-foreground"
+                                                >
+                                                    允许模型进行联网搜索以获取最新信息
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center">
+                                                <input
+                                                    type="checkbox"
+                                                    class="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
+                                                    :checked="
+                                                        Boolean(
+                                                            selectedConversation.webSearch,
+                                                        )
+                                                    "
+                                                    @change="
+                                                        chatStore.updateConversation(
+                                                            selectedConversation!
+                                                                .id,
+                                                            {
+                                                                webSearch: (
+                                                                    $event.target as HTMLInputElement
+                                                                ).checked,
+                                                            },
+                                                        )
+                                                    "
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            class="flex items-center justify-between border rounded-lg p-4"
+                                        >
+                                            <div class="space-y-0.5">
+                                                <Label class="text-base"
+                                                    >Agent Skills</Label
+                                                >
+                                                <div
+                                                    class="text-sm text-muted-foreground"
+                                                >
+                                                    启用高级代理指令（如自动执行、规划等）
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center">
+                                                <input
+                                                    type="checkbox"
+                                                    class="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
+                                                    :checked="
+                                                        selectedConversation.agentSkillsEnabled !==
+                                                        false
+                                                    "
+                                                    @change="
+                                                        chatStore.updateConversation(
+                                                            selectedConversation!
+                                                                .id,
+                                                            {
+                                                                agentSkillsEnabled:
+                                                                    (
+                                                                        $event.target as HTMLInputElement
+                                                                    ).checked,
+                                                            },
+                                                        )
+                                                    "
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <Separator />
+
+                                    <div class="space-y-3">
+                                        <div
+                                            class="flex items-center justify-between"
+                                        >
+                                            <Label class="text-base"
+                                                >MCP Servers</Label
+                                            >
+                                            <Button
+                                                variant="link"
+                                                size="sm"
+                                                class="h-auto p-0"
+                                                as-child
+                                            >
+                                                <router-link to="/mcp"
+                                                    >配置服务器</router-link
+                                                >
+                                            </Button>
+                                        </div>
+
+                                        <div
+                                            v-if="mcpStore.servers.length === 0"
+                                            class="text-sm text-muted-foreground bg-muted/50 p-4 rounded-md text-center"
+                                        >
+                                            未配置任何 MCP Server
+                                        </div>
+                                        <div
+                                            v-else
+                                            class="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                                        >
+                                            <div
+                                                v-for="s in mcpStore.servers"
+                                                :key="s.id"
+                                                class="flex items-start space-x-3 space-y-0 rounded-md border p-3 hover:bg-muted/50 transition-colors"
+                                                :class="{
+                                                    'bg-primary/5 border-primary/20':
+                                                        (
+                                                            selectedConversation.enabledMcpServerIds ||
+                                                            []
+                                                        ).includes(s.id),
+                                                }"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    :id="`server-${s.id}`"
+                                                    class="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
+                                                    :checked="
+                                                        (
+                                                            selectedConversation.enabledMcpServerIds ||
+                                                            []
+                                                        ).includes(s.id)
+                                                    "
+                                                    @change="
+                                                        toggleServer(
+                                                            s.id,
+                                                            (
+                                                                $event.target as HTMLInputElement
+                                                            ).checked,
+                                                        )
+                                                    "
+                                                />
+                                                <div
+                                                    class="flex flex-col gap-1 overflow-hidden"
+                                                >
+                                                    <label
+                                                        :for="`server-${s.id}`"
+                                                        class="text-sm font-medium leading-none cursor-pointer truncate"
+                                                    >
+                                                        {{ s.name }}
+                                                    </label>
+                                                    <span
+                                                        class="text-xs text-muted-foreground line-clamp-2"
+                                                        :title="
+                                                            JSON.stringify(s)
+                                                        "
+                                                    >
+                                                        {{
+                                                            (s as any).type ===
+                                                            "stdio"
+                                                                ? `${(s as any).command} ${((s as any).args || []).join(" ")}`
+                                                                : (s as any).url
+                                                        }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </TabsContent>
+
+                                <!-- Danger Tab -->
+                                <TabsContent
+                                    value="danger"
+                                    class="space-y-6 mt-0"
+                                >
+                                    <div
+                                        class="rounded-lg border border-destructive/50 bg-destructive/5 p-4"
+                                    >
+                                        <div
+                                            class="flex items-center justify-between"
+                                        >
+                                            <div class="space-y-1">
+                                                <h4
+                                                    class="text-sm font-medium text-destructive"
+                                                >
+                                                    删除会话
+                                                </h4>
+                                                <p
+                                                    class="text-sm text-muted-foreground"
+                                                >
+                                                    一旦删除，该会话的所有历史记录将无法恢复。
+                                                </p>
+                                            </div>
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                @click="confirmDeleteSession"
+                                            >
+                                                删除当前会话
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </TabsContent>
+                            </div>
+                        </Tabs>
+                    </div>
+
+                    <DialogFooter class="p-4 border-t shrink-0 bg-muted/20">
+                        <Button variant="outline" @click="settingsOpen = false"
+                            >完成</Button
+                        >
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
     </div>
 </template>
