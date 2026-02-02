@@ -273,7 +273,6 @@ if (corsFetch?.config) {
             // // Store 下载接口（可能是本地开发的 http://localhost:3000，也可能是线上域名）
             // /^https?:\/\/[^/]+\/api\/store\/plugins\/[^/]+\/versions\/[^/]+\/download(\?.*)?$/i,
             // // R2 产物直链（Store 会 302/307 到这里）
-            /^https?:\/\/r2\.glosc\.ai\//i,
             /^https?:\/\/[^/]+/i,
         ],
         exclude: ["http://localhost:3000/", "https://www.glosc.ai/"],
