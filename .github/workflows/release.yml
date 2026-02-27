@@ -107,6 +107,9 @@ jobs:
               uses: tauri-apps/tauri-action@v0
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+                  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+                  TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
                   VITE_API_HOST: ${{ secrets.VITE_API_HOST  }}
                   VITE_SITE_HOST: ${{ secrets.VITE_SITE_HOST  }}
                   DEEPSEED_API_KEY: ${{ secrets.DEEPSEED_API_KEY }}

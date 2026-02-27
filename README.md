@@ -34,6 +34,21 @@ Glosc Copilot 是一款跨平台的 AI 智能助手，目前有 聊天模式、�
 
 运行安装包，然后安装完成后，打开应用程序即可开始使用。
 
+### 自动更新（GitHub Releases）
+
+项目已配置 Tauri Updater 使用 GitHub Releases 的静态 JSON：
+
+- 更新端点：`https://github.com/glosc-ai/Glosc-Copilot/releases/latest/download/latest.json`
+- 发布时会生成 updater 产物（`createUpdaterArtifacts: true`）
+
+请在仓库 Actions Secrets 中配置以下变量（用于签名与校验）：
+
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（如你的私钥有密码）
+- `TAURI_UPDATER_PUBKEY`（公钥内容，供应用校验更新包）
+
+未配置签名密钥时，Releases 可正常发布，但自动更新校验将无法工作。
+
 ### 功能特色
 - 多种 AI 模型支持：接入 OpenAI、Anthropic、Azure OpenAI、Mistral、Claude+、Gemini 等多种模型。
 - 聊天模式：与 AI 进行自然语言对话，支持上下文记忆和多轮交流。

@@ -1,8 +1,16 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+use serde::Serialize;
+use tauri::{Emitter, Manager};
 
 #[derive(Clone, Copy)]
 struct DebugState {
     enabled: bool,
+}
+
+#[derive(Clone, Serialize)]
+struct SingleInstancePayload {
+    args: Vec<String>,
+    cwd: String,
 }
 
 fn is_dev_file_present() -> bool {
@@ -112,10 +120,33 @@ fn get_cli_args() -> Vec<String> {
 pub fn run() {
     let debug_enabled = is_dev_file_present();
 
+    let updater_builder = tauri_plugin_updater::Builder::new();
+    let updater_builder = match std::env::var("TAURI_UPDATER_PUBKEY") {
+        Ok(pubkey) if !pubkey.trim().is_empty() => updater_builder.pubkey(pubkey),
+        _ => updater_builder,
+    };
+
     #[cfg(target_os = "windows")]
     try_register_glosc_protocol();
 
     tauri::Builder::default()
+        .plugin(updater_builder.build())
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+
+            let _ = app.emit(
+                "single-instance",
+                SingleInstancePayload {
+                    args,
+                    cwd: cwd.to_string(),
+                },
+            );
+        }))
+        .plugin(tauri_plugin_positioner::init())
         .manage(DebugState {
             enabled: debug_enabled,
         })

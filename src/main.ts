@@ -117,60 +117,135 @@ function parseGloscUrl(arg: string): URL | null {
     }
 }
 
+type SingleInstancePayload = {
+    args?: string[];
+    cwd?: string;
+};
+
+function isTauriRuntime() {
+    return Boolean((window as any).__TAURI_INTERNALS__);
+}
+
+async function handleCliArgs(args: string[]) {
+    // 1) glosc:// deep links
+    for (const a of args) {
+        const u = parseGloscUrl(a);
+        if (!u) continue;
+
+        // glosc://install?slug=xxx (store install by slug)
+        if (u.hostname === "install") {
+            const slug = u.searchParams.get("slug") || "";
+            if (slug) {
+                await installStorePluginBySlug(slug);
+                return;
+            }
+        }
+
+        // glosc://mcp/import?payload=<base64url>
+        if (u.hostname === "mcp" && u.pathname === "/import") {
+            const payload = u.searchParams.get("payload") || "";
+            if (payload) {
+                const json = decodeBase64Url(payload);
+                await importMcpServersFromPayload(json);
+                return;
+            }
+        }
+    }
+
+    // 2) CLI import (explicit)
+    for (let i = 0; i < args.length; i++) {
+        const a = args[i];
+        if (a === "--import-mcp" && args[i + 1]) {
+            await importMcpServersFromPayload(args[i + 1]);
+            return;
+        }
+        if (a === "--import-mcp-base64" && args[i + 1]) {
+            const json = decodeBase64Url(args[i + 1]);
+            await importMcpServersFromPayload(json);
+            return;
+        }
+
+        // Compatibility: glosc-copilot plugins install <slug>
+        if (a === "plugins" && args[i + 1] === "install" && args[i + 2]) {
+            await installStorePluginBySlug(args[i + 2]);
+            return;
+        }
+    }
+}
+
 async function handleStartupImports() {
     // Only meaningful inside Tauri.
-    if (!(window as any).__TAURI_INTERNALS__) return;
+    if (!isTauriRuntime()) return;
 
     try {
         const { invoke } = await import("@tauri-apps/api/core");
         const args = await invoke<string[]>("get_cli_args");
-
-        // 1) glosc:// deep links
-        for (const a of args) {
-            const u = parseGloscUrl(a);
-            if (!u) continue;
-
-            // glosc://install?slug=xxx (store install by slug)
-            if (u.hostname === "install") {
-                const slug = u.searchParams.get("slug") || "";
-                if (slug) {
-                    await installStorePluginBySlug(slug);
-                    return;
-                }
-            }
-
-            // glosc://mcp/import?payload=<base64url>
-            if (u.hostname === "mcp" && u.pathname === "/import") {
-                const payload = u.searchParams.get("payload") || "";
-                if (payload) {
-                    const json = decodeBase64Url(payload);
-                    await importMcpServersFromPayload(json);
-                    return;
-                }
-            }
-        }
-
-        // 2) CLI import (explicit)
-        for (let i = 0; i < args.length; i++) {
-            const a = args[i];
-            if (a === "--import-mcp" && args[i + 1]) {
-                await importMcpServersFromPayload(args[i + 1]);
-                return;
-            }
-            if (a === "--import-mcp-base64" && args[i + 1]) {
-                const json = decodeBase64Url(args[i + 1]);
-                await importMcpServersFromPayload(json);
-                return;
-            }
-
-            // Compatibility: glosc-copilot plugins install <slug>
-            if (a === "plugins" && args[i + 1] === "install" && args[i + 2]) {
-                await installStorePluginBySlug(args[i + 2]);
-                return;
-            }
-        }
+        await handleCliArgs(args);
     } catch (e: any) {
         console.warn("startup import failed", e);
+    }
+}
+
+async function setupSingleInstanceHandler() {
+    if (!isTauriRuntime()) return;
+
+    try {
+        const { listen } = await import("@tauri-apps/api/event");
+        await listen<SingleInstancePayload>(
+            "single-instance",
+            async (event) => {
+                const args = Array.isArray(event.payload?.args)
+                    ? event.payload?.args
+                    : [];
+                await handleCliArgs(args);
+            },
+        );
+    } catch (e) {
+        console.warn("setup single-instance listener failed", e);
+    }
+}
+
+async function setupMainWindowPosition() {
+    if (!isTauriRuntime()) return;
+
+    try {
+        const { Position, moveWindow } =
+            await import("@tauri-apps/plugin-positioner");
+        await moveWindow(Position.Center);
+    } catch (e) {
+        console.warn("setup positioner failed", e);
+    }
+}
+
+async function checkForAppUpdates(manual = false) {
+    if (!isTauriRuntime()) return;
+
+    try {
+        const { check } = await import("@tauri-apps/plugin-updater");
+        const update = await check();
+
+        if (!update) {
+            if (manual) {
+                ElMessage.success("当前已是最新版本");
+            }
+            return;
+        }
+
+        if (!manual) {
+            ElMessage.info(
+                `发现新版本 ${update.version}，可在控制台执行 glosc.checkUpdates(true) 安装`,
+            );
+            return;
+        }
+
+        ElMessage.info(`开始安装更新 ${update.version}...`);
+        await update.downloadAndInstall();
+        ElMessage.success("更新已安装，请重启应用后生效");
+    } catch (e) {
+        if (manual) {
+            ElMessage.error("检查更新失败，请确认 updater 服务器配置");
+        }
+        console.warn("check update failed", e);
     }
 }
 
@@ -183,10 +258,16 @@ function setupConsoleImporter() {
     w.glosc.installPlugin = async (slug: string) => {
         await installStorePluginBySlug(slug);
     };
+    w.glosc.checkUpdates = async (install = false) => {
+        await checkForAppUpdates(Boolean(install));
+    };
 }
 
 setupConsoleImporter();
 handleStartupImports();
+setupSingleInstanceHandler();
+setupMainWindowPosition();
+checkForAppUpdates(false);
 
 // 启动时后台展开 npm 资源（仅 Tauri 环境）。
 // 目标是让安装目录的 resources/npm 存在（npx 使用时无需再解压）。
