@@ -267,7 +267,7 @@ setupConsoleImporter();
 handleStartupImports();
 setupSingleInstanceHandler();
 setupMainWindowPosition();
-checkForAppUpdates(false);
+checkForAppUpdates(true);
 
 // 启动时后台展开 npm 资源（仅 Tauri 环境）。
 // 目标是让安装目录的 resources/npm 存在（npx 使用时无需再解压）。
