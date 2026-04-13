@@ -116,6 +116,8 @@ jobs:
                   AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
                   GOOGLE_VertexAI_API_KEY: ${{ secrets.GOOGLE_VertexAI_API_KEY }}
                   GOOGLE_VertexAI_PROJECT_ID: ${{ secrets.GOOGLE_VertexAI_PROJECT_ID }}
+                  APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+                  APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
               with:
                   tagName: ${{ github.ref_name }}
                   releaseName: "Glosc Copilot ${{ github.ref_name }}"

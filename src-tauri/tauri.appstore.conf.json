@@ -1,0 +1,11 @@
+{
+    "bundle": {
+        "category": "Utility",
+        "macOS": {
+            "entitlements": "./Entitlements.plist",
+            "files": {
+                "embedded.provisionprofile": "path/to/profile-name.provisionprofile"
+            }
+        }
+    }
+}
