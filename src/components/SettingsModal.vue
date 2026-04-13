@@ -1,13 +1,13 @@
 <script lang="ts" setup>
 import { computed, ref, watch } from "vue";
 import { formatModelName } from "@/utils/ModelApi";
+import { isApiKeyOptionalForBaseUrl } from "@/utils/LocalAiProvider";
 import { storeToRefs } from "pinia";
 import type { ModelInfo } from "@/utils/interface";
 
 const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
 const chatStore = useChatStore();
-const authStore = useAuthStore();
 const { availableModels, isLoadingModels, modelsError } =
     storeToRefs(chatStore);
 const { hiddenModelIds } = storeToRefs(settingsStore);
@@ -111,18 +111,61 @@ const enabledCustomProviderCount = computed(
     () => (customModelProviders.value || []).filter((p) => p.enabled).length,
 );
 
+const providerPresets = [
+    {
+        key: "ollama",
+        label: "Ollama 本地",
+        name: "Ollama 本地",
+        baseUrl: "http://127.0.0.1:11434/v1",
+        apiKey: "",
+        description: "离线本地模型，无需 Key",
+    },
+    {
+        key: "lm-studio",
+        label: "LM Studio 本地",
+        name: "LM Studio 本地",
+        baseUrl: "http://127.0.0.1:1234/v1",
+        apiKey: "",
+        description: "离线本地模型，通常无需 Key",
+    },
+    {
+        key: "openai",
+        label: "OpenAI 接口",
+        name: "OpenAI 接口",
+        baseUrl: "https://api.openai.com/v1",
+        apiKey: "",
+        description: "云服务，需要 API Key",
+    },
+] as const;
+
 const customDraft = ref({
     name: "",
     apiKey: "",
-    baseUrl: "https://api.openai.com/v1",
+    baseUrl: "http://127.0.0.1:11434/v1",
 });
+
+const customDraftAllowsEmptyKey = computed(() =>
+    isApiKeyOptionalForBaseUrl(customDraft.value.baseUrl),
+);
 
 const customSaving = ref(false);
 
 function maskKey(key: string) {
     const k = String(key || "");
+    if (!k) return "未设置（本地/无需 Key）";
     if (k.length <= 8) return "********";
     return `${k.slice(0, 3)}********${k.slice(-4)}`;
+}
+
+function applyProviderPreset(presetKey: string) {
+    const preset = providerPresets.find((item) => item.key === presetKey);
+    if (!preset) return;
+
+    customDraft.value = {
+        name: preset.name,
+        apiKey: preset.apiKey,
+        baseUrl: preset.baseUrl,
+    };
 }
 
 function newProviderId() {
@@ -136,12 +179,6 @@ function newProviderId() {
 async function addCustomProviderAndProbe() {
     if (customSaving.value) return;
 
-    if (!authStore.isLoggedIn) {
-        ElMessage.warning("请先登录后再配置自定义模型");
-        void authStore.startLogin();
-        return;
-    }
-
     const name = customDraft.value.name.trim();
     const apiKey = customDraft.value.apiKey.trim();
     const baseUrl = customDraft.value.baseUrl.trim();
@@ -150,7 +187,7 @@ async function addCustomProviderAndProbe() {
         ElMessage.warning("请填写配置名称");
         return;
     }
-    if (!apiKey) {
+    if (!apiKey && !isApiKeyOptionalForBaseUrl(baseUrl)) {
         ElMessage.warning("请填写 API Key");
         return;
     }
@@ -186,15 +223,15 @@ async function addCustomProviderAndProbe() {
         customDraft.value = {
             name: "",
             apiKey: "",
-            baseUrl: "https://api.openai.com/v1",
+            baseUrl: "http://127.0.0.1:11434/v1",
         };
     } catch (e: any) {
         const msg =
             e instanceof Error
                 ? e.message
                 : typeof e === "string"
-                  ? e
-                  : "验证失败";
+                    ? e
+                    : "验证失败";
         ElMessage.error(msg);
         // 失败时保留配置，方便用户修改/重试
     } finally {
@@ -203,11 +240,6 @@ async function addCustomProviderAndProbe() {
 }
 
 async function refreshCustomProvider(id: string) {
-    if (!authStore.isLoggedIn) {
-        ElMessage.warning("请先登录后再验证 Key");
-        void authStore.startLogin();
-        return;
-    }
     try {
         const models =
             await settingsStore.probeAndUpdateCustomModelProviderModels(id);
@@ -218,8 +250,8 @@ async function refreshCustomProvider(id: string) {
             e instanceof Error
                 ? e.message
                 : typeof e === "string"
-                  ? e
-                  : "刷新失败",
+                    ? e
+                    : "刷新失败",
         );
     }
 }
@@ -288,18 +320,10 @@ watch(
 
 <template>
     <Dialog v-model:open="uiStore.settingsOpen">
-        <DialogContent
-            class="w-[92vw] max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
-        >
+        <DialogContent class="w-[92vw] max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
             <DialogHeader>
                 <DialogTitle class="flex items-center gap-2">
-                    <Button
-                        v-if="view !== 'main'"
-                        variant="ghost"
-                        size="sm"
-                        class="h-8 px-2"
-                        @click="view = 'main'"
-                    >
+                    <Button v-if="view !== 'main'" variant="ghost" size="sm" class="h-8 px-2" @click="view = 'main'">
                         返回
                     </Button>
                     <span>
@@ -307,8 +331,8 @@ watch(
                             view === "models"
                                 ? "模型管理"
                                 : view === "custom-models"
-                                  ? "自定义模型"
-                                  : "设置"
+                                    ? "自定义模型"
+                                    : "设置"
                         }}
                     </span>
                 </DialogTitle>
@@ -355,16 +379,10 @@ watch(
                                 {{ visibleCount }}
                                 <span class="text-muted-foreground">/</span>
                                 {{ totalModelCount }}
-                                <span class="text-muted-foreground"
-                                    >；已隐藏</span
-                                >
+                                <span class="text-muted-foreground">；已隐藏</span>
                                 {{ hiddenCount }}
                             </div>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                @click="openModelManager"
-                            >
+                            <Button size="sm" variant="outline" @click="openModelManager">
                                 显示所有模型
                             </Button>
                         </div>
@@ -380,21 +398,15 @@ watch(
                                 {{ enabledCustomProviderCount }}
                                 <span class="text-muted-foreground">/</span>
                                 {{ customProviderCount }}
-                                <span class="text-muted-foreground"
-                                    >已启用</span
-                                >
+                                <span class="text-muted-foreground">已启用</span>
                             </div>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                @click="openCustomModelManager"
-                            >
+                            <Button size="sm" variant="outline" @click="openCustomModelManager">
                                 管理自定义模型
                             </Button>
                         </div>
                         <div class="text-xs text-muted-foreground">
-                            自定义模型使用你的第三方 Key，不消耗 Glosc
-                            额度/余额；仍需要登录。
+                            自定义模型配置与 Key 只保存在本地，调用时直接连接你配置的
+                            AI 服务商。登录仅用于账号与 Store。
                         </div>
                     </div>
                 </div>
@@ -407,11 +419,7 @@ watch(
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">全部类型</SelectItem>
-                                <SelectItem
-                                    v-for="t in availableModelTypes"
-                                    :key="t"
-                                    :value="t"
-                                >
+                                <SelectItem v-for="t in availableModelTypes" :key="t" :value="t">
                                     {{ t }}
                                 </SelectItem>
                             </SelectContent>
@@ -423,50 +431,26 @@ watch(
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">全部开发商</SelectItem>
-                                <SelectItem
-                                    v-for="o in availableModelOwners"
-                                    :key="o"
-                                    :value="o"
-                                >
+                                <SelectItem v-for="o in availableModelOwners" :key="o" :value="o">
                                     {{ o }}
                                 </SelectItem>
                             </SelectContent>
                         </Select>
 
-                        <Input
-                            v-model="modelSearch"
-                            class="h-8 w-64"
-                            placeholder="搜索模型（名称/ID/描述）"
-                        />
+                        <Input v-model="modelSearch" class="h-8 w-64" placeholder="搜索模型（名称/ID/描述）" />
                     </div>
 
                     <div class="flex items-center gap-2 flex-wrap">
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            @click="showFilteredModels"
-                        >
+                        <Button size="sm" variant="outline" @click="showFilteredModels">
                             显示当前筛选
                         </Button>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            @click="hideFilteredModels"
-                        >
+                        <Button size="sm" variant="outline" @click="hideFilteredModels">
                             隐藏当前筛选
                         </Button>
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            @click="showAllModels"
-                        >
+                        <Button size="sm" variant="ghost" @click="showAllModels">
                             全部显示
                         </Button>
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            @click="resetModelFilters"
-                        >
+                        <Button size="sm" variant="ghost" @click="resetModelFilters">
                             清空筛选
                         </Button>
 
@@ -475,62 +459,35 @@ watch(
                         </div>
                     </div>
 
-                    <div
-                        v-if="isLoadingModels"
-                        class="text-sm text-muted-foreground py-6 text-center"
-                    >
+                    <div v-if="isLoadingModels" class="text-sm text-muted-foreground py-6 text-center">
                         正在加载模型列表...
                     </div>
-                    <div
-                        v-else-if="modelsError"
-                        class="text-sm text-destructive py-6 text-center"
-                    >
+                    <div v-else-if="modelsError" class="text-sm text-destructive py-6 text-center">
                         {{ modelsError }}
                     </div>
-                    <div
-                        v-else
-                        class="max-h-[52vh] overflow-auto rounded-md border"
-                    >
-                        <div
-                            v-if="filteredModels.length === 0"
-                            class="text-sm text-muted-foreground py-6 text-center"
-                        >
+                    <div v-else class="max-h-[52vh] overflow-auto rounded-md border">
+                        <div v-if="filteredModels.length === 0" class="text-sm text-muted-foreground py-6 text-center">
                             没有匹配的模型
                         </div>
-                        <label
-                            v-for="m in filteredModels"
-                            :key="m.id"
-                            class="flex items-center gap-3 px-3 py-2 border-b last:border-b-0"
-                        >
-                            <input
-                                type="checkbox"
-                                class="h-4 w-4"
-                                :checked="!settingsStore.isModelHidden(m.id)"
+                        <label v-for="m in filteredModels" :key="m.id"
+                            class="flex items-center gap-3 px-3 py-2 border-b last:border-b-0">
+                            <input type="checkbox" class="h-4 w-4" :checked="!settingsStore.isModelHidden(m.id)"
                                 @change="
                                     toggleModelVisible(
                                         m.id,
                                         ($event.target as HTMLInputElement)
                                             .checked,
                                     )
-                                "
-                            />
+                                    " />
                             <div class="min-w-0 flex-1">
-                                <div
-                                    class="text-sm font-medium truncate"
-                                    :title="m.id"
-                                >
+                                <div class="text-sm font-medium truncate" :title="m.id">
                                     {{ formatModelName(m.id) }}
                                 </div>
-                                <div
-                                    class="text-xs text-muted-foreground truncate"
-                                >
+                                <div class="text-xs text-muted-foreground truncate">
                                     {{ m.owned_by }} · {{ m.type }} · {{ m.id }}
                                 </div>
                             </div>
-                            <Badge
-                                v-if="settingsStore.isModelHidden(m.id)"
-                                variant="secondary"
-                            >
+                            <Badge v-if="settingsStore.isModelHidden(m.id)" variant="secondary">
                                 已隐藏
                             </Badge>
                         </label>
@@ -540,54 +497,64 @@ watch(
                 <div v-else class="space-y-4">
                     <div class="text-sm text-muted-foreground">
                         支持 OpenAI 兼容接口（`GET {baseUrl}/models`）。Key
-                        将加密存储在本地。
+                        将加密存储在本地；本地服务如 Ollama / LM Studio
+                        可不填写 Key。
                     </div>
 
                     <div class="rounded-md border p-3 space-y-3">
                         <div class="text-sm font-medium">添加新配置</div>
+
+                        <div class="grid gap-2">
+                            <div class="text-xs text-muted-foreground">
+                                快速预设
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <Button v-for="preset in providerPresets" :key="preset.key" size="sm" variant="outline"
+                                    @click="applyProviderPreset(preset.key)">
+                                    {{ preset.label }}
+                                </Button>
+                            </div>
+                            <div class="text-xs text-muted-foreground">
+                                {{
+                                    providerPresets
+                                        .map(
+                                            (preset) =>
+                                                `${preset.label}：${preset.description}`,
+                                        )
+                                        .join("；")
+                                }}
+                            </div>
+                        </div>
 
                         <div class="grid grid-cols-1 gap-3">
                             <div class="grid gap-2">
                                 <div class="text-xs text-muted-foreground">
                                     组名
                                 </div>
-                                <Input
-                                    v-model="customDraft.name"
-                                    class="h-8"
-                                    placeholder="例如：我的私有模型组"
-                                />
+                                <Input v-model="customDraft.name" class="h-8" placeholder="例如：我的私有模型组" />
                             </div>
 
                             <div class="grid gap-2">
                                 <div class="text-xs text-muted-foreground">
                                     API Key
                                 </div>
-                                <Input
-                                    v-model="customDraft.apiKey"
-                                    class="h-8"
-                                    placeholder="粘贴你的 Key（本地加密保存）"
-                                    type="password"
-                                />
+                                <Input v-model="customDraft.apiKey" class="h-8" :placeholder="customDraftAllowsEmptyKey
+                                    ? '本地服务可留空；有 Key 也可填写'
+                                    : '粘贴你的 Key（本地加密保存）'
+                                    " type="password" />
                             </div>
 
                             <div class="grid gap-2">
                                 <div class="text-xs text-muted-foreground">
                                     Base URL
                                 </div>
-                                <Input
-                                    v-model="customDraft.baseUrl"
-                                    class="h-8"
-                                    placeholder="例如：https://api.openai.com/v1（必须包含 /v1）"
-                                />
+                                <Input v-model="customDraft.baseUrl" class="h-8"
+                                    placeholder="例如：https://api.openai.com/v1（必须包含 /v1）" />
                             </div>
 
                             <div class="flex items-center gap-2">
-                                <Button
-                                    size="sm"
-                                    variant="default"
-                                    :disabled="customSaving"
-                                    @click="addCustomProviderAndProbe"
-                                >
+                                <Button size="sm" variant="default" :disabled="customSaving"
+                                    @click="addCustomProviderAndProbe">
                                     {{
                                         customSaving
                                             ? "验证中..."
@@ -595,25 +562,20 @@ watch(
                                     }}
                                 </Button>
                                 <div class="text-xs text-muted-foreground">
-                                    验证会调用第三方接口拉取模型列表
+                                    验证会直接调用该服务商接口拉取模型列表
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="rounded-md border overflow-hidden">
-                        <div
-                            v-if="(customModelProviders || []).length === 0"
-                            class="text-sm text-muted-foreground py-6 text-center"
-                        >
+                        <div v-if="(customModelProviders || []).length === 0"
+                            class="text-sm text-muted-foreground py-6 text-center">
                             暂无自定义模型配置
                         </div>
 
-                        <div
-                            v-for="p in customModelProviders"
-                            :key="p.id"
-                            class="px-3 py-3 border-b last:border-b-0 flex items-start gap-3"
-                        >
+                        <div v-for="p in customModelProviders" :key="p.id"
+                            class="px-3 py-3 border-b last:border-b-0 flex items-start gap-3">
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-2">
                                     <div class="text-sm font-medium truncate">
@@ -622,17 +584,12 @@ watch(
                                     <Badge v-if="p.enabled" variant="secondary">
                                         已启用
                                     </Badge>
-                                    <Badge v-else variant="outline"
-                                        >已禁用</Badge
-                                    >
+                                    <Badge v-else variant="outline">已禁用</Badge>
                                 </div>
                                 <div class="text-xs text-muted-foreground mt-1">
                                     Key：{{ maskKey(p.apiKey) }}
                                 </div>
-                                <div
-                                    v-if="p.baseUrl"
-                                    class="text-xs text-muted-foreground truncate"
-                                >
+                                <div v-if="p.baseUrl" class="text-xs text-muted-foreground truncate">
                                     BaseUrl：{{ p.baseUrl }}
                                 </div>
                                 <div class="text-xs text-muted-foreground mt-1">
@@ -648,31 +605,19 @@ watch(
                             </div>
 
                             <div class="flex items-center gap-2">
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    @click="
-                                        settingsStore.setCustomModelProviderEnabled(
-                                            p.id,
-                                            !p.enabled,
-                                        )
-                                    "
-                                >
+                                <Button size="sm" variant="outline" @click="
+                                    settingsStore.setCustomModelProviderEnabled(
+                                        p.id,
+                                        !p.enabled,
+                                    )
+                                    ">
                                     {{ p.enabled ? "禁用" : "启用" }}
                                 </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    @click="refreshCustomProvider(p.id)"
-                                >
+                                <Button size="sm" variant="outline" @click="refreshCustomProvider(p.id)">
                                     验证/刷新
                                 </Button>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    class="text-destructive"
-                                    @click="removeCustomProvider(p.id)"
-                                >
+                                <Button size="sm" variant="ghost" class="text-destructive"
+                                    @click="removeCustomProvider(p.id)">
                                     删除
                                 </Button>
                             </div>

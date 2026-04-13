@@ -14,7 +14,7 @@ import { useMcpStore } from "@/stores/mcp";
 import { McpUtils } from "@/utils/McpUtils";
 import { ChatUtils } from "@/utils/ChatUtils";
 import { Shimmer } from "@/components/ai-elements/shimmer";
-import { parseCustomModelId } from "@/utils/CustomModelId";
+import { resolveCustomProviderRequest } from "@/utils/LocalAiProvider";
 
 const props = defineProps<{
     meetingId: string;
@@ -276,15 +276,15 @@ async function streamToMeetingMessage(params: StreamToMessageParams) {
         triggerText || "现在轮到你发言。请基于会议背景与历史讨论继续推进。";
 
     try {
-        const parsedCustom = parseCustomModelId(model);
-        const customProvider = parsedCustom
-            ? settingsStore.getCustomModelProviderById(parsedCustom.providerId)
-            : null;
-        if (parsedCustom && !customProvider) {
+        const resolvedRequest = resolveCustomProviderRequest(
+            model,
+            settingsStore.getCustomModelProviderById,
+        );
+        if (!resolvedRequest) {
             (window as any).ElMessage?.error?.(
-                "自定义模型配置不存在或已被删除，请在设置中重新配置。",
+                "当前会议角色使用的是旧版在线模型，请重新选择本地或自定义服务商模型。",
             );
-            throw new Error("自定义模型配置缺失");
+            throw new Error("会议角色模型配置缺失");
         }
 
         // 参考 AI SDK / ai-elements 的用法：sendMessage 往往是“触发请求”，
@@ -294,17 +294,7 @@ async function streamToMeetingMessage(params: StreamToMessageParams) {
             { text: effectiveTriggerText },
             {
                 body: {
-                    model: parsedCustom ? parsedCustom.rawModelId : model,
-                    ...(parsedCustom && customProvider
-                        ? {
-                              useUserKey: true,
-                              userModelProviderId: customProvider.id,
-                              userModelProvider: "openai-compatible",
-                              userModelGroupName: customProvider.name,
-                              userModelApiKey: customProvider.apiKey,
-                              userModelBaseUrl: customProvider.baseUrl,
-                          }
-                        : {}),
+                    ...resolvedRequest.requestBody,
                     mcpEnabled: Object.keys(tools || {}).length > 0,
                     tools,
                 },
@@ -404,8 +394,8 @@ async function generateRoleMessage(
     const tools =
         enabledIds.size > 0
             ? await McpUtils.getTools(toolServers as any, {
-                  skipStopDisabled: true,
-              })
+                skipStopDisabled: true,
+            })
             : {};
 
     // 构建上下文：全局摘要 + 历史消息
@@ -575,80 +565,49 @@ defineExpose({
                 </ConversationEmptyState>
 
                 <template v-else>
-                    <div
-                        v-for="(msg, idx) in uiMessages"
-                        :key="msg.id"
-                        class="group"
-                    >
-                        <ChatMessageItem
-                            :message="msg"
-                            :message-index="idx"
-                            :status="status"
-                            :last-message-id="lastMessageId"
-                            :last-assistant-message-id="lastAssistantMessageId"
-                            @copy="copyToClipboard"
-                            @regenerate="
+                    <div v-for="(msg, idx) in uiMessages" :key="msg.id" class="group">
+                        <ChatMessageItem :message="msg" :message-index="idx" :status="status"
+                            :last-message-id="lastMessageId" :last-assistant-message-id="lastAssistantMessageId"
+                            @copy="copyToClipboard" @regenerate="
                                 () => regenerateMessage(currentMessages[idx])
-                            "
-                        >
-                            <template
-                                #text="{
-                                    message,
-                                    part,
-                                    partIndex,
-                                    isLastTextPart,
-                                    isStreaming,
-                                }"
-                            >
-                                <template
-                                    v-if="
-                                        editingMessageId === message.id &&
-                                        isLastTextPart
-                                    "
-                                >
-                                    <Textarea
-                                        v-model="editingContent"
-                                        rows="4"
-                                        class="resize-none"
-                                    />
+                            ">
+                            <template #text="{
+                                message,
+                                part,
+                                partIndex,
+                                isLastTextPart,
+                                isStreaming,
+                            }">
+                                <template v-if="
+                                    editingMessageId === message.id &&
+                                    isLastTextPart
+                                ">
+                                    <Textarea v-model="editingContent" rows="4" class="resize-none" />
                                     <div class="flex gap-2 mt-2">
-                                        <Button
-                                            size="sm"
-                                            @click="saveEditMessage(message.id)"
-                                        >
+                                        <Button size="sm" @click="saveEditMessage(message.id)">
                                             保存
                                         </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            @click="cancelEditMessage"
-                                        >
+                                        <Button size="sm" variant="outline" @click="cancelEditMessage">
                                             取消
                                         </Button>
                                     </div>
                                 </template>
                                 <template v-else>
-                                    <div
-                                        v-if="partIndex === 0"
-                                        class="flex items-center gap-2 mb-1 text-xs text-muted-foreground"
-                                    >
-                                        <span
-                                            class="inline-flex items-center justify-center w-5 h-5 rounded-full"
+                                    <div v-if="partIndex === 0"
+                                        class="flex items-center gap-2 mb-1 text-xs text-muted-foreground">
+                                        <span class="inline-flex items-center justify-center w-5 h-5 rounded-full"
                                             :style="{
                                                 backgroundColor:
                                                     ((message as any)
                                                         .speakerColor ||
                                                         '#6b7280') + '20',
-                                            }"
-                                        >
+                                            }">
                                             {{
                                                 (message as any)
                                                     .speakerAvatar || "👤"
                                             }}
                                         </span>
-                                        <span
-                                            class="font-medium text-foreground/80"
-                                        >
+                                        <span class="font-medium text-foreground/80">
                                             {{
                                                 (message as any).speakerName ||
                                                 (message.role === "user"
@@ -665,87 +624,53 @@ defineExpose({
                                         </span>
                                     </div>
 
-                                    <Shimmer
-                                        v-if="
-                                            (message as any).isGenerating &&
-                                            !part.text
-                                        "
-                                        class="text-sm text-muted-foreground"
-                                    >
+                                    <Shimmer v-if="
+                                        (message as any).isGenerating &&
+                                        !part.text
+                                    " class="text-sm text-muted-foreground">
                                         正在生成回复...
                                     </Shimmer>
-                                    <MessageResponse
-                                        v-else
-                                        :id="`${message.id}-text-${partIndex}`"
-                                        :content="part.text"
-                                        :is-streaming="isStreaming"
-                                        :class="{
+                                    <MessageResponse v-else :id="`${message.id}-text-${partIndex}`" :content="part.text"
+                                        :is-streaming="isStreaming" :class="{
                                             'opacity-50': (message as any)
                                                 .isGenerating,
-                                        }"
-                                    />
+                                        }" />
                                 </template>
                             </template>
 
-                            <template
-                                #assistant-actions="{
-                                    message,
-                                    part,
-                                    timestampText,
-                                }"
-                            >
+                            <template #assistant-actions="{
+                                message,
+                                part,
+                                timestampText,
+                            }">
                                 <MessageActions>
-                                    <MessageAction
-                                        v-if="message.role === 'assistant'"
-                                        label="重新生成"
-                                        @click="
-                                            regenerateMessage(
-                                                currentMessages[idx],
-                                            )
-                                        "
-                                    >
+                                    <MessageAction v-if="message.role === 'assistant'" label="重新生成" @click="
+                                        regenerateMessage(
+                                            currentMessages[idx],
+                                        )
+                                        ">
                                         <RefreshCw class="size-3" />
                                     </MessageAction>
-                                    <MessageAction
-                                        label="复制"
-                                        @click="copyToClipboard(part.text)"
-                                    >
+                                    <MessageAction label="复制" @click="copyToClipboard(part.text)">
                                         <CopyIcon class="size-3" />
                                     </MessageAction>
-                                    <span
-                                        v-if="timestampText"
-                                        class="ml-2 text-xs text-muted-foreground"
-                                    >
+                                    <span v-if="timestampText" class="ml-2 text-xs text-muted-foreground">
                                         {{ timestampText }}
                                     </span>
                                 </MessageActions>
 
-                                <div
-                                    class="mt-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        @click="
-                                            startEditMessage(
-                                                currentMessages[idx],
-                                            )
-                                        "
-                                        :disabled="
-                                            (message as any).isGenerating
-                                        "
-                                    >
+                                <div class="mt-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button variant="ghost" size="sm" @click="
+                                        startEditMessage(
+                                            currentMessages[idx],
+                                        )
+                                        " :disabled="(message as any).isGenerating
+                                            ">
                                         <Edit class="w-3 h-3 mr-1" />
                                         编辑
                                     </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        @click="deleteMessage(message.id)"
-                                        :disabled="
-                                            (message as any).isGenerating
-                                        "
-                                    >
+                                    <Button variant="ghost" size="sm" @click="deleteMessage(message.id)" :disabled="(message as any).isGenerating
+                                        ">
                                         <Trash2 class="w-3 h-3 mr-1" />
                                         删除
                                     </Button>

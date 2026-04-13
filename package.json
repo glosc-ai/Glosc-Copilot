@@ -1,7 +1,7 @@
 {
   "name": "glosc-copilot",
   "private": true,
-  "version": "0.6.2",
+  "version": "0.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,10 +17,9 @@
     "tauri:build": "yarn -s prepare:binaries && yarn -s tauri build"
   },
   "dependencies": {
-    "@ai-sdk/gateway": "^3.0.2",
-    "@ai-sdk/mcp": "^1.0.1",
-    "@ai-sdk/vue": "^3.0.3",
-    "@ai-sdk/xai": "^3.0.3",
+    "@ai-sdk/mcp": "^1.0.36",
+    "@ai-sdk/openai-compatible": "^2.0.41",
+    "@ai-sdk/vue": "^3.0.159",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/theme-one-dark": "^6.1.3",
     "@lenml/tokenizers": "^3.7.2",
@@ -46,7 +45,7 @@
     "@tauri-apps/plugin-updater": "2.9.0",
     "@tdesign-vue-next/chat": "^0.5.0-alpha.7",
     "@vueuse/core": "^14.1.0",
-    "ai": "^6.0.3",
+    "ai": "^6.0.159",
     "ai-elements-vue": "^1.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -61,7 +60,6 @@
     "monaco-editor": "^0.55.1",
     "motion-v": "^1.7.4",
     "nanoid": "^5.1.6",
-    "openai": "^6.10.0",
     "path-browserify": "^1.0.1",
     "pinia": "^3.0.4",
     "reka-ui": "^2.7.0",

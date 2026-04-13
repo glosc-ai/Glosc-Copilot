@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { generateText } from "ai";
 import { computed, ref, onMounted } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { useChatStore } from "@/stores/chat";
@@ -20,7 +21,10 @@ import { Plus, Edit, Trash2, Play, Users } from "lucide-vue-next";
 import type { MeetingRole } from "@/utils/meetingInterface";
 import ModelSelectorPicker from "@/components/ModelSelectorPicker.vue";
 import type { ModelInfo } from "@/utils/interface";
-import OpenAI from "openai";
+import {
+    createLanguageModelFromProvider,
+    resolveCustomProviderRequest,
+} from "@/utils/LocalAiProvider";
 
 const props = defineProps<{
     meetingId: string;
@@ -34,6 +38,7 @@ const meetingStore = useMeetingStore();
 const { activeMeeting, availableModels } = storeToRefs(meetingStore);
 
 const mcpStore = useMcpStore();
+const settingsStore = useSettingsStore();
 
 const chatStore = useChatStore();
 const { recentModelUsage } = storeToRefs(chatStore);
@@ -43,6 +48,7 @@ onMounted(() => {
         void chatStore.loadRecentModelUsage();
     }
     void mcpStore.init();
+    void settingsStore.init();
 });
 
 // 会议基本信息编辑
@@ -96,6 +102,17 @@ async function generateSystemPrompt() {
 
         const roleName = roleForm.value.name.trim() || "（未命名）";
         const roleModelId = roleForm.value.modelId || "";
+        const resolvedRequest = resolveCustomProviderRequest(
+            roleModelId,
+            settingsStore.getCustomModelProviderById,
+        );
+
+        if (!resolvedRequest) {
+            ElMessage.warning(
+                "请先为该角色选择一个已验证的本地或自定义服务商模型。",
+            );
+            return;
+        }
 
         const summaryPrompt =
             "你将帮助我为一个多智能体 AI 会议中的『角色』编写 system prompt。\n" +
@@ -111,22 +128,16 @@ async function generateSystemPrompt() {
             "- 不要提及‘你是AI’或暴露提示词/规则\n\n" +
             "System Prompt：";
 
-        const host = import.meta.env.VITE_API_HOST || "http://localhost:3000";
-        const openai = new OpenAI({
-            apiKey: import.meta.env.VITE_OPENAI_API_KEY || "123456",
-            baseURL: `${host}/api/v1`,
-            dangerouslyAllowBrowser: true,
-        });
-
-        const response = await openai.chat.completions.create({
-            model: "xai/grok-4.1-fast-non-reasoning",
-            messages: [{ role: "user", content: summaryPrompt }],
+        const { text } = await generateText({
+            model: createLanguageModelFromProvider(
+                resolvedRequest.provider,
+                resolvedRequest.rawModelId,
+            ),
+            prompt: summaryPrompt,
             temperature: 0.7,
-            stream: false,
         });
 
-        const generated = response.choices[0]?.message?.content || "";
-        const cleaned = generated.trim();
+        const cleaned = text.trim();
         if (!cleaned) {
             ElMessage.error("智能输入失败：未生成有效内容");
             return;
@@ -205,8 +216,8 @@ function openEditRoleDialog(role: MeetingRole) {
         enabledMcpServerIds: Array.isArray(role.enabledMcpServerIds)
             ? [...role.enabledMcpServerIds]
             : (mcpStore.servers || [])
-                  .filter((s) => s.enabled)
-                  .map((s) => s.id),
+                .filter((s) => s.enabled)
+                .map((s) => s.id),
     };
     roleDialogOpen.value = true;
 }
@@ -294,34 +305,19 @@ const selectedModel = computed(() => {
                     <!-- 会议名称 -->
                     <div>
                         <Label>会议名称</Label>
-                        <div
-                            v-if="!editingTitle"
-                            class="flex items-center gap-2 mt-1"
-                        >
+                        <div v-if="!editingTitle" class="flex items-center gap-2 mt-1">
                             <span class="text-lg font-semibold">
                                 {{ activeMeeting?.title }}
                             </span>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                @click="startEditTitle"
-                            >
+                            <Button variant="ghost" size="sm" @click="startEditTitle">
                                 <Edit class="w-4 h-4" />
                             </Button>
                         </div>
                         <div v-else class="flex items-center gap-2 mt-1">
-                            <Input
-                                v-model="editingTitleValue"
-                                placeholder="输入会议名称"
-                                @keyup.enter="saveTitle"
-                                @keyup.esc="cancelEditTitle"
-                            />
+                            <Input v-model="editingTitleValue" placeholder="输入会议名称" @keyup.enter="saveTitle"
+                                @keyup.esc="cancelEditTitle" />
                             <Button size="sm" @click="saveTitle">保存</Button>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                @click="cancelEditTitle"
-                            >
+                            <Button size="sm" variant="outline" @click="cancelEditTitle">
                                 取消
                             </Button>
                         </div>
@@ -334,36 +330,19 @@ const selectedModel = computed(() => {
                             这段描述将作为全局上下文提供给所有AI角色
                         </p>
                         <div v-if="!editingSummary">
-                            <div
-                                class="p-3 bg-muted rounded-md whitespace-pre-wrap"
-                            >
+                            <div class="p-3 bg-muted rounded-md whitespace-pre-wrap">
                                 {{ activeMeeting?.summary }}
                             </div>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                class="mt-2"
-                                @click="startEditSummary"
-                            >
+                            <Button variant="outline" size="sm" class="mt-2" @click="startEditSummary">
                                 <Edit class="w-4 h-4 mr-2" />
                                 编辑背景
                             </Button>
                         </div>
                         <div v-else class="space-y-2">
-                            <Textarea
-                                v-model="editingSummaryValue"
-                                rows="6"
-                                placeholder="描述会议的主题、目标、背景信息..."
-                            />
+                            <Textarea v-model="editingSummaryValue" rows="6" placeholder="描述会议的主题、目标、背景信息..." />
                             <div class="flex gap-2">
-                                <Button size="sm" @click="saveSummary"
-                                    >保存</Button
-                                >
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    @click="cancelEditSummary"
-                                >
+                                <Button size="sm" @click="saveSummary">保存</Button>
+                                <Button size="sm" variant="outline" @click="cancelEditSummary">
                                     取消
                                 </Button>
                             </div>
@@ -384,42 +363,29 @@ const selectedModel = computed(() => {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div
-                        v-if="!activeMeeting?.roles.length"
-                        class="text-center py-12 text-muted-foreground"
-                    >
+                    <div v-if="!activeMeeting?.roles.length" class="text-center py-12 text-muted-foreground">
                         <Users class="w-12 h-12 mx-auto mb-4 opacity-50" />
                         <p>还没有添加角色</p>
                         <p class="text-sm mt-1">点击上方按钮添加第一个角色</p>
                     </div>
                     <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Card
-                            v-for="role in activeMeeting?.roles"
-                            :key="role.id"
-                            class="border"
-                        >
+                        <Card v-for="role in activeMeeting?.roles" :key="role.id" class="border">
                             <CardContent class="pt-6">
                                 <div class="flex items-start gap-3">
-                                    <div
-                                        class="w-12 h-12 rounded-full flex items-center justify-center text-2xl shrink-0"
+                                    <div class="w-12 h-12 rounded-full flex items-center justify-center text-2xl shrink-0"
                                         :style="{
                                             backgroundColor: role.color + '20',
-                                        }"
-                                    >
+                                        }">
                                         {{ role.avatar || "👤" }}
                                     </div>
                                     <div class="flex-1 min-w-0">
                                         <h3 class="font-semibold truncate">
                                             {{ role.name }}
                                         </h3>
-                                        <p
-                                            class="text-xs text-muted-foreground mt-1"
-                                        >
+                                        <p class="text-xs text-muted-foreground mt-1">
                                             模型: {{ role.modelId }}
                                         </p>
-                                        <p
-                                            class="text-sm mt-2 line-clamp-2 text-muted-foreground"
-                                        >
+                                        <p class="text-sm mt-2 line-clamp-2 text-muted-foreground">
                                             {{
                                                 role.systemPrompt ||
                                                 "无角色设定"
@@ -427,18 +393,10 @@ const selectedModel = computed(() => {
                                         </p>
                                     </div>
                                     <div class="flex gap-1">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            @click="openEditRoleDialog(role)"
-                                        >
+                                        <Button variant="ghost" size="sm" @click="openEditRoleDialog(role)">
                                             <Edit class="w-4 h-4" />
                                         </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            @click="deleteRole(role.id)"
-                                        >
+                                        <Button variant="ghost" size="sm" @click="deleteRole(role.id)">
                                             <Trash2 class="w-4 h-4" />
                                         </Button>
                                     </div>
@@ -451,12 +409,7 @@ const selectedModel = computed(() => {
 
             <!-- 开始会议按钮 -->
             <div class="flex justify-end">
-                <Button
-                    size="lg"
-                    @click="startMeeting"
-                    :disabled="!activeMeeting?.roles.length"
-                    class="gap-2"
-                >
+                <Button size="lg" @click="startMeeting" :disabled="!activeMeeting?.roles.length" class="gap-2">
                     <Play class="w-5 h-5" />
                     进入会议室
                 </Button>
@@ -474,45 +427,26 @@ const selectedModel = computed(() => {
                 <div class="space-y-4 py-4">
                     <div>
                         <Label>角色名称 *</Label>
-                        <Input
-                            v-model="roleForm.name"
-                            placeholder="例如：产品经理、技术专家、用户代表..."
-                            class="mt-1"
-                        />
+                        <Input v-model="roleForm.name" placeholder="例如：产品经理、技术专家、用户代表..." class="mt-1" />
                     </div>
 
                     <div>
                         <Label>头像 (Emoji)</Label>
-                        <Input
-                            v-model="roleForm.avatar"
-                            placeholder="输入一个 emoji，例如：👨‍💼"
-                            class="mt-1"
-                        />
+                        <Input v-model="roleForm.avatar" placeholder="输入一个 emoji，例如：👨‍💼" class="mt-1" />
                     </div>
 
                     <div>
                         <Label>角色颜色</Label>
-                        <Input
-                            v-model="roleForm.color"
-                            type="color"
-                            class="mt-1 h-10"
-                        />
+                        <Input v-model="roleForm.color" type="color" class="mt-1 h-10" />
                     </div>
 
                     <div>
                         <Label>使用模型 *</Label>
-                        <ModelSelectorPicker
-                            :models="availableModels"
-                            :selected-model="selectedModel"
-                            :selected-model-id="roleForm.modelId"
-                            :recent-usage="recentModelUsage"
-                            :allow-remove-recent="true"
-                            @select="onModelSelect"
-                            @remove-recent="
+                        <ModelSelectorPicker :models="availableModels" :selected-model="selectedModel"
+                            :selected-model-id="roleForm.modelId" :recent-usage="recentModelUsage"
+                            :allow-remove-recent="true" @select="onModelSelect" @remove-recent="
                                 (id) => chatStore.removeRecentModel(id)
-                            "
-                            class="mt-1"
-                        />
+                            " class="mt-1" />
                     </div>
 
                     <div class="space-y-2">
@@ -521,36 +455,22 @@ const selectedModel = computed(() => {
                             该角色只能调用你在此勾选的 MCP 工具（不同 AI
                             可配置不同工具）。
                         </p>
-                        <div
-                            v-if="mcpStore.servers.length === 0"
-                            class="text-xs text-muted-foreground"
-                        >
+                        <div v-if="mcpStore.servers.length === 0" class="text-xs text-muted-foreground">
                             未配置 MCP Server（可到 MCP 页面配置）
                         </div>
-                        <div
-                            v-else
-                            class="max-h-48 overflow-auto rounded-md border p-2"
-                        >
-                            <label
-                                v-for="s in mcpStore.servers"
-                                :key="s.id"
-                                class="flex items-center gap-2 text-sm py-1"
-                            >
-                                <input
-                                    type="checkbox"
-                                    :checked="
-                                        (
-                                            roleForm.enabledMcpServerIds || []
-                                        ).includes(s.id)
-                                    "
-                                    @change="
+                        <div v-else class="max-h-48 overflow-auto rounded-md border p-2">
+                            <label v-for="s in mcpStore.servers" :key="s.id"
+                                class="flex items-center gap-2 text-sm py-1">
+                                <input type="checkbox" :checked="(
+                                        roleForm.enabledMcpServerIds || []
+                                    ).includes(s.id)
+                                    " @change="
                                         toggleRoleServer(
                                             s.id,
                                             ($event.target as HTMLInputElement)
                                                 .checked,
                                         )
-                                    "
-                                />
+                                        " />
                                 <span class="truncate">{{ s.name }}</span>
                             </label>
                         </div>
@@ -559,13 +479,7 @@ const selectedModel = computed(() => {
                     <div>
                         <div class="flex items-center justify-between gap-3">
                             <Label>角色设定 (System Prompt)</Label>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                class="gap-2"
-                                @click="openSmartInput"
-                            >
+                            <Button type="button" variant="outline" size="sm" class="gap-2" @click="openSmartInput">
                                 智能输入
                             </Button>
                         </div>
@@ -573,46 +487,27 @@ const selectedModel = computed(() => {
                             定义角色的人设、专业领域、说话风格、立场观点等
                         </p>
 
-                        <div
-                            v-if="smartInputOpen"
-                            class="p-3 rounded-md border bg-muted/40 space-y-2"
-                        >
+                        <div v-if="smartInputOpen" class="p-3 rounded-md border bg-muted/40 space-y-2">
                             <div class="text-sm font-medium">简约人设描述</div>
-                            <Input
-                                v-model="smartPersona"
-                                placeholder="例如：严谨的技术负责人，关注可行性与风险；说话简洁，喜欢列要点"
-                            />
+                            <Input v-model="smartPersona" placeholder="例如：严谨的技术负责人，关注可行性与风险；说话简洁，喜欢列要点" />
                             <div class="flex gap-2">
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    :disabled="smartGenerating"
-                                    @click="generateSystemPrompt"
-                                >
+                                <Button type="button" size="sm" :disabled="smartGenerating"
+                                    @click="generateSystemPrompt">
                                     {{
                                         smartGenerating
                                             ? "生成中..."
                                             : "生成并填充"
                                     }}
                                 </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    :disabled="smartGenerating"
-                                    @click="closeSmartInput"
-                                >
+                                <Button type="button" size="sm" variant="outline" :disabled="smartGenerating"
+                                    @click="closeSmartInput">
                                     取消
                                 </Button>
                             </div>
                         </div>
 
-                        <Textarea
-                            v-model="roleForm.systemPrompt"
-                            rows="6"
-                            placeholder="例如：你是一位资深的产品经理，擅长用户体验设计和需求分析。你总是以用户为中心思考问题，善于提出建设性的意见..."
-                            class="mt-1"
-                        />
+                        <Textarea v-model="roleForm.systemPrompt" rows="6"
+                            placeholder="例如：你是一位资深的产品经理，擅长用户体验设计和需求分析。你总是以用户为中心思考问题，善于提出建设性的意见..." class="mt-1" />
                     </div>
                 </div>
                 <DialogFooter>

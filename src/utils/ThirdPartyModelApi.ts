@@ -1,8 +1,12 @@
 import type { ModelInfo } from "@/utils/interface";
+import {
+    isApiKeyOptionalForBaseUrl,
+    normalizeAiBaseUrl,
+    resolveAiFetch,
+} from "@/utils/LocalAiProvider";
 
 function normalizeBaseUrl(url: string): string {
-    const u = String(url || "").trim();
-    return u.endsWith("/") ? u.slice(0, -1) : u;
+    return normalizeAiBaseUrl(url);
 }
 
 function createPlaceholderModel(partial: {
@@ -37,14 +41,22 @@ async function fetchOpenAICompatibleModels(params: {
     const baseUrl = normalizeBaseUrl(params.baseUrl);
     const apiKey = String(params.apiKey || "").trim();
     if (!baseUrl) throw new Error("baseUrl 不能为空");
-    if (!apiKey) throw new Error("API Key 不能为空");
 
-    const res = await fetch(`${baseUrl}/models`, {
+    if (!apiKey && !isApiKeyOptionalForBaseUrl(baseUrl)) {
+        throw new Error("API Key 不能为空");
+    }
+
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+    };
+    if (apiKey) {
+        headers.Authorization = `Bearer ${apiKey}`;
+    }
+
+    const fetchImpl = resolveAiFetch(baseUrl);
+    const res = await fetchImpl(`${baseUrl}/models`, {
         method: "GET",
-        headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-        },
+        headers,
     });
 
     if (!res.ok) {

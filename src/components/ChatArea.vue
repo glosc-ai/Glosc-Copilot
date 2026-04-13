@@ -24,9 +24,8 @@ import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat";
 import { storeToRefs } from "pinia";
 import { useMcpStore } from "@/stores/mcp";
-import { useAuthStore } from "@/stores/auth";
 import { useRouter } from "vue-router";
-import { parseCustomModelId } from "@/utils/CustomModelId";
+import { resolveCustomProviderRequest } from "@/utils/LocalAiProvider";
 
 import McpPromptInputInsert from "@/components/mcp/McpPromptInputInsert.vue";
 import { InlineCitedText } from "@/components/ai-elements/inline-citation";
@@ -37,7 +36,7 @@ import PromptInputResourceCitationsPreview from "@/components/ai-elements/prompt
 const props = withDefaults(
     defineProps<{
         /**
-         * 后端接口路径：默认 /api/chat；任务模式传 /api/agent。
+         * 兼容旧调用的保留字段；本地直连模式下不会再使用该参数。
          */
         apiPath?: string;
     }>(),
@@ -49,6 +48,7 @@ const props = withDefaults(
 // import { nanoid } from "nanoid";
 
 const chatStore = useChatStore();
+const uiStore = useUiStore();
 const {
     activeKey,
     conversations,
@@ -59,7 +59,6 @@ const {
 const settingsStore = useSettingsStore();
 const mcpStore = useMcpStore();
 const { servers } = storeToRefs(mcpStore);
-const authStore = useAuthStore();
 const router = useRouter();
 
 const hasEnabledServers = computed(() => servers.value.some((s) => s.enabled));
@@ -111,6 +110,23 @@ const selectableModels = computed(() => {
         (m) => !settingsStore.isModelHidden(m.id) || m.id === selectedId,
     );
 });
+
+const selectedModelRequest = computed(() =>
+    resolveCustomProviderRequest(
+        selectedModel.value?.id,
+        settingsStore.getCustomModelProviderById,
+    ),
+);
+
+function getSelectedModelRequestBody() {
+    const resolved = selectedModelRequest.value;
+    if (resolved) return resolved.requestBody;
+
+    ElMessage.warning(
+        "请先在设置中添加并验证至少一个 AI 服务商模型后再开始会话。",
+    );
+    return null;
+}
 
 const availableModelTypes = computed(() => {
     const types = new Set<string>();
@@ -243,7 +259,7 @@ const getOrSetMessageTimestamp = (
     }
     const next =
         typeof fallbackTimestamp === "number" &&
-        Number.isFinite(fallbackTimestamp)
+            Number.isFinite(fallbackTimestamp)
             ? fallbackTimestamp
             : Date.now();
     messageTimestamps.value.set(key, next);
@@ -344,11 +360,8 @@ async function sendChatMessage(
 ) {
     if (isChatBusy.value) return;
 
-    if (!authStore.isLoggedIn) {
-        ElMessage.warning("请先登录后使用会话");
-        void authStore.startLogin();
-        return;
-    }
+    const modelRequestBody = getSelectedModelRequestBody();
+    if (!modelRequestBody) return;
 
     sendLock.value = true;
     const mcpTools = await mcpStore.getCachedTools();
@@ -366,43 +379,11 @@ async function sendChatMessage(
     const toolsEnabled = Object.keys(tools).length > 0;
 
     try {
-        const selectedId = selectedModel.value?.id;
-        const parsedCustom = parseCustomModelId(selectedId);
-
-        if (parsedCustom) {
-            const provider = settingsStore.getCustomModelProviderById(
-                parsedCustom.providerId,
-            );
-            if (!provider) {
-                ElMessage.error(
-                    "自定义模型配置不存在或已被删除，请在设置中重新配置。",
-                );
-                return;
-            }
-        }
-
         await chat.sendMessage(
             { text, messageId, files },
             {
                 body: {
-                    model: parsedCustom ? parsedCustom.rawModelId : selectedId,
-                    ...(parsedCustom
-                        ? (() => {
-                              const provider =
-                                  settingsStore.getCustomModelProviderById(
-                                      parsedCustom.providerId,
-                                  );
-                              if (!provider) return {};
-                              return {
-                                  useUserKey: true,
-                                  userModelProviderId: provider.id,
-                                  userModelProvider: "openai-compatible",
-                                  userModelGroupName: provider.name,
-                                  userModelApiKey: provider.apiKey,
-                                  userModelBaseUrl: provider.baseUrl,
-                              };
-                          })()
-                        : {}),
+                    ...modelRequestBody,
                     // 后端若仅在 mcpEnabled=true 时启用 tools，这里扩展为“任意工具可用”。
                     mcpEnabled: toolsEnabled,
                     tools,
@@ -448,12 +429,6 @@ function cancelEditUserMessage() {
 async function resendUserMessage(message: UIMessage) {
     if (status.value === "streaming" || status.value === "submitted") return;
 
-    if (!authStore.isLoggedIn) {
-        ElMessage.warning("请先登录后使用会话");
-        void authStore.startLogin();
-        return;
-    }
-
     const text = getUserMessageText(message);
     const files = message.parts.filter((part) => part.type === "file") as any[];
     if (!truncateChatToMessage(message.id)) return;
@@ -463,12 +438,6 @@ async function resendUserMessage(message: UIMessage) {
 async function confirmEditAndResendUserMessage() {
     if (status.value === "streaming" || status.value === "submitted") return;
 
-    if (!authStore.isLoggedIn) {
-        ElMessage.warning("请先登录后使用会话");
-        void authStore.startLogin();
-        return;
-    }
-
     const nextText = editingUserMessageText.value.trim();
     const messageId = editingUserMessageId.value;
     if (!messageId || !nextText) return;
@@ -477,8 +446,8 @@ async function confirmEditAndResendUserMessage() {
     const originalMessage = messages.value.find((m) => m.id === messageId);
     const files = originalMessage
         ? (originalMessage.parts.filter(
-              (part) => part.type === "file",
-          ) as any[])
+            (part) => part.type === "file",
+        ) as any[])
         : [];
 
     if (!truncateChatToMessage(messageId, nextText)) return;
@@ -495,8 +464,8 @@ watch(error, (newError) => {
             (newError instanceof Error
                 ? newError.message
                 : typeof newError === "string"
-                  ? newError
-                  : "流式传输发生错误");
+                    ? newError
+                    : "流式传输发生错误");
 
         const trimmed = String(errorText || "").trim();
         if (trimmed) {
@@ -615,13 +584,13 @@ function applyConversationToChat(conversationId: string) {
     }
     chat.messages = conversation
         ? conversation.messages.map((m) => ({
-              id: m.id,
-              role: m.role === "data" ? "assistant" : m.role,
-              parts:
-                  Array.isArray(m.parts) && m.parts.length > 0
-                      ? (m.parts as any)
-                      : ([{ type: "text", text: m.content ?? "" }] as any),
-          }))
+            id: m.id,
+            role: m.role === "data" ? "assistant" : m.role,
+            parts:
+                Array.isArray(m.parts) && m.parts.length > 0
+                    ? (m.parts as any)
+                    : ([{ type: "text", text: m.content ?? "" }] as any),
+        }))
         : [];
 }
 
@@ -741,11 +710,8 @@ async function handleSubmit(message: PromptInputMessage) {
     if (!hasText && !hasAttachments) return;
     if (isChatBusy.value) return;
 
-    if (!authStore.isLoggedIn) {
-        ElMessage.warning("请先登录后使用会话");
-        void authStore.startLogin();
-        return;
-    }
+    const modelRequestBody = getSelectedModelRequestBody();
+    if (!modelRequestBody) return;
 
     try {
         sendLock.value = true;
@@ -762,31 +728,7 @@ async function handleSubmit(message: PromptInputMessage) {
             },
             {
                 body: {
-                    ...(function () {
-                        const selectedId = selectedModel.value?.id;
-                        const parsedCustom = parseCustomModelId(selectedId);
-                        if (!parsedCustom) return { model: selectedId };
-
-                        const provider =
-                            settingsStore.getCustomModelProviderById(
-                                parsedCustom.providerId,
-                            );
-                        if (!provider) {
-                            ElMessage.error(
-                                "自定义模型配置不存在或已被删除，请在设置中重新配置。",
-                            );
-                            return { model: selectedId };
-                        }
-                        return {
-                            model: parsedCustom.rawModelId,
-                            useUserKey: true,
-                            userModelProviderId: provider.id,
-                            userModelProvider: "openai-compatible",
-                            userModelGroupName: provider.name,
-                            userModelApiKey: provider.apiKey,
-                            userModelBaseUrl: provider.baseUrl,
-                        };
-                    })(),
+                    ...modelRequestBody,
                     mcpEnabled: hasEnabledServers.value,
                     tools,
                     ...(webSearchEnabled.value ? { webSearch: true } : {}),
@@ -836,7 +778,7 @@ const submitDisabled = computed(
         !hasPendingInput.value ||
         isChatBusy.value ||
         promptInput.isLoading.value ||
-        !authStore.isLoggedIn,
+        !selectedModelRequest.value,
 );
 
 function getSourceUrlParts(message: UIMessage) {
@@ -880,11 +822,8 @@ async function copyToClipboard(text: string) {
 }
 
 async function handleRegenerate() {
-    if (!authStore.isLoggedIn) {
-        ElMessage.warning("请先登录后使用会话");
-        void authStore.startLogin();
-        return;
-    }
+    const modelRequestBody = getSelectedModelRequestBody();
+    if (!modelRequestBody) return;
     const mcpTools = await mcpStore.getCachedTools();
     // const builtinTools = createBuiltinTools({
     //     // enabled: settingsStore.builtinToolsEnabled,
@@ -899,30 +838,7 @@ async function handleRegenerate() {
     const toolsEnabled = Object.keys(tools).length > 0;
     chat.regenerate({
         body: {
-            ...(function () {
-                const selectedId = selectedModel.value?.id;
-                const parsedCustom = parseCustomModelId(selectedId);
-                if (!parsedCustom) return { model: selectedId };
-
-                const provider = settingsStore.getCustomModelProviderById(
-                    parsedCustom.providerId,
-                );
-                if (!provider) {
-                    ElMessage.error(
-                        "自定义模型配置不存在或已被删除，请在设置中重新配置。",
-                    );
-                    return { model: selectedId };
-                }
-                return {
-                    model: parsedCustom.rawModelId,
-                    useUserKey: true,
-                    userModelProviderId: provider.id,
-                    userModelProvider: "openai-compatible",
-                    userModelGroupName: provider.name,
-                    userModelApiKey: provider.apiKey,
-                    userModelBaseUrl: provider.baseUrl,
-                };
-            })(),
+            ...modelRequestBody,
             mcpEnabled: toolsEnabled,
             tools,
             ...(webSearchEnabled.value ? { webSearch: true } : {}),
@@ -1003,8 +919,8 @@ function dataUrlByteSize(dataUrl: string): number | null {
             const padding = payload.endsWith("==")
                 ? 2
                 : payload.endsWith("=")
-                  ? 1
-                  : 0;
+                    ? 1
+                    : 0;
             return Math.max(0, Math.floor((payload.length * 3) / 4) - padding);
         }
         // 非 base64：按 URL 编码文本解码后再测 UTF-8 字节数
@@ -1261,259 +1177,152 @@ watch(
             <Conversation class="h-full">
                 <ConversationContent>
                     <ConversationEmptyState v-if="messages.length === 0">
-                        <div
-                            class="flex flex-col items-center justify-center space-y-4"
-                        >
+                        <div class="flex flex-col items-center justify-center space-y-4">
                             <div class="bg-primary/10 p-6 rounded-full">
                                 <Bot class="w-12 h-12 text-primary" />
                             </div>
                             <h1 class="text-2xl font-bold tracking-tight">
                                 欢迎使用 Glosc Copilot
                             </h1>
-                            <p
-                                class="text-muted-foreground max-w-md text-center"
-                            >
+                            <p class="text-muted-foreground max-w-md text-center">
                                 您的 AI 智能助手。开始一个新的对话吧。
                             </p>
                         </div>
                     </ConversationEmptyState>
-                    <template
-                        v-else
-                        v-for="{
-                            message,
-                            index,
-                            checkpoint,
-                        } in messagesWithCheckpoints"
-                        :key="message.id"
-                    >
+                    <template v-else v-for="{
+                        message,
+                        index,
+                        checkpoint,
+                    } in messagesWithCheckpoints" :key="message.id">
                         <Message :from="message.role">
                             <!-- 来源 -->
-                            <Sources
-                                v-if="
-                                    message.role === 'assistant' &&
-                                    getSourceUrlParts(message).length > 0
-                                "
-                            >
-                                <SourcesTrigger
-                                    :count="getSourceUrlParts(message).length"
-                                />
-                                <SourcesContent
-                                    v-for="(source, index) in getSourceUrlParts(
-                                        message,
-                                    )"
-                                    :key="`${message.id}-source-${index}`"
-                                >
-                                    <Source
-                                        :href="source.url"
-                                        :title="source.title ?? source.url"
-                                    />
+                            <Sources v-if="
+                                message.role === 'assistant' &&
+                                getSourceUrlParts(message).length > 0
+                            ">
+                                <SourcesTrigger :count="getSourceUrlParts(message).length" />
+                                <SourcesContent v-for="(source, index) in getSourceUrlParts(
+                                    message,
+                                )" :key="`${message.id}-source-${index}`">
+                                    <Source :href="source.url" :title="source.title ?? source.url" />
                                 </SourcesContent>
                             </Sources>
 
                             <!-- 内容 -->
                             <MessageContent>
-                                <div
-                                    v-if="
-                                        message.role === 'user' &&
-                                        getMessageFileParts(message).length > 0
-                                    "
-                                    class="flex flex-wrap items-center gap-2 p-3 w-full"
-                                >
-                                    <PromptInputAttachment
-                                        v-for="(
-                                            filePart, fileIndex
-                                        ) in getMessageFileParts(message)"
-                                        :key="
-                                            filePart.id ||
+                                <div v-if="
+                                    message.role === 'user' &&
+                                    getMessageFileParts(message).length > 0
+                                " class="flex flex-wrap items-center gap-2 p-3 w-full">
+                                    <PromptInputAttachment v-for="(
+filePart, fileIndex
+                                        ) in getMessageFileParts(message)" :key="filePart.id ||
                                             `${message.id}-file-${fileIndex}`
-                                        "
-                                        :file="
-                                            asAttachmentFile(
+                                            " :file="asAttachmentFile(
                                                 filePart,
                                                 message.id,
                                                 fileIndex,
                                             )
-                                        "
-                                        readonly
-                                    />
+                                                " readonly />
                                 </div>
 
-                                <template
-                                    v-for="(part, partIndex) in message.parts"
-                                    :key="partIndex"
-                                >
+                                <template v-for="(part, partIndex) in message.parts" :key="partIndex">
                                     <template v-if="part.type === 'text'">
-                                        <template
-                                            v-if="
-                                                message.role === 'user' &&
-                                                editingUserMessageId ===
-                                                    message.id &&
-                                                isLastTextPart(
-                                                    message,
-                                                    partIndex,
-                                                )
-                                            "
-                                        >
-                                            <Textarea
-                                                v-model="editingUserMessageText"
-                                                class="min-h-20"
-                                            />
-                                        </template>
-                                        <template v-else>
-                                            <InlineCitedText
-                                                v-if="message.role === 'user'"
-                                                :content="part.text"
-                                                class="text-sm"
-                                                trigger-label="mcp"
-                                            />
-                                            <MessageResponse
-                                                v-else
-                                                :id="`${message.id}-text-${partIndex}`"
-                                                :content="part.text"
-                                                :is-streaming="
-                                                    isStreamingPart(
-                                                        index,
-                                                        partIndex,
-                                                    )
-                                                "
-                                            />
-                                        </template>
-                                    </template>
-                                    <Reasoning
-                                        v-if="part.type === 'reasoning'"
-                                        class="w-full"
-                                        :is-streaming="
-                                            isStreamingPart(index, partIndex)
-                                        "
-                                    >
-                                        <ReasoningTrigger />
-                                        <ReasoningContent
-                                            :id="`${message.id}-reasoning-${partIndex}`"
-                                            :content="part.text"
-                                        />
-                                    </Reasoning>
-                                    <div
-                                        v-if="isGloscGameTool(part)"
-                                        class="not-prose mb-4 max-w-110 rounded-md border bg-background/60"
-                                    >
-                                        <GloscGameToolsOutput
-                                            :toolName="resolveToolName(part)"
-                                            :toolType="part.type"
-                                            :input="(part as any).input"
-                                            :output="(part as any).output"
-                                            :errorText="(part as any).errorText"
-                                        />
-                                    </div>
-
-                                    <div
-                                        v-else-if="isFileOpsTool(part)"
-                                        class="not-prose mb-4 max-w-110"
-                                    >
-                                        <FileOpsCommitOutput
-                                            :toolName="resolveToolName(part)"
-                                            :toolType="part.type"
-                                            :input="(part as any).input"
-                                            :output="(part as any).output"
-                                            :errorText="(part as any).errorText"
-                                        />
-                                    </div>
-
-                                    <Tool
-                                        v-else-if="
-                                            part.type === 'dynamic-tool' ||
-                                            part.type.startsWith('tool-')
-                                        "
-                                        class="max-w-110"
-                                    >
-                                        <ToolHeader
-                                            :state="(part as any).state"
-                                            :title="resolveToolName(part)"
-                                            :type="part.type as any"
-                                        ></ToolHeader>
-                                        <ToolContent>
-                                            <ToolInput
-                                                v-if="
-                                                    part.type !==
-                                                        'tool-sequentialthinking' &&
-                                                    !isFileToolType(part.type)
-                                                "
-                                                :input="(part as any).input"
-                                            ></ToolInput>
-                                            <SequentialThinkingQueue
-                                                v-if="
-                                                    part.type ===
-                                                    'tool-sequentialthinking'
-                                                "
-                                                :input="(part as any).input"
-                                                :output="(part as any).output"
-                                                :errorText="
-                                                    (part as any).errorText
-                                                "
-                                            />
-                                            <EditText
-                                                v-else-if="
-                                                    isFileToolType(part.type)
-                                                "
-                                                :toolType="part.type"
-                                                :input="(part as any).input"
-                                                :output="(part as any).output"
-                                                :errorText="
-                                                    (part as any).errorText
-                                                "
-                                            />
-                                            <ToolOutput
-                                                v-else
-                                                :output="(part as any).output"
-                                                :errorText="
-                                                    (part as any).errorText
-                                                "
-                                            ></ToolOutput>
-                                        </ToolContent>
-                                    </Tool>
-                                    <Image
-                                        v-if="
-                                            part.type === 'file' &&
-                                            part.mediaType.startsWith(
-                                                'image/',
-                                            ) &&
-                                            message.role === 'assistant'
-                                        "
-                                        v-bind="imageData(part)"
-                                        class="max-w-[90%] h-auto rounded-md"
-                                        :alt="
-                                            (part as any).alt ||
-                                            'Generated image'
-                                        "
-                                    />
-
-                                    <MessageActions
-                                        v-if="
-                                            shouldShowActions(
+                                        <template v-if="
+                                            message.role === 'user' &&
+                                            editingUserMessageId ===
+                                            message.id &&
+                                            isLastTextPart(
                                                 message,
                                                 partIndex,
-                                            ) && part.type === 'text'
-                                        "
-                                    >
-                                        <MessageAction
-                                            label="重试"
-                                            @click="handleRegenerate"
-                                        >
+                                            )
+                                        ">
+                                            <Textarea v-model="editingUserMessageText" class="min-h-20" />
+                                        </template>
+                                        <template v-else>
+                                            <InlineCitedText v-if="message.role === 'user'" :content="part.text"
+                                                class="text-sm" trigger-label="mcp" />
+                                            <MessageResponse v-else :id="`${message.id}-text-${partIndex}`"
+                                                :content="part.text" :is-streaming="isStreamingPart(
+                                                    index,
+                                                    partIndex,
+                                                )
+                                                    " />
+                                        </template>
+                                    </template>
+                                    <Reasoning v-if="part.type === 'reasoning'" class="w-full" :is-streaming="isStreamingPart(index, partIndex)
+                                        ">
+                                        <ReasoningTrigger />
+                                        <ReasoningContent :id="`${message.id}-reasoning-${partIndex}`"
+                                            :content="part.text" />
+                                    </Reasoning>
+                                    <div v-if="isGloscGameTool(part)"
+                                        class="not-prose mb-4 max-w-110 rounded-md border bg-background/60">
+                                        <GloscGameToolsOutput :toolName="resolveToolName(part)" :toolType="part.type"
+                                            :input="(part as any).input" :output="(part as any).output"
+                                            :errorText="(part as any).errorText" />
+                                    </div>
+
+                                    <div v-else-if="isFileOpsTool(part)" class="not-prose mb-4 max-w-110">
+                                        <FileOpsCommitOutput :toolName="resolveToolName(part)" :toolType="part.type"
+                                            :input="(part as any).input" :output="(part as any).output"
+                                            :errorText="(part as any).errorText" />
+                                    </div>
+
+                                    <Tool v-else-if="
+                                        part.type === 'dynamic-tool' ||
+                                        part.type.startsWith('tool-')
+                                    " class="max-w-110">
+                                        <ToolHeader :state="(part as any).state" :title="resolveToolName(part)"
+                                            :type="part.type as any"></ToolHeader>
+                                        <ToolContent>
+                                            <ToolInput v-if="
+                                                part.type !==
+                                                'tool-sequentialthinking' &&
+                                                !isFileToolType(part.type)
+                                            " :input="(part as any).input"></ToolInput>
+                                            <SequentialThinkingQueue v-if="
+                                                part.type ===
+                                                'tool-sequentialthinking'
+                                            " :input="(part as any).input" :output="(part as any).output" :errorText="(part as any).errorText
+                                                " />
+                                            <EditText v-else-if="
+                                                isFileToolType(part.type)
+                                            " :toolType="part.type" :input="(part as any).input"
+                                                :output="(part as any).output" :errorText="(part as any).errorText
+                                                    " />
+                                            <ToolOutput v-else :output="(part as any).output" :errorText="(part as any).errorText
+                                                "></ToolOutput>
+                                        </ToolContent>
+                                    </Tool>
+                                    <Image v-if="
+                                        part.type === 'file' &&
+                                        part.mediaType.startsWith(
+                                            'image/',
+                                        ) &&
+                                        message.role === 'assistant'
+                                    " v-bind="imageData(part)" class="max-w-[90%] h-auto rounded-md" :alt="(part as any).alt ||
+                                        'Generated image'
+                                        " />
+
+                                    <MessageActions v-if="
+                                        shouldShowActions(
+                                            message,
+                                            partIndex,
+                                        ) && part.type === 'text'
+                                    ">
+                                        <MessageAction label="重试" @click="handleRegenerate">
                                             <RefreshCcwIcon class="size-3" />
                                         </MessageAction>
-                                        <MessageAction
-                                            label="复制"
-                                            @click="copyToClipboard(part.text)"
-                                        >
+                                        <MessageAction label="复制" @click="copyToClipboard(part.text)">
                                             <CopyIcon class="size-3" />
                                         </MessageAction>
-                                        <span
-                                            v-if="
-                                                getMessageTimestampText(
-                                                    message.id,
-                                                )
-                                            "
-                                            class="ml-1 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity select-none"
-                                        >
+                                        <span v-if="
+                                            getMessageTimestampText(
+                                                message.id,
+                                            )
+                                        "
+                                            class="ml-1 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity select-none">
                                             {{
                                                 getMessageTimestampText(
                                                     message.id,
@@ -1522,65 +1331,43 @@ watch(
                                         </span>
                                     </MessageActions>
 
-                                    <MessageActions
-                                        v-if="
-                                            message.role === 'user' &&
-                                            part.type === 'text' &&
-                                            isLastTextPart(message, partIndex)
-                                        "
-                                    >
-                                        <template
-                                            v-if="
-                                                editingUserMessageId ===
-                                                message.id
-                                            "
-                                        >
-                                            <MessageAction
-                                                label="取消"
-                                                @click="cancelEditUserMessage"
-                                            />
-                                            <MessageAction
-                                                label="发送"
-                                                @click="
-                                                    confirmEditAndResendUserMessage()
-                                                "
-                                            >
-                                                <RefreshCcwIcon
-                                                    class="size-3"
-                                                />
+                                    <MessageActions v-if="
+                                        message.role === 'user' &&
+                                        part.type === 'text' &&
+                                        isLastTextPart(message, partIndex)
+                                    ">
+                                        <template v-if="
+                                            editingUserMessageId ===
+                                            message.id
+                                        ">
+                                            <MessageAction label="取消" @click="cancelEditUserMessage" />
+                                            <MessageAction label="发送" @click="
+                                                confirmEditAndResendUserMessage()
+                                                ">
+                                                <RefreshCcwIcon class="size-3" />
                                             </MessageAction>
                                         </template>
                                         <template v-else>
-                                            <MessageAction
-                                                label="编辑"
-                                                @click="
-                                                    startEditUserMessage(
-                                                        message,
-                                                    )
-                                                "
-                                            >
+                                            <MessageAction label="编辑" @click="
+                                                startEditUserMessage(
+                                                    message,
+                                                )
+                                                ">
                                                 <Pencil class="size-3" />
                                             </MessageAction>
-                                            <MessageAction
-                                                label="重新发送"
-                                                @click="
-                                                    resendUserMessage(message)
-                                                "
-                                            >
-                                                <RefreshCcwIcon
-                                                    class="size-3"
-                                                />
+                                            <MessageAction label="重新发送" @click="
+                                                resendUserMessage(message)
+                                                ">
+                                                <RefreshCcwIcon class="size-3" />
                                             </MessageAction>
                                         </template>
 
-                                        <span
-                                            v-if="
-                                                getMessageTimestampText(
-                                                    message.id,
-                                                )
-                                            "
-                                            class="ml-1 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity select-none"
-                                        >
+                                        <span v-if="
+                                            getMessageTimestampText(
+                                                message.id,
+                                            )
+                                        "
+                                            class="ml-1 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity select-none">
                                             {{
                                                 getMessageTimestampText(
                                                     message.id,
@@ -1593,45 +1380,34 @@ watch(
                         </Message>
                         <Checkpoint v-if="checkpoint">
                             <CheckpointIcon />
-                            <CheckpointTrigger
-                                @click="
-                                    restoreToCheckpoint(checkpoint.messageIndex)
-                                "
-                            >
+                            <CheckpointTrigger @click="
+                                restoreToCheckpoint(checkpoint.messageIndex)
+                                ">
                                 Restore checkpoint
                             </CheckpointTrigger>
                         </Checkpoint>
                     </template>
 
-                    <div
-                        v-if="status === 'submitted'"
-                        class="flex justify-center py-4"
-                    >
-                        <Shimmer class="text-sm text-muted-foreground"
-                            >正在思考...</Shimmer
-                        >
+                    <div v-if="status === 'submitted'" class="flex justify-center py-4">
+                        <Shimmer class="text-sm text-muted-foreground">正在思考...</Shimmer>
                     </div>
                 </ConversationContent>
 
                 <ConversationScrollButton />
             </Conversation>
 
-            <div
-                v-if="error"
-                class="mx-auto mb-2 max-w-3xl rounded-md bg-destructive/10 px-4 py-2 text-sm text-destructive"
-            >
+            <div v-if="error"
+                class="mx-auto mb-2 max-w-3xl rounded-md bg-destructive/10 px-4 py-2 text-sm text-destructive">
                 Error: {{ error.message }}
             </div>
 
-            <div
-                v-if="!authStore.isLoggedIn"
-                class="mx-auto mb-2 flex max-w-3xl items-center justify-between gap-3 rounded-md bg-secondary/40 px-4 py-2 text-sm"
-            >
+            <div v-if="!selectedModelRequest"
+                class="mx-auto mb-2 flex max-w-3xl items-center justify-between gap-3 rounded-md bg-secondary/40 px-4 py-2 text-sm">
                 <div class="text-muted-foreground">
-                    请先登录后使用会话（消息会以你的账号身份请求 API）
+                    请先在设置里添加并验证至少一个 AI。
                 </div>
-                <Button size="sm" @click="authStore.startLogin()">
-                    去登录
+                <Button size="sm" @click="uiStore.openSettings()">
+                    去配置
                 </Button>
             </div>
 
@@ -1679,21 +1455,15 @@ watch(
                             </ContextContent>
                         </Context> -->
 
-                        <PromptInputButton
-                            :variant="webSearchEnabled ? 'default' : 'ghost'"
-                            title="联网搜索"
-                            @click="toggleWebSearch"
-                        >
+                        <PromptInputButton :variant="webSearchEnabled ? 'default' : 'ghost'" title="联网搜索"
+                            @click="toggleWebSearch">
                             <Globe class="size-4" />
                             <span>联网搜索</span>
                         </PromptInputButton>
 
                         <DropdownMenu>
                             <DropdownMenuTrigger as-child>
-                                <PromptInputButton
-                                    variant="ghost"
-                                    @contextmenu.prevent="openMcpManager"
-                                >
+                                <PromptInputButton variant="ghost" @contextmenu.prevent="openMcpManager">
                                     <Server class="size-4" />
                                     <span>工具</span>
                                 </PromptInputButton>
@@ -1701,59 +1471,41 @@ watch(
                             <DropdownMenuContent class="w-56">
                                 <DropdownMenuLabel>工具</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuSub
-                                    v-for="server in servers"
-                                    :key="server.id"
-                                >
+                                <DropdownMenuSub v-for="server in servers" :key="server.id">
                                     <DropdownMenuSubTrigger>
                                         <div class="flex items-center gap-2">
-                                            <div
-                                                :class="
-                                                    cn(
-                                                        'w-2 h-2 rounded-full',
-                                                        server.enabled
-                                                            ? 'bg-green-500'
-                                                            : 'bg-gray-300',
-                                                    )
-                                                "
-                                            />
+                                            <div :class="cn(
+                                                'w-2 h-2 rounded-full',
+                                                server.enabled
+                                                    ? 'bg-green-500'
+                                                    : 'bg-gray-300',
+                                            )
+                                                " />
                                             <span>{{ server.name }}</span>
                                         </div>
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent class="w-64">
-                                        <DropdownMenuItem
-                                            :disabled="
-                                                mcpTogglingServerIds.has(
-                                                    server.id,
-                                                )
-                                            "
-                                            @click="
+                                        <DropdownMenuItem :disabled="mcpTogglingServerIds.has(
+                                            server.id,
+                                        )
+                                            " @click="
                                                 toggleServer(
                                                     server.id,
                                                     !server.enabled,
                                                 )
-                                            "
-                                        >
-                                            <Loader2Icon
-                                                v-if="
-                                                    mcpTogglingServerIds.has(
-                                                        server.id,
-                                                    )
-                                                "
-                                                class="mr-2 h-4 w-4 animate-spin"
-                                            />
-                                            <Check
-                                                v-else-if="server.enabled"
-                                                class="mr-2 h-4 w-4"
-                                            />
+                                                ">
+                                            <Loader2Icon v-if="
+                                                mcpTogglingServerIds.has(
+                                                    server.id,
+                                                )
+                                            " class="mr-2 h-4 w-4 animate-spin" />
+                                            <Check v-else-if="server.enabled" class="mr-2 h-4 w-4" />
                                             <span v-else class="mr-6"></span>
-                                            <span
-                                                v-if="
-                                                    mcpTogglingServerIds.has(
-                                                        server.id,
-                                                    )
-                                                "
-                                            >
+                                            <span v-if="
+                                                mcpTogglingServerIds.has(
+                                                    server.id,
+                                                )
+                                            ">
                                                 {{
                                                     server.enabled
                                                         ? "禁用中"
@@ -1769,16 +1521,12 @@ watch(
                                             </span>
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
-                                        <div
-                                            class="p-2 text-xs text-muted-foreground max-h-75 overflow-y-auto"
-                                        >
-                                            <div
-                                                v-if="
-                                                    mcpStore.serverCapabilities[
-                                                        server.id
-                                                    ]?.tools
-                                                "
-                                            >
+                                        <div class="p-2 text-xs text-muted-foreground max-h-75 overflow-y-auto">
+                                            <div v-if="
+                                                mcpStore.serverCapabilities[
+                                                    server.id
+                                                ]?.tools
+                                            ">
                                                 <div class="font-semibold mb-1">
                                                     工具 ({{
                                                         Object.keys(
@@ -1790,29 +1538,22 @@ watch(
                                                     }})
                                                 </div>
                                                 <div class="pl-2 mb-2">
-                                                    <div
-                                                        v-for="name in Object.keys(
-                                                            mcpStore
-                                                                .serverCapabilities[
-                                                                server.id
-                                                            ].tools,
-                                                        )"
-                                                        :key="String(name)"
-                                                        class="truncate"
-                                                        :title="String(name)"
-                                                    >
+                                                    <div v-for="name in Object.keys(
+                                                        mcpStore
+                                                            .serverCapabilities[
+                                                            server.id
+                                                        ].tools,
+                                                    )" :key="String(name)" class="truncate" :title="String(name)">
                                                         - {{ name }}
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div
-                                                v-if="
-                                                    mcpStore.serverCapabilities[
-                                                        server.id
-                                                    ]?.resources?.resources
-                                                        ?.length
-                                                "
-                                            >
+                                            <div v-if="
+                                                mcpStore.serverCapabilities[
+                                                    server.id
+                                                ]?.resources?.resources
+                                                    ?.length
+                                            ">
                                                 <div class="font-semibold mb-1">
                                                     资源 ({{
                                                         mcpStore
@@ -1823,28 +1564,21 @@ watch(
                                                     }})
                                                 </div>
                                                 <div class="pl-2 mb-2">
-                                                    <div
-                                                        v-for="resource in mcpStore
-                                                            .serverCapabilities[
-                                                            server.id
-                                                        ].resources.resources"
-                                                        :key="resource.uri"
-                                                        class="truncate"
-                                                        :title="resource.name"
-                                                    >
+                                                    <div v-for="resource in mcpStore
+                                                        .serverCapabilities[
+                                                        server.id
+                                                    ].resources.resources" :key="resource.uri" class="truncate"
+                                                        :title="resource.name">
                                                         - {{ resource.name }}
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div
-                                                v-if="
-                                                    !mcpStore
-                                                        .serverCapabilities[
-                                                        server.id
-                                                    ]
-                                                "
-                                                class="text-center py-2"
-                                            >
+                                            <div v-if="
+                                                !mcpStore
+                                                    .serverCapabilities[
+                                                server.id
+                                                ]
+                                            " class="text-center py-2">
                                                 无可用信息
                                             </div>
                                         </div>
@@ -1857,52 +1591,33 @@ watch(
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <McpPromptInputInsert
-                            :servers="servers"
-                            :enabled-server-ids="enabledMcpServerIds"
-                            :disabled="!hasEnabledServers || isChatBusy"
-                        />
+                        <McpPromptInputInsert :servers="servers" :enabled-server-ids="enabledMcpServerIds"
+                            :disabled="!hasEnabledServers || isChatBusy" />
 
                         <ModelSelector v-model:open="openModelSelector">
                             <ModelSelectorTrigger as-child>
-                                <Button
-                                    variant="ghost"
-                                    role="combobox"
-                                    :aria-expanded="openModelSelector"
-                                    class="justify-between border-none bg-transparent font-medium text-muted-foreground shadow-none hover:bg-accent hover:text-foreground"
-                                >
-                                    <div
-                                        class="flex items-center gap-2 truncate"
-                                    >
-                                        <ModelSelectorLogo
-                                            v-if="selectedModelData?.owned_by"
-                                            :provider="
-                                                selectedModelData.owned_by
-                                            "
-                                        />
+                                <Button variant="ghost" role="combobox" :aria-expanded="openModelSelector"
+                                    class="justify-between border-none bg-transparent font-medium text-muted-foreground shadow-none hover:bg-accent hover:text-foreground">
+                                    <div class="flex items-center gap-2 truncate">
+                                        <ModelSelectorLogo v-if="selectedModelData?.owned_by" :provider="selectedModelData.owned_by
+                                            " />
                                         <ModelSelectorName>
                                             {{
                                                 selectedModelData
                                                     ? formatModelName(
-                                                          selectedModelData.id,
-                                                      )
+                                                        selectedModelData.id,
+                                                    )
                                                     : "选择模型..."
                                             }}
                                         </ModelSelectorName>
                                     </div>
-                                    <ChevronsUpDown
-                                        class="ml-2 h-4 w-4 shrink-0 opacity-50"
-                                    />
+                                    <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                 </Button>
                             </ModelSelectorTrigger>
-                            <ModelSelectorContent
-                                :model-value="selectedModelSearchTerm"
-                            >
+                            <ModelSelectorContent :model-value="selectedModelSearchTerm">
                                 <ModelSelectorInput placeholder="搜索模型..." />
 
-                                <div
-                                    class="px-3 pb-2 flex items-center gap-2 flex-wrap"
-                                >
+                                <div class="px-3 pb-2 flex items-center gap-2 flex-wrap">
                                     <Select v-model="selectedModelType">
                                         <SelectTrigger class="h-8 w-40">
                                             <SelectValue placeholder="类型" />
@@ -1911,11 +1626,7 @@ watch(
                                             <SelectItem value="all">
                                                 全部类型
                                             </SelectItem>
-                                            <SelectItem
-                                                v-for="t in availableModelTypes"
-                                                :key="t"
-                                                :value="t"
-                                            >
+                                            <SelectItem v-for="t in availableModelTypes" :key="t" :value="t">
                                                 {{ t }}
                                             </SelectItem>
                                         </SelectContent>
@@ -1923,63 +1634,45 @@ watch(
 
                                     <DropdownMenu>
                                         <DropdownMenuTrigger as-child>
-                                            <Button
-                                                variant="outline"
-                                                class="h-8"
-                                            >
+                                            <Button variant="outline" class="h-8">
                                                 标签
-                                                <span
-                                                    v-if="
-                                                        selectedModelTags.length
-                                                    "
-                                                    class="ml-1 text-muted-foreground"
-                                                >
+                                                <span v-if="
+                                                    selectedModelTags.length
+                                                " class="ml-1 text-muted-foreground">
                                                     ({{
                                                         selectedModelTags.length
                                                     }})
                                                 </span>
                                             </Button>
                                         </DropdownMenuTrigger>
-                                        <DropdownMenuContent
-                                            class="w-64 max-h-72 overflow-auto"
-                                        >
+                                        <DropdownMenuContent class="w-64 max-h-72 overflow-auto">
                                             <DropdownMenuLabel>
                                                 标签筛选
                                             </DropdownMenuLabel>
                                             <DropdownMenuSeparator />
-                                            <DropdownMenuCheckboxItem
-                                                v-for="tag in availableModelTags"
-                                                :key="tag"
-                                                :checked="
-                                                    selectedModelTags.includes(
-                                                        tag,
-                                                    )
-                                                "
-                                                @select.prevent="
-                                                    updateSelectedTag(
-                                                        tag,
-                                                        !selectedModelTags.includes(
+                                            <DropdownMenuCheckboxItem v-for="tag in availableModelTags" :key="tag"
+                                                :checked="selectedModelTags.includes(
+                                                    tag,
+                                                )
+                                                    " @select.prevent="
+                                                        updateSelectedTag(
                                                             tag,
-                                                        ),
-                                                    )
-                                                "
-                                                :class="{
-                                                    'bg-blue-500!':
-                                                        selectedModelTags.includes(
-                                                            tag,
-                                                        ),
-                                                }"
-                                            >
+                                                            !selectedModelTags.includes(
+                                                                tag,
+                                                            ),
+                                                        )
+                                                        " :class="{
+                                                        'bg-blue-500!':
+                                                            selectedModelTags.includes(
+                                                                tag,
+                                                            ),
+                                                    }">
                                                 {{ tag }}
                                             </DropdownMenuCheckboxItem>
                                             <DropdownMenuSeparator />
-                                            <DropdownMenuItem
-                                                :disabled="
-                                                    selectedModelTags.length ===
-                                                    0
-                                                "
-                                                @click="selectedModelTags = []"
-                                            >
+                                            <DropdownMenuItem :disabled="selectedModelTags.length ===
+                                                0
+                                                " @click="selectedModelTags = []">
                                                 清空标签
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
@@ -1987,141 +1680,93 @@ watch(
 
                                     <DropdownMenu>
                                         <DropdownMenuTrigger as-child>
-                                            <Button
-                                                variant="outline"
-                                                class="h-8"
-                                            >
+                                            <Button variant="outline" class="h-8">
                                                 开发商
-                                                <span
-                                                    v-if="
-                                                        selectedModelOwners.length
-                                                    "
-                                                    class="ml-1 text-muted-foreground"
-                                                >
+                                                <span v-if="
+                                                    selectedModelOwners.length
+                                                " class="ml-1 text-muted-foreground">
                                                     ({{
                                                         selectedModelOwners.length
                                                     }})
                                                 </span>
                                             </Button>
                                         </DropdownMenuTrigger>
-                                        <DropdownMenuContent
-                                            class="w-64 max-h-72 overflow-auto"
-                                        >
+                                        <DropdownMenuContent class="w-64 max-h-72 overflow-auto">
                                             <DropdownMenuLabel>
                                                 开发商筛选 (owned_by)
                                             </DropdownMenuLabel>
                                             <DropdownMenuSeparator />
-                                            <DropdownMenuCheckboxItem
-                                                v-for="owner in availableModelOwners"
-                                                :key="owner"
-                                                :checked="
-                                                    selectedModelOwners.includes(
-                                                        owner,
-                                                    )
-                                                "
-                                                @select.prevent="
-                                                    updateSelectedOwner(
-                                                        owner,
-                                                        !selectedModelOwners.includes(
+                                            <DropdownMenuCheckboxItem v-for="owner in availableModelOwners" :key="owner"
+                                                :checked="selectedModelOwners.includes(
+                                                    owner,
+                                                )
+                                                    " @select.prevent="
+                                                        updateSelectedOwner(
                                                             owner,
-                                                        ),
-                                                    )
-                                                "
-                                                :class="{
-                                                    'bg-blue-500!':
-                                                        selectedModelOwners.includes(
-                                                            owner,
-                                                        ),
-                                                }"
-                                            >
+                                                            !selectedModelOwners.includes(
+                                                                owner,
+                                                            ),
+                                                        )
+                                                        " :class="{
+                                                        'bg-blue-500!':
+                                                            selectedModelOwners.includes(
+                                                                owner,
+                                                            ),
+                                                    }">
                                                 {{ owner }}
                                             </DropdownMenuCheckboxItem>
                                             <DropdownMenuSeparator />
-                                            <DropdownMenuItem
-                                                :disabled="
-                                                    selectedModelOwners.length ===
-                                                    0
-                                                "
-                                                @click="
+                                            <DropdownMenuItem :disabled="selectedModelOwners.length ===
+                                                0
+                                                " @click="
                                                     selectedModelOwners = []
-                                                "
-                                            >
+                                                    ">
                                                 清空开发商
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
 
-                                    <Button
-                                        v-if="
-                                            selectedModelType !== 'all' ||
-                                            selectedModelTags.length ||
-                                            selectedModelOwners.length
-                                        "
-                                        variant="ghost"
-                                        class="h-8 px-2"
-                                        @click="clearModelFilters"
-                                    >
+                                    <Button v-if="
+                                        selectedModelType !== 'all' ||
+                                        selectedModelTags.length ||
+                                        selectedModelOwners.length
+                                    " variant="ghost" class="h-8 px-2" @click="clearModelFilters">
                                         清除
                                     </Button>
                                 </div>
 
                                 <ModelSelectorList>
-                                    <ModelSelectorEmpty
-                                        >未找到模型。</ModelSelectorEmpty
-                                    >
+                                    <ModelSelectorEmpty>未找到模型。</ModelSelectorEmpty>
 
-                                    <ModelSelectorGroup
-                                        v-if="recentModels.length"
-                                        heading="最近使用"
-                                    >
-                                        <ModelSelectorItem
-                                            v-for="item in recentModels"
-                                            :key="item.id"
-                                            :value="getModelSearchTerm(item)"
-                                            :class="
-                                                cn(
-                                                    'flex items-start gap-2 py-3',
-                                                    selectedModel?.id ===
-                                                        item.id
-                                                        ? 'bg-accent text-accent-foreground'
-                                                        : '',
-                                                )
-                                            "
-                                            @select="
-                                                () => {
-                                                    chatStore.selectModel(item);
-                                                    openModelSelector = false;
-                                                }
-                                            "
-                                        >
-                                            <Check
-                                                :class="
-                                                    cn(
-                                                        'mt-1 h-4 w-4 shrink-0',
-                                                        selectedModel?.id ===
-                                                            item.id
-                                                            ? 'opacity-100'
-                                                            : 'opacity-0',
-                                                    )
-                                                "
-                                            />
-                                            <div
-                                                class="flex flex-col gap-1 w-full min-w-0"
-                                            >
-                                                <div
-                                                    class="flex items-center justify-between gap-2"
-                                                >
-                                                    <div
-                                                        class="flex items-center gap-2 truncate"
-                                                    >
-                                                        <ModelSelectorLogo
-                                                            :provider="
-                                                                item.owned_by
-                                                            "
-                                                        />
-                                                        <ModelSelectorName
-                                                            class="font-medium truncate"
-                                                        >
+                                    <ModelSelectorGroup v-if="recentModels.length" heading="最近使用">
+                                        <ModelSelectorItem v-for="item in recentModels" :key="item.id"
+                                            :value="getModelSearchTerm(item)" :class="cn(
+                                                'flex items-start gap-2 py-3',
+                                                selectedModel?.id ===
+                                                    item.id
+                                                    ? 'bg-accent text-accent-foreground'
+                                                    : '',
+                                            )
+                                                " @select="
+                                                    () => {
+                                                        chatStore.selectModel(item);
+                                                        openModelSelector = false;
+                                                    }
+                                                ">
+                                            <Check :class="cn(
+                                                'mt-1 h-4 w-4 shrink-0',
+                                                selectedModel?.id ===
+                                                    item.id
+                                                    ? 'opacity-100'
+                                                    : 'opacity-0',
+                                            )
+                                                " />
+                                            <div class="flex flex-col gap-1 w-full min-w-0">
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <div class="flex items-center gap-2 truncate">
+                                                        <ModelSelectorLogo :provider="item.owned_by
+                                                            " />
+                                                        <ModelSelectorName class="font-medium truncate">
                                                             {{
                                                                 formatModelName(
                                                                     item.id,
@@ -2129,45 +1774,29 @@ watch(
                                                             }}
                                                         </ModelSelectorName>
                                                     </div>
-                                                    <div
-                                                        class="flex items-center gap-1"
-                                                    >
+                                                    <div class="flex items-center gap-1">
                                                         <span
-                                                            class="text-[10px] uppercase text-muted-foreground border px-1 rounded"
-                                                            >{{
+                                                            class="text-[10px] uppercase text-muted-foreground border px-1 rounded">{{
                                                                 item.type
-                                                            }}</span
-                                                        >
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
+                                                            }}</span>
+                                                        <Button variant="ghost" size="sm"
                                                             class="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
                                                             @click.stop="
                                                                 chatStore.removeRecentModel(
                                                                     item.id,
                                                                 )
-                                                            "
-                                                        >
-                                                            <X
-                                                                class="h-3 w-3"
-                                                            />
+                                                                ">
+                                                            <X class="h-3 w-3" />
                                                         </Button>
                                                     </div>
                                                 </div>
 
                                                 <div
-                                                    class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"
-                                                >
-                                                    <span
-                                                        v-if="
-                                                            item.context_window
-                                                        "
-                                                        class="flex items-center gap-1"
-                                                        title="上下文窗口"
-                                                    >
-                                                        <Maximize2
-                                                            class="w-3 h-3"
-                                                        />
+                                                    class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                                    <span v-if="
+                                                        item.context_window
+                                                    " class="flex items-center gap-1" title="上下文窗口">
+                                                        <Maximize2 class="w-3 h-3" />
                                                         {{
                                                             (
                                                                 item.context_window /
@@ -2175,14 +1804,9 @@ watch(
                                                             ).toFixed(0)
                                                         }}k
                                                     </span>
-                                                    <span
-                                                        v-if="item.max_tokens"
-                                                        class="flex items-center gap-1"
-                                                        title="最大输出 Token"
-                                                    >
-                                                        <MessageSquare
-                                                            class="w-3 h-3"
-                                                        />
+                                                    <span v-if="item.max_tokens" class="flex items-center gap-1"
+                                                        title="最大输出 Token">
+                                                        <MessageSquare class="w-3 h-3" />
                                                         {{
                                                             (
                                                                 item.max_tokens /
@@ -2192,37 +1816,25 @@ watch(
                                                     </span>
                                                 </div>
 
-                                                <div
-                                                    v-if="item.pricing"
-                                                    class="flex items-center gap-2 text-[10px] text-muted-foreground/80"
-                                                >
+                                                <div v-if="item.pricing"
+                                                    class="flex items-center gap-2 text-[10px] text-muted-foreground/80">
                                                     <Coins class="w-3 h-3" />
-                                                    <span
-                                                        >输入:
+                                                    <span>输入:
                                                         {{
                                                             item.pricing.input
-                                                        }}</span
-                                                    >
-                                                    <span
-                                                        >输出:
+                                                        }}</span>
+                                                    <span>输出:
                                                         {{
                                                             item.pricing.output
-                                                        }}</span
-                                                    >
+                                                        }}</span>
                                                 </div>
 
-                                                <div
-                                                    v-if="
-                                                        item.tags &&
-                                                        item.tags.length
-                                                    "
-                                                    class="flex flex-wrap gap-1 mt-1"
-                                                >
-                                                    <span
-                                                        v-for="tag in item.tags"
-                                                        :key="tag"
-                                                        class="bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded text-[10px]"
-                                                    >
+                                                <div v-if="
+                                                    item.tags &&
+                                                    item.tags.length
+                                                " class="flex flex-wrap gap-1 mt-1">
+                                                    <span v-for="tag in item.tags" :key="tag"
+                                                        class="bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded text-[10px]">
                                                         {{ tag }}
                                                     </span>
                                                 </div>
@@ -2230,61 +1842,37 @@ watch(
                                         </ModelSelectorItem>
                                     </ModelSelectorGroup>
 
-                                    <ModelSelectorGroup
-                                        v-for="(
-                                            groupModels, provider
-                                        ) in groupedModels"
-                                        :key="provider"
-                                        :heading="provider"
-                                    >
-                                        <ModelSelectorItem
-                                            v-for="item in groupModels"
-                                            :key="item.id"
-                                            :value="getModelSearchTerm(item)"
-                                            :class="
-                                                cn(
-                                                    'flex items-start gap-2 py-3',
-                                                    selectedModel?.id ===
-                                                        item.id
-                                                        ? 'bg-accent text-accent-foreground'
-                                                        : '',
-                                                )
-                                            "
-                                            @select="
-                                                () => {
-                                                    chatStore.selectModel(item);
-                                                    openModelSelector = false;
-                                                }
-                                            "
-                                        >
-                                            <Check
-                                                :class="
-                                                    cn(
-                                                        'mt-1 h-4 w-4 shrink-0',
-                                                        selectedModel?.id ===
-                                                            item.id
-                                                            ? 'opacity-100'
-                                                            : 'opacity-0',
-                                                    )
-                                                "
-                                            />
-                                            <div
-                                                class="flex flex-col gap-1 w-full min-w-0"
-                                            >
-                                                <div
-                                                    class="flex items-center justify-between gap-2"
-                                                >
-                                                    <div
-                                                        class="flex items-center gap-2 truncate"
-                                                    >
-                                                        <ModelSelectorLogo
-                                                            :provider="
-                                                                item.owned_by
-                                                            "
-                                                        />
-                                                        <ModelSelectorName
-                                                            class="font-medium truncate"
-                                                        >
+                                    <ModelSelectorGroup v-for="(
+groupModels, provider
+                                        ) in groupedModels" :key="provider" :heading="provider">
+                                        <ModelSelectorItem v-for="item in groupModels" :key="item.id"
+                                            :value="getModelSearchTerm(item)" :class="cn(
+                                                'flex items-start gap-2 py-3',
+                                                selectedModel?.id ===
+                                                    item.id
+                                                    ? 'bg-accent text-accent-foreground'
+                                                    : '',
+                                            )
+                                                " @select="
+                                                    () => {
+                                                        chatStore.selectModel(item);
+                                                        openModelSelector = false;
+                                                    }
+                                                ">
+                                            <Check :class="cn(
+                                                'mt-1 h-4 w-4 shrink-0',
+                                                selectedModel?.id ===
+                                                    item.id
+                                                    ? 'opacity-100'
+                                                    : 'opacity-0',
+                                            )
+                                                " />
+                                            <div class="flex flex-col gap-1 w-full min-w-0">
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <div class="flex items-center gap-2 truncate">
+                                                        <ModelSelectorLogo :provider="item.owned_by
+                                                            " />
+                                                        <ModelSelectorName class="font-medium truncate">
                                                             {{
                                                                 formatModelName(
                                                                     item.id,
@@ -2293,24 +1881,16 @@ watch(
                                                         </ModelSelectorName>
                                                     </div>
                                                     <span
-                                                        class="text-[10px] uppercase text-muted-foreground border px-1 rounded"
-                                                        >{{ item.type }}</span
-                                                    >
+                                                        class="text-[10px] uppercase text-muted-foreground border px-1 rounded">{{
+                                                            item.type }}</span>
                                                 </div>
 
                                                 <div
-                                                    class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground"
-                                                >
-                                                    <span
-                                                        v-if="
-                                                            item.context_window
-                                                        "
-                                                        class="flex items-center gap-1"
-                                                        title="上下文窗口"
-                                                    >
-                                                        <Maximize2
-                                                            class="w-3 h-3"
-                                                        />
+                                                    class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                                    <span v-if="
+                                                        item.context_window
+                                                    " class="flex items-center gap-1" title="上下文窗口">
+                                                        <Maximize2 class="w-3 h-3" />
                                                         {{
                                                             (
                                                                 item.context_window /
@@ -2318,14 +1898,9 @@ watch(
                                                             ).toFixed(0)
                                                         }}k
                                                     </span>
-                                                    <span
-                                                        v-if="item.max_tokens"
-                                                        class="flex items-center gap-1"
-                                                        title="最大输出 Token"
-                                                    >
-                                                        <MessageSquare
-                                                            class="w-3 h-3"
-                                                        />
+                                                    <span v-if="item.max_tokens" class="flex items-center gap-1"
+                                                        title="最大输出 Token">
+                                                        <MessageSquare class="w-3 h-3" />
                                                         {{
                                                             (
                                                                 item.max_tokens /
@@ -2335,37 +1910,25 @@ watch(
                                                     </span>
                                                 </div>
 
-                                                <div
-                                                    v-if="item.pricing"
-                                                    class="flex items-center gap-2 text-[10px] text-muted-foreground/80"
-                                                >
+                                                <div v-if="item.pricing"
+                                                    class="flex items-center gap-2 text-[10px] text-muted-foreground/80">
                                                     <Coins class="w-3 h-3" />
-                                                    <span
-                                                        >输入:
+                                                    <span>输入:
                                                         {{
                                                             item.pricing.input
-                                                        }}</span
-                                                    >
-                                                    <span
-                                                        >输出:
+                                                        }}</span>
+                                                    <span>输出:
                                                         {{
                                                             item.pricing.output
-                                                        }}</span
-                                                    >
+                                                        }}</span>
                                                 </div>
 
-                                                <div
-                                                    v-if="
-                                                        item.tags &&
-                                                        item.tags.length
-                                                    "
-                                                    class="flex flex-wrap gap-1 mt-1"
-                                                >
-                                                    <span
-                                                        v-for="tag in item.tags"
-                                                        :key="tag"
-                                                        class="bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded text-[10px]"
-                                                    >
+                                                <div v-if="
+                                                    item.tags &&
+                                                    item.tags.length
+                                                " class="flex flex-wrap gap-1 mt-1">
+                                                    <span v-for="tag in item.tags" :key="tag"
+                                                        class="bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded text-[10px]">
                                                         {{ tag }}
                                                     </span>
                                                 </div>
@@ -2377,18 +1940,9 @@ watch(
                         </ModelSelector>
                     </PromptInputTools>
 
-                    <PromptInputSubmit
-                        v-if="status !== 'streaming' && status !== 'submitted'"
-                        :disabled="submitDisabled"
-                        :status="status"
-                    />
-                    <PromptInputSubmit
-                        v-else
-                        :disabled="false"
-                        :status="status"
-                        @click="handleStop"
-                        type="button"
-                    />
+                    <PromptInputSubmit v-if="status !== 'streaming' && status !== 'submitted'"
+                        :disabled="submitDisabled" :status="status" />
+                    <PromptInputSubmit v-else :disabled="false" :status="status" @click="handleStop" type="button" />
                 </PromptInputFooter>
             </PromptInput>
         </div>

@@ -3,29 +3,11 @@
  */
 
 /**
- * 从 Vercel AI Gateway 获取可用模型列表
+ * 旧版在线模型列表入口已移除。
+ * 当前应用只展示用户本地配置并验证过的服务商模型。
  */
 export async function fetchAvailableModels(): Promise<ModelInfo[]> {
-    try {
-        const host = import.meta.env.VITE_API_HOST || "http://localhost:3000";
-        const response = await fetch(`${host}/api/models`, {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json",
-            },
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data: ModelsResponse = await response.json();
-        return data.data || [];
-    } catch (error) {
-        console.log("Failed to fetch models:", error);
-        ElMessage.error("无法获取模型列表，请检查网络连接或配置。");
-        return [];
-    }
+    return [];
 }
 
 /**
@@ -49,7 +31,7 @@ export function getModelProvider(modelId: string): string {
  * 按提供商分组模型（使用 owned_by 字段）
  */
 export function groupModelsByProvider(
-    models: ModelInfo[]
+    models: ModelInfo[],
 ): Record<string, ModelInfo[]> {
     return models.reduce(
         (acc, model) => {
@@ -60,6 +42,6 @@ export function groupModelsByProvider(
             acc[provider].push(model);
             return acc;
         },
-        {} as Record<string, ModelInfo[]>
+        {} as Record<string, ModelInfo[]>,
     );
 }

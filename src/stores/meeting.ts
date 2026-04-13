@@ -9,7 +9,6 @@ import type {
     MeetingStatus,
 } from "@/utils/meetingInterface";
 import { DEFAULT_AVATARS, DEFAULT_COLORS } from "@/utils/meetingInterface";
-import { fetchAvailableModels } from "@/utils/ModelApi";
 import type { ModelInfo } from "@/utils/interface";
 
 export const useMeetingStore = defineStore("meeting", {
@@ -799,11 +798,10 @@ export const useMeetingStore = defineStore("meeting", {
             this.isLoadingModels = true;
             this.modelsError = null;
             try {
-                const gloscModels = await fetchAvailableModels();
                 const settingsStore = useSettingsStore();
                 await settingsStore.init();
-                const customModels = settingsStore.getCustomSelectableModels();
-                this.availableModels = [...gloscModels, ...customModels];
+                this.availableModels =
+                    settingsStore.getCustomSelectableModels();
             } catch (error) {
                 this.modelsError =
                     error instanceof Error ? error.message : "加载模型失败";

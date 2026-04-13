@@ -308,6 +308,7 @@ declare global {
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
   const alertVariants: typeof import('./src/components/ui/alert/index').alertVariants
   const badgeVariants: typeof import('./src/components/ui/badge/index').badgeVariants
+  const buildCustomProviderRequestBody: typeof import('./src/utils/LocalAiProvider').buildCustomProviderRequestBody
   const buildMcpResourceBlock: typeof import('./src/utils/InlineCitationUtils').buildMcpResourceBlock
   const buttonGroupVariants: typeof import('./src/components/ui/button-group/index').buttonGroupVariants
   const buttonVariants: typeof import('./src/components/ui/button/index').buttonVariants
@@ -315,6 +316,9 @@ declare global {
   const computed: typeof import('vue').computed
   const createApp: typeof import('vue').createApp
   const createBuiltinTools: typeof import('./src/utils/BuiltinTools').createBuiltinTools
+  const createImageModelFromProvider: typeof import('./src/utils/LocalAiProvider').createImageModelFromProvider
+  const createLanguageModelFromProvider: typeof import('./src/utils/LocalAiProvider').createLanguageModelFromProvider
+  const createLanguageModelFromRequestBody: typeof import('./src/utils/LocalAiProvider').createLanguageModelFromRequestBody
   const createMarkdownParser: typeof import('./src/utils/MarkdownIt').createMarkdownParser
   const createPinia: typeof import('pinia').createPinia
   const customRef: typeof import('vue').customRef
@@ -345,7 +349,9 @@ declare global {
   const inputGroupAddonVariants: typeof import('./src/components/ui/input-group/index').inputGroupAddonVariants
   const inputGroupButtonVariants: typeof import('./src/components/ui/input-group/index').inputGroupButtonVariants
   const installStoreTool: typeof import('./src/utils/StoreToolInstaller').installStoreTool
+  const isApiKeyOptionalForBaseUrl: typeof import('./src/utils/LocalAiProvider').isApiKeyOptionalForBaseUrl
   const isCustomModelId: typeof import('./src/utils/CustomModelId').isCustomModelId
+  const isLocalAiBaseUrl: typeof import('./src/utils/LocalAiProvider').isLocalAiBaseUrl
   const isMcpServerEqual: typeof import('./src/utils/McpServerImport').isMcpServerEqual
   const isProxy: typeof import('vue').isProxy
   const isReactive: typeof import('vue').isReactive
@@ -362,6 +368,7 @@ declare global {
   const markRaw: typeof import('vue').markRaw
   const meetingMessagesToUiMessages: typeof import('./src/utils/MeetingUiMessageAdapter').meetingMessagesToUiMessages
   const nextTick: typeof import('vue').nextTick
+  const normalizeAiBaseUrl: typeof import('./src/utils/LocalAiProvider').normalizeAiBaseUrl
   const onActivated: typeof import('vue').onActivated
   const onBeforeMount: typeof import('vue').onBeforeMount
   const onBeforeRouteLeave: typeof import('vue-router').onBeforeRouteLeave
@@ -391,7 +398,11 @@ declare global {
   const ref: typeof import('vue').ref
   const removeMcpResourceCitation: typeof import('./src/utils/InlineCitationUtils').removeMcpResourceCitation
   const requestGeneratedImage: typeof import('./src/utils/ImageApi').requestGeneratedImage
+  const resolveAiFetch: typeof import('./src/utils/LocalAiProvider').resolveAiFetch
   const resolveComponent: typeof import('vue').resolveComponent
+  const resolveCustomProviderRequest: typeof import('./src/utils/LocalAiProvider').resolveCustomProviderRequest
+  const resolveCustomProviderSelection: typeof import('./src/utils/LocalAiProvider').resolveCustomProviderSelection
+  const resolveLocalAiRequest: typeof import('./src/utils/LocalAiProvider').resolveLocalAiRequest
   const setActivePinia: typeof import('pinia').setActivePinia
   const setMapStoreSuffix: typeof import('pinia').setMapStoreSuffix
   const shallowReactive: typeof import('vue').shallowReactive
@@ -473,6 +484,9 @@ declare global {
   // @ts-ignore
   export type { InlineCitationItem, ParsedInlineCitationPart } from './src/utils/InlineCitationUtils'
   import('./src/utils/InlineCitationUtils')
+  // @ts-ignore
+  export type { LocalAiRequestBody, ResolvedCustomProviderSelection, ResolvedCustomProviderRequest, ResolvedLocalAiRequest } from './src/utils/LocalAiProvider'
+  import('./src/utils/LocalAiProvider')
   // @ts-ignore
   export type { McpServerImportConfig } from './src/utils/McpServerImport'
   import('./src/utils/McpServerImport')

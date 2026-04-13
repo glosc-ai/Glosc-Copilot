@@ -1,60 +1,17 @@
-# Copilot instructions (Glosc Copilot)
+---
+applyTo: "**"
+---
 
-## Big picture
-
-- Desktop app built with **Tauri v2 (Rust)** + **Vue 3 + Vite + TypeScript**.
-- UI routes are **file-based** via `unplugin-vue-router`: add pages in `src/pages/*.vue` and layouts in `src/layouts/*.vue` (wired by `vite-plugin-vue-layouts`). Router uses `createMemoryHistory()` in `src/router/index.ts` (fits Tauri; avoid switching history mode casually).
-- Core domains:
-    - Chat UI (using @tdesign-vue-next/chat) + persistence: `src/components/ChatArea.vue`, `src/stores/chat.ts`
-    - MCP integration (tools/resources/prompts): `src/stores/mcp.ts`, `src/utils/McpUtils.ts`, `src/utils/TauriStdioTransport.ts`
-    - Model/image backend calls (Vercel AI Gateway style): `src/utils/ChatUtils.ts`, `src/utils/ModelApi.ts`, `src/utils/ImageApi.ts`
-
-## Dev workflows (commands that matter)
-
-- Package manager is **Yarn**: use `yarn install` / `yarn add`, and keep `yarn.lock` as the single lockfile (don’t introduce npm/pnpm lockfiles).
-- Web (browser): `yarn dev` (Vite)
-- Typecheck + build: `yarn build` (runs `vue-tsc --noEmit` then `vite build`)
-- Desktop (Tauri): `yarn tauri:dev` / `yarn tauri:build`
-    - These run `yarn prepare:uv` first to download the `uv` sidecar into `src-tauri/binaries/` (see `scripts/prepare-uv.mjs`).
-    - Tauri’s `beforeDevCommand`/`beforeBuildCommand` in `src-tauri/tauri.conf.json` also assume **yarn**.
-
-## Project conventions (important for agent edits)
-
-- **Auto-imports are intentional**: `vite.config.ts` configures `unplugin-auto-import` for `vue`, `vue-router`, `pinia` plus project dirs:
-    - `src/stores`, `src/utils`, `src/components/ai-elements/**`, `src/components/ui/**`
-    - Many files rely on this (e.g. `src/pages/mcp.vue` uses `useRouter()`/`useMcpStore()` without imports).
-- Treat generated typing files as read-only: `auto-imports.d.ts`, `components.d.ts`, `typed-router.d.ts`.
-- UI stack is mixed but consistent:
-    - Tailwind v4 + shadcn-vue primitives in `src/components/ui/**`
-    - Element Plus and Reka UI are enabled and auto-resolved (`ElementPlusResolver`) for components/messages.
-- Codebase is primarily in **Chinese**: comments, UI text, and variable names use Chinese (e.g., `会话相关` for conversation-related).
-- Tokenization uses `@lenml/tokenizers` with Claude config for message counting (`src/components/ChatArea.vue`).
-
-## Persistence & settings
-
-- Use `storeUtils` (`src/utils/StoreUtils.ts`) backed by `@tauri-apps/plugin-store`.
-    - Default is **encrypted**; unencrypted values are stored as `PLAIN:` prefix.
-    - Follow existing choices: MCP server configs are saved unencrypted (`src/stores/mcp.ts` uses `storeUtils.set(..., false)`).
-
-## MCP (tools) execution model
-
-- MCP servers are configured in the MCP page and persisted in `mcp_servers` via `src/stores/mcp.ts`.
-- Server lifecycle + capability probing:
-    - Use `McpUtils.startServer/stopServer/getActiveCapabilities/getTools` in `src/utils/McpUtils.ts`.
-    - Store caches tool lists for 5s (`CACHE_DURATION_MS`) to avoid reloading on every message.
-- Stdio MCP uses Tauri shell to spawn processes:
-    - `TauriStdioTransport` in `src/utils/TauriStdioTransport.ts` supports `npx`, `node`, `python`, `uv/uvx`.
-    - Sidecars are expected under `src-tauri/binaries/` and bundled via `src-tauri/tauri.conf.json` (`externalBin`) plus packaged JS resources under `src-tauri/resources/npm`.
-
-## Backend/API expectations
-
-- Backend is a separate project/repo; this codebase only contains the Tauri/Vue client.
-- Client calls default to `VITE_API_HOST || http://localhost:3000`.
-    - Models: `GET /api/models` (`src/utils/ModelApi.ts`)
-    - Chat streaming: `ChatUtils.getChat()` hits `${host}/api/chat` or `${host}/api/agent` (`src/utils/ChatUtils.ts`, `src/pages/workspace.vue`).
-    - Images: `POST /api/image` (`src/utils/ImageApi.ts`).
-
-## Debugging hooks
-
-- Production devtools hotkey: `F12` triggers the `open_devtools` Tauri command only when debug is enabled (`src/main.ts`).
-- Debug enable flag is controlled by presence of a `DEV` file next to the executable or in CWD (`src-tauri/src/lib.rs`).
+- 代码规范在 `/CodeStyle.md` 文件中有详细说明，请遵守其中的规范。
+- 项目使用 [tauri 2.0](https://tauri.app/) ｜ [AI Elements Vue](https://www.ai-elements-vue.com/overview/introduction) ｜ [AI SDK](https://ai-sdk.dev/) 进行开发，请在修改时先阅读相关文档:
+    - [相关API](https://tauri.app/zh-cn/reference/javascript/api/)
+    - [官方插件](https://tauri.app/zh-cn/plugin/)
+    - [AI Elements Vue 组件库](https://www.ai-elements-vue.com/components/chatbot/attachments)
+    - [AI SDK 文档](https://ai-sdk.dev/docs/introduction)
+- 尽量使用 TypeScript 来实现功能, 只有在确实无法实现 TypeScript 的情况下才使用 Rust.
+- 每次修改完成后都需要运行 `yarn tauri build` 来检查是否有编译错误。
+- 前端使用 [shadcn-vue](https://shadcn-vue.com/docs/components) 组件库，在编写前端时优先使用该组件库提供的组件来实现功能, 只有在确实无法实现的情况下才编写自定义组件.
+- 在编写代码时, 请尽量添加中文注释来解释代码的功能和实现思路, 以便其他开发者能够更好地理解代码.
+- 尽量用简洁的代码实现功能, 避免过于复杂的实现, 以提高代码的可读性和可维护性.
+- 必要时, 在 `/docs` 目录下添加相关文档记录功能的实现细节和使用方法, 以便后续的查阅和使用.
+- UI 风格使用简约现代紧凑的设计风格, 以提高用户体验和视觉效果,尽量避免冗余的介绍和过于复杂的设计, 以保持界面的清晰和易用性.

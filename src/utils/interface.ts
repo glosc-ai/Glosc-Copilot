@@ -155,8 +155,8 @@ export type McpServer = z.infer<typeof McpServerSchema>;
 export type ClientToolRegistry = Record<string, any>;
 export type CreateChatClientOptions = {
     /**
-     * 后端 Chat/Agent 接口路径。
-     * 默认 `/api/chat`；任务模式可传 `/api/agent`。
+     * 兼容旧调用的保留字段。
+     * 当前聊天请求已改为前端本地直连 AI 服务商，不再请求后端 chat/agent 接口。
      */
     apiPath?: string;
     /**

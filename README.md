@@ -14,7 +14,14 @@
 
 ### 简介
 
-Glosc Copilot 是一款跨平台的 AI 智能助手，目前有 聊天模式、会议模式、工作区模式，支持上百款 AI 模型接入（包括 OpenAI、Anthropic、Azure OpenAI、Mistral、Claude+、Gemini 等）,适配 MCP 工具 以及 Glosc Store 的高级功能。
+Glosc Copilot 是一款跨平台的 AI 智能助手，目前有聊天模式、会议模式、工作区模式，支持通过用户自定义 AI 服务商接入模型，适配 MCP 工具以及 Glosc Store 的高级功能。
+
+### AI 接入方式
+
+- AI 调用采用离线优先设计：应用会直接连接你在本地配置的 AI 服务商，不再依赖 Glosc 在线 AI 中转服务。
+- 登录只用于账号与 Glosc Store；聊天、会议、工作区模式不再要求登录后才能使用。
+- 当前支持 OpenAI 兼容接口，可用于接入 OpenAI 官方、各类兼容云服务，以及本地 Ollama、LM Studio 等服务。
+- 自定义服务商配置与 API Key 会加密存储在本地，模型列表通过服务商自己的 `GET {baseUrl}/models` 接口拉取。
 
 ### 软件界面
 
@@ -36,10 +43,11 @@ Glosc Copilot 是一款跨平台的 AI 智能助手，目前有 聊天模式、�
 
 
 ### 功能特色
-- 多种 AI 模型支持：接入 OpenAI、Anthropic、Azure OpenAI、Mistral、Claude+、Gemini 等多种模型。
+- 多种 AI 模型支持：通过自定义 OpenAI 兼容服务商接入云端或本地模型。
 - 聊天模式：与 AI 进行自然语言对话，支持上下文记忆和多轮交流。
 - 会议模式：模拟多人会议场景，AI 角色根据设定的人设进行发言和互动。
 - 工作区模式：创建专属工作区，集中管理任务和项目。
 - MCP 工具集成：支持多种工具调用，增强 AI 的功能和实用性。
+- 本地服务商预设：内置 Ollama、LM Studio、OpenAI 官方等快捷配置入口。
 - 跨平台支持：适用于 Windows、macOS 和 Linux 操作系统。
 

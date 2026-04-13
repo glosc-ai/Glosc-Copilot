@@ -1,7 +1,4 @@
 import { defineStore } from "pinia";
-import OpenAI from "openai";
-
-import { fetchAvailableModels } from "../utils/ModelApi";
 import { storeUtils } from "../utils/StoreUtils";
 import type { AttachmentFile } from "@/components/ai-elements/prompt-input";
 import type {
@@ -709,42 +706,29 @@ export const useChatStore = defineStore("chat", {
             }
 
             try {
-                // 构建对话内容用于总结
-                const conversationText = conversation.messages
-                    .filter((m) => m.role !== "system")
-                    .map(
-                        (m) =>
-                            `${m.role === "user" ? "用户" : "AI"}: ${m.content}`,
-                    )
-                    .join("\n");
+                const firstUserContent = userMessages[0]?.content?.trim() || "";
+                const firstAssistantContent =
+                    assistantMessages[0]?.content?.trim() || "";
 
-                // 使用AI生成总结
-                const summaryPrompt = `请为以下对话生成一个简短的标题（不超过20个字符）：\n\n${conversationText}\n\n标题：`;
+                let cleanedSummary = firstUserContent
+                    .replace(/\s+/g, " ")
+                    .replace(/[。！？!?]+$/g, "")
+                    .slice(0, 20)
+                    .trim();
 
-                const host =
-                    import.meta.env.VITE_API_HOST || "http://localhost:3000";
+                if (!cleanedSummary && firstAssistantContent) {
+                    cleanedSummary = firstAssistantContent
+                        .replace(/\s+/g, " ")
+                        .replace(/[。！？!?]+$/g, "")
+                        .slice(0, 20)
+                        .trim();
+                }
 
-                const openai = new OpenAI({
-                    apiKey: "123456",
-                    baseURL: `${host}/api/v1`,
-                    dangerouslyAllowBrowser: true,
-                });
-
-                const response = await openai.chat.completions.create({
-                    model: "xai/grok-4.1-fast-non-reasoning",
-                    messages: [{ role: "user", content: summaryPrompt }],
-                    temperature: 0.7,
-                    stream: false,
-                });
-
-                // 处理OpenAI响应
-                const summary = response.choices[0]?.message?.content || "";
-                console.log("Summary API response:", summary); // 调试日志
-
-                // 清理总结文本
-                let cleanedSummary = summary.trim();
-                if (cleanedSummary.length > 20) {
-                    cleanedSummary = cleanedSummary.substring(0, 20) + "...";
+                if (
+                    firstUserContent.length > cleanedSummary.length &&
+                    cleanedSummary
+                ) {
+                    cleanedSummary += "...";
                 }
 
                 if (cleanedSummary) {
@@ -881,13 +865,11 @@ export const useChatStore = defineStore("chat", {
             this.isLoadingModels = true;
             this.modelsError = null;
             try {
-                // Glosc 模型 + 用户自定义模型（本地加密存储的第三方 Key 配置）
-                const gloscModels = await fetchAvailableModels();
                 const settingsStore = useSettingsStore();
                 // 兜底：确保 settings 初始化（main.ts 会先 init，但这里避免时序问题）
                 await settingsStore.init();
-                const customModels = settingsStore.getCustomSelectableModels();
-                this.availableModels = [...gloscModels, ...customModels];
+                this.availableModels =
+                    settingsStore.getCustomSelectableModels();
 
                 if (this.availableModels.length > 0) {
                     const persistedModelId =
@@ -896,22 +878,13 @@ export const useChatStore = defineStore("chat", {
                     const currentModelId = this.selectedModel?.id;
                     const desiredModelId = currentModelId || persistedModelId;
 
-                    const defaultModelId = "xai/grok-code-fast-1";
-
                     const resolvedModel = desiredModelId
                         ? this.availableModels.find(
                               (m) => m.id === desiredModelId,
                           )
                         : undefined;
 
-                    const fallbackDefaultModel = this.availableModels.find(
-                        (m) => m.id === defaultModelId,
-                    );
-
-                    const nextModel =
-                        resolvedModel ||
-                        fallbackDefaultModel ||
-                        this.availableModels[0];
+                    const nextModel = resolvedModel || this.availableModels[0];
 
                     if (this.selectedModel?.id !== nextModel?.id) {
                         this.selectedModel = nextModel;
@@ -920,6 +893,9 @@ export const useChatStore = defineStore("chat", {
                     await this.persistSelectedModelId(
                         this.selectedModel?.id || null,
                     );
+                } else {
+                    this.selectedModel = null;
+                    await this.persistSelectedModelId(null);
                 }
             } catch (error) {
                 this.modelsError =

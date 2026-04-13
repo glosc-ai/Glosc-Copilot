@@ -1,6 +1,4 @@
 import { defineStore } from "pinia";
-
-import { fetchAvailableModels } from "@/utils/ModelApi";
 import { storeUtils } from "@/utils/StoreUtils";
 import type {
     ConversationItem,
@@ -447,30 +445,27 @@ export const useWorkspaceChatStore = defineStore("workspaceChat", {
             this.isLoadingModels = true;
             this.modelsError = null;
             try {
-                const gloscModels = await fetchAvailableModels();
                 const settingsStore = useSettingsStore();
                 await settingsStore.init();
-                const customModels = settingsStore.getCustomSelectableModels();
-                this.availableModels = [...gloscModels, ...customModels];
+                this.availableModels =
+                    settingsStore.getCustomSelectableModels();
 
                 if (this.availableModels.length > 0) {
                     const persisted = await this.loadPersistedSelectedModelId();
                     const desiredId = this.selectedModel?.id || persisted;
-                    const defaultModelId = "xai/grok-code-fast-1";
 
                     const resolved = desiredId
                         ? this.availableModels.find((m) => m.id === desiredId)
                         : undefined;
-                    const fallbackDefault = this.availableModels.find(
-                        (m) => m.id === defaultModelId,
-                    );
 
-                    this.selectedModel =
-                        resolved || fallbackDefault || this.availableModels[0];
+                    this.selectedModel = resolved || this.availableModels[0];
 
                     await this.persistSelectedModelId(
                         this.selectedModel?.id || null,
                     );
+                } else {
+                    this.selectedModel = null;
+                    await this.persistSelectedModelId(null);
                 }
             } catch (error) {
                 this.modelsError =
