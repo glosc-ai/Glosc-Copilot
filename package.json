@@ -1,7 +1,7 @@
 {
     "name": "glosc-copilot",
     "private": true,
-    "version": "0.7.1",
+    "version": "0.7.2",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -14,7 +14,10 @@
         "prepare:binaries": "yarn -s prepare:node && yarn -s prepare:uv",
         "sync:version": "node scripts/sync-version.mjs",
         "tauri:dev": "yarn -s prepare:binaries && yarn -s tauri dev",
-        "tauri:build": "yarn -s prepare:binaries && yarn -s tauri build"
+        "tauri:build": "yarn -s prepare:binaries && yarn -s tauri build",
+        "tauri:build:appstore": "node scripts/run-appstore-build.mjs build",
+        "tauri:bundle:appstore": "node scripts/run-appstore-build.mjs bundle",
+        "appstore:pkg": "node scripts/package-appstore-pkg.mjs"
     },
     "dependencies": {
         "@ai-sdk/mcp": "^1.0.36",

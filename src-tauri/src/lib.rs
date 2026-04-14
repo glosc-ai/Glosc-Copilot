@@ -116,21 +116,31 @@ fn get_cli_args() -> Vec<String> {
     std::env::args().collect()
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    let debug_enabled = is_dev_file_present();
-
+#[cfg(not(app_store))]
+fn attach_updater_plugin(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
     let updater_builder = tauri_plugin_updater::Builder::new();
     let updater_builder = match std::env::var("TAURI_UPDATER_PUBKEY") {
         Ok(pubkey) if !pubkey.trim().is_empty() => updater_builder.pubkey(pubkey),
         _ => updater_builder,
     };
 
+    builder.plugin(updater_builder.build())
+}
+
+#[cfg(app_store)]
+fn attach_updater_plugin(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    // App Store 版本必须走商店更新，不能继续注入自更新插件。
+    builder
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let debug_enabled = is_dev_file_present();
+
     #[cfg(target_os = "windows")]
     try_register_glosc_protocol();
 
-    tauri::Builder::default()
-        .plugin(updater_builder.build())
+    attach_updater_plugin(tauri::Builder::default())
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();

@@ -962,7 +962,7 @@ async function toggleServer(serverId: string, checked: boolean) {
                 <div class="flex items-center gap-2 text-sm font-semibold leading-none">
                     <span class="truncate">工作区会话</span>
                     <Badge variant="outline"
-                        class="font-normal text-xs h-5 px-1.5 gap-1 shrink-0 bg-muted/50 truncate max-w-[200px]">
+                        class="font-normal text-xs h-5 px-1.5 gap-1 shrink-0 bg-muted/50 truncate max-w-50">
                         {{
                             props.workspaceRoot
                                 ? props.workspaceRoot.split(/[/\\]/).pop()
@@ -1179,7 +1179,7 @@ async function toggleServer(serverId: string, checked: boolean) {
             </div>
 
             <Dialog v-model:open="settingsOpen">
-                <DialogContent class="max-w-[700px] h-[800px] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+                <DialogContent class="max-w-175 h-200 max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
                     <DialogHeader class="px-6 py-4 border-b shrink-0 bg-muted/20">
                         <DialogTitle>会话设置</DialogTitle>
                         <DialogDescription>
@@ -1221,11 +1221,11 @@ async function toggleServer(serverId: string, checked: boolean) {
                                             <ModelSelectorPicker :models="availableModels" :selected-model="selectedConversationModelInfo
                                                 " :selected-model-id="selectedConversationModelId
                                                     " @select="
-                                                    (m) =>
-                                                        setConversationModel(
-                                                            m.id,
-                                                        )
-                                                " class="w-full" />
+                                                        (m) =>
+                                                            setConversationModel(
+                                                                m.id,
+                                                            )
+                                                    " class="w-full" />
                                         </div>
                                     </div>
                                 </TabsContent>
@@ -1301,16 +1301,16 @@ async function toggleServer(serverId: string, checked: boolean) {
                                                         selectedConversation.webSearch,
                                                     )
                                                         " @change="
-                                                        chatStore.updateConversation(
-                                                            selectedConversation!
-                                                                .id,
-                                                            {
-                                                                webSearch: (
-                                                                    $event.target as HTMLInputElement
-                                                                ).checked,
-                                                            },
-                                                        )
-                                                        " />
+                                                            chatStore.updateConversation(
+                                                                selectedConversation!
+                                                                    .id,
+                                                                {
+                                                                    webSearch: (
+                                                                        $event.target as HTMLInputElement
+                                                                    ).checked,
+                                                                },
+                                                            )
+                                                            " />
                                             </div>
                                         </div>
 
@@ -1327,17 +1327,17 @@ async function toggleServer(serverId: string, checked: boolean) {
                                                     :checked="selectedConversation.agentSkillsEnabled !==
                                                         false
                                                         " @change="
-                                                        chatStore.updateConversation(
-                                                            selectedConversation!
-                                                                .id,
-                                                            {
-                                                                agentSkillsEnabled:
-                                                                    (
-                                                                        $event.target as HTMLInputElement
-                                                                    ).checked,
-                                                            },
-                                                        )
-                                                        " />
+                                                            chatStore.updateConversation(
+                                                                selectedConversation!
+                                                                    .id,
+                                                                {
+                                                                    agentSkillsEnabled:
+                                                                        (
+                                                                            $event.target as HTMLInputElement
+                                                                        ).checked,
+                                                                },
+                                                            )
+                                                            " />
                                             </div>
                                         </div>
                                     </div>
@@ -1369,17 +1369,17 @@ async function toggleServer(serverId: string, checked: boolean) {
                                                 <input type="checkbox" :id="`server-${s.id}`"
                                                     class="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
                                                     :checked="(
-                                                            selectedConversation.enabledMcpServerIds ||
-                                                            []
-                                                        ).includes(s.id)
+                                                        selectedConversation.enabledMcpServerIds ||
+                                                        []
+                                                    ).includes(s.id)
                                                         " @change="
-                                                        toggleServer(
-                                                            s.id,
-                                                            (
-                                                                $event.target as HTMLInputElement
-                                                            ).checked,
-                                                        )
-                                                        " />
+                                                            toggleServer(
+                                                                s.id,
+                                                                (
+                                                                    $event.target as HTMLInputElement
+                                                                ).checked,
+                                                            )
+                                                            " />
                                                 <div class="flex flex-col gap-1 overflow-hidden">
                                                     <label :for="`server-${s.id}`"
                                                         class="text-sm font-medium leading-none cursor-pointer truncate">

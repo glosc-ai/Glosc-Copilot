@@ -22,6 +22,8 @@ const pinia = createPinia();
 app.use(pinia);
 app.use(router);
 
+const isAppStoreBuild = import.meta.env.VITE_APP_STORE_BUILD === "true";
+
 // 全局设置（主题/语言/模型显示）
 try {
     const settingsStore = useSettingsStore(pinia);
@@ -220,6 +222,13 @@ async function setupMainWindowPosition() {
 async function checkForAppUpdates(manual = false) {
     if (!isTauriRuntime()) return;
 
+    if (isAppStoreBuild) {
+        if (manual) {
+            ElMessage.info("App Store 版本请通过 App Store 获取更新");
+        }
+        return;
+    }
+
     try {
         const { check } = await import("@tauri-apps/plugin-updater");
         const update = await check();
@@ -267,7 +276,10 @@ setupConsoleImporter();
 handleStartupImports();
 setupSingleInstanceHandler();
 setupMainWindowPosition();
-checkForAppUpdates(true);
+
+if (!isAppStoreBuild) {
+    checkForAppUpdates(true);
+}
 
 // 启动时后台展开 npm 资源（仅 Tauri 环境）。
 // 目标是让安装目录的 resources/npm 存在（npx 使用时无需再解压）。

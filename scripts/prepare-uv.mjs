@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import AdmZip from "adm-zip";
 import * as tar from "tar";
@@ -72,6 +73,60 @@ async function findFileRecursive(rootDir, predicate) {
         }
     }
     return null;
+}
+
+async function ensureUniversalBinary(binariesDir, binaryName) {
+    if (process.platform !== "darwin") {
+        return;
+    }
+
+    const arm64Binary = path.join(
+        binariesDir,
+        `${binaryName}-aarch64-apple-darwin`,
+    );
+    const x64Binary = path.join(
+        binariesDir,
+        `${binaryName}-x86_64-apple-darwin`,
+    );
+    const universalBinary = path.join(
+        binariesDir,
+        `${binaryName}-universal-apple-darwin`,
+    );
+
+    if (!(await fileExists(arm64Binary)) || !(await fileExists(x64Binary))) {
+        return;
+    }
+
+    await fs.rm(universalBinary, { force: true });
+
+    const result = spawnSync(
+        "lipo",
+        [
+            "-create",
+            arm64Binary,
+            x64Binary,
+            "-output",
+            universalBinary,
+        ],
+        { stdio: "inherit" },
+    );
+
+    if (result.status !== 0) {
+        throw new Error(
+            `[prepare-uv] Failed to build universal binary: ${path.relative(
+                process.cwd(),
+                universalBinary,
+            )}`,
+        );
+    }
+
+    await fs.chmod(universalBinary, 0o755);
+    console.log(
+        `[prepare-uv] Built universal binary: ${path.relative(
+            process.cwd(),
+            universalBinary,
+        )}`,
+    );
 }
 
 async function main() {
@@ -172,6 +227,8 @@ async function main() {
             `[prepare-uv] Installed: ${path.relative(process.cwd(), outFile)}`,
         );
     }
+
+    await ensureUniversalBinary(binariesDir, "uv");
 }
 
 main().catch((err) => {

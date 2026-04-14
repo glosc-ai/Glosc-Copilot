@@ -28,4 +28,6 @@ dist-ssr
 .env
 
 /src-tauri/resources/
+/src-tauri/binaries/
 .tauri
+*.provisionprofile
