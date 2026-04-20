@@ -53,6 +53,10 @@ const openMcpManager = () => {
     uiStore.openMcpManager();
 };
 
+const openSkillsManager = () => {
+    uiStore.openSkillsManager();
+};
+
 const openSettings = () => {
     uiStore.openSettings();
 };
@@ -179,8 +183,11 @@ const balanceTip = computed(() => {
                     <DropdownMenuTrigger as-child>
                         <Button variant="ghost"> 选项 </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent class="w-20" align="start">
+                    <DropdownMenuContent class="w-28" align="start">
                         <DropdownMenuGroup>
+                            <DropdownMenuItem @click="openSkillsManager">
+                                Skills
+                            </DropdownMenuItem>
                             <DropdownMenuItem @click="openMcpManager">
                                 工具
                             </DropdownMenuItem>

@@ -10,12 +10,11 @@ import "./assets/css/main.less";
 import { installStoreTool } from "@/utils/StoreToolInstaller";
 import {
     decodeBase64Url,
-    isMcpServerEqual,
     parseMcpServerConfigs,
-    type McpServerImportConfig,
 } from "@/utils/McpServerImport";
 import { GloscStoreApi } from "@/utils/GloscStoreApi";
 import { syncInstalledStoreToolsAccess } from "@/utils/StoreToolAccess";
+import { upsertMcpServersInStore } from "@/utils/McpImportUtils";
 
 const app = createApp(App);
 const pinia = createPinia();
@@ -33,43 +32,19 @@ try {
 }
 app.mount("#app");
 
-async function importMcpServersFromConfigs(configs: McpServerImportConfig[]) {
+async function importMcpServersFromConfigs(configs: ReturnType<typeof parseMcpServerConfigs>) {
     const mcpStore = useMcpStore(pinia);
     await mcpStore.init();
 
-    let added = 0;
-    let updated = 0;
+    const summary = await upsertMcpServersInStore({
+        mcpStore,
+        configs,
+        enableImported: true,
+    });
 
-    for (const cfg of configs) {
-        // Upsert by (type,name) as the most user-friendly behavior.
-        const existing = mcpStore.servers.find(
-            (s) => s.type === cfg.type && s.name === cfg.name,
-        );
-
-        if (existing) {
-            if (!isMcpServerEqual(existing, cfg)) {
-                await mcpStore.updateServer(existing.id, {
-                    ...cfg,
-                    enabled: true,
-                } as any);
-                updated += 1;
-            } else if (!existing.enabled) {
-                await mcpStore.updateServer(existing.id, { enabled: true });
-                updated += 1;
-            }
-            continue;
-        }
-
-        await mcpStore.addServer({
-            ...(cfg as any),
-            enabled: true,
-        });
-        added += 1;
-    }
-
-    if (added || updated) {
+    if (summary.added || summary.updated) {
         ElMessage.success(
-            `已导入工具：新增 ${added} 个，更新/启用 ${updated} 个`,
+            `已导入工具：新增 ${summary.added} 个，更新/启用 ${summary.updated} 个`,
         );
     } else {
         ElMessage.info("未导入任何工具（可能已存在）");

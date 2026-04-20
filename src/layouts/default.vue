@@ -8,6 +8,7 @@ onMounted(() => {
 <template>
     <div class="pt-10">
         <TitleBar />
+        <SkillsManagerDialog />
         <McpManagerDialog />
         <SettingsModal />
         <AboutDialog />

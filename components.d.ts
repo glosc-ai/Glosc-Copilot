@@ -275,6 +275,7 @@ declare module 'vue' {
     Settings2: typeof import('lucide-vue-next')['Settings2']
     SettingsModal: typeof import('./src/components/SettingsModal.vue')['default']
     Shimmer: typeof import('./src/components/ai-elements/shimmer/Shimmer.vue')['default']
+    SkillsManagerDialog: typeof import('./src/components/skills/SkillsManagerDialog.vue')['default']
     Source: typeof import('./src/components/ai-elements/sources/Source.vue')['default']
     Sources: typeof import('./src/components/ai-elements/sources/Sources.vue')['default']
     SourcesContent: typeof import('./src/components/ai-elements/sources/SourcesContent.vue')['default']

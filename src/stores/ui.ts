@@ -3,6 +3,7 @@ import { defineStore } from "pinia";
 export const useUiStore = defineStore("ui", {
     state: () => ({
         mcpManagerOpen: false,
+        skillsManagerOpen: false,
         settingsOpen: false,
         aboutOpen: false,
         aboutTab: "about" as "about" | "changelog" | "github",
@@ -13,6 +14,12 @@ export const useUiStore = defineStore("ui", {
         },
         closeMcpManager() {
             this.mcpManagerOpen = false;
+        },
+        openSkillsManager() {
+            this.skillsManagerOpen = true;
+        },
+        closeSkillsManager() {
+            this.skillsManagerOpen = false;
         },
         openSettings() {
             this.settingsOpen = true;

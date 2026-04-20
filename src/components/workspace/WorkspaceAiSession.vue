@@ -50,6 +50,7 @@ import {
 
 import { useWorkspaceChatStore } from "@/stores/workspaceChat";
 import { useMcpStore } from "@/stores/mcp";
+import { useSkillsStore } from "@/stores/skills";
 import { storeToRefs } from "pinia";
 
 import { ChatUtils } from "@/utils/ChatUtils";
@@ -80,6 +81,8 @@ const props = defineProps<{ workspaceRoot: string | null }>();
 const chatStore = useWorkspaceChatStore();
 const settingsStore = useSettingsStore();
 const mcpStore = useMcpStore();
+const skillsStore = useSkillsStore();
+const uiStore = useUiStore();
 
 const {
     conversationsItems,
@@ -91,6 +94,11 @@ const {
 
 const selectedConversation = computed(() =>
     activeKey.value ? conversations.value[activeKey.value] : null,
+);
+const compatibleSkillsPrompt = computed(() =>
+    skillsStore.getEnabledSkillsPrompt({
+        title: "【已启用兼容 Skills】",
+    }),
 );
 
 const selectedConversationModelId = computed(() => {
@@ -507,7 +515,7 @@ async function ensureActiveSession() {
 }
 
 onMounted(async () => {
-    await mcpStore.init();
+    await Promise.all([mcpStore.init(), skillsStore.init()]);
     void mcpStore.checkConnections();
     await chatStore.setWorkspaceRoot(props.workspaceRoot);
     await ensureActiveSession();
@@ -538,6 +546,7 @@ function buildBaseWorkspaceSystemPrompt(params: {
     customInstructions?: string;
     agentSkillsEnabled?: boolean;
     fileContextText?: string;
+    compatibleSkillsPrompt?: string;
 }) {
     const lines: string[] = [];
 
@@ -577,6 +586,11 @@ function buildBaseWorkspaceSystemPrompt(params: {
         lines.push("");
     }
 
+    if (params.compatibleSkillsPrompt?.trim()) {
+        lines.push(params.compatibleSkillsPrompt.trim());
+        lines.push("");
+    }
+
     return lines.join("\n").trim();
 }
 
@@ -594,6 +608,7 @@ function applyConversationToChat(conversationId: string) {
         customInstructions: conv.customInstructions,
         agentSkillsEnabled: conv.agentSkillsEnabled,
         fileContextText: undefined,
+        compatibleSkillsPrompt: compatibleSkillsPrompt.value,
     });
 
     const systemMessage: any = {
@@ -740,6 +755,7 @@ async function ensureSystemPromptUpToDate() {
         customInstructions: conv.customInstructions,
         agentSkillsEnabled: conv.agentSkillsEnabled,
         fileContextText: fileContextText || undefined,
+        compatibleSkillsPrompt: compatibleSkillsPrompt.value,
     });
 
     const systemId = `ws-system-${conv.id}`;
@@ -892,6 +908,14 @@ async function switchSession(id: string) {
 }
 
 const sessionTitleDraft = ref<string>("");
+watch(
+    compatibleSkillsPrompt,
+    async () => {
+        if (!selectedConversation.value) return;
+        await ensureSystemPromptUpToDate();
+    },
+);
+
 watch(
     () => selectedConversation.value?.title,
     (t) => {
@@ -1339,6 +1363,30 @@ async function toggleServer(serverId: string, checked: boolean) {
                                                             )
                                                             " />
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    <Separator />
+
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between">
+                                            <Label class="text-base">兼容 Skills</Label>
+                                            <Button
+                                                variant="link"
+                                                size="sm"
+                                                class="h-auto p-0"
+                                                @click="uiStore.openSkillsManager"
+                                            >
+                                                管理 Skills
+                                            </Button>
+                                        </div>
+
+                                        <div
+                                            class="text-sm text-muted-foreground bg-muted/50 p-4 rounded-md"
+                                        >
+                                            已全局启用 {{ skillsStore.enabledSkillCount }}
+                                            个兼容 Skill。导入的 Agent Skills / ClawHub
+                                            技能会自动拼接到当前工作区的 system prompt。
                                         </div>
                                     </div>
 

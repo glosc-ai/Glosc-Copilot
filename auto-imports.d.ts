@@ -308,6 +308,7 @@ declare global {
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
   const alertVariants: typeof import('./src/components/ui/alert/index').alertVariants
   const badgeVariants: typeof import('./src/components/ui/badge/index').badgeVariants
+  const buildCompatibleSkillsPrompt: typeof import('./src/utils/SkillCompatibility').buildCompatibleSkillsPrompt
   const buildCustomProviderRequestBody: typeof import('./src/utils/LocalAiProvider').buildCustomProviderRequestBody
   const buildMcpResourceBlock: typeof import('./src/utils/InlineCitationUtils').buildMcpResourceBlock
   const buttonGroupVariants: typeof import('./src/components/ui/button-group/index').buttonGroupVariants
@@ -323,6 +324,7 @@ declare global {
   const createPinia: typeof import('pinia').createPinia
   const customRef: typeof import('vue').customRef
   const decodeBase64Url: typeof import('./src/utils/McpServerImport').decodeBase64Url
+  const dedupeMcpConfigs: typeof import('./src/utils/McpImportUtils').dedupeMcpConfigs
   const defineAsyncComponent: typeof import('vue').defineAsyncComponent
   const defineComponent: typeof import('vue').defineComponent
   const defineStore: typeof import('pinia').defineStore
@@ -345,6 +347,7 @@ declare global {
   const h: typeof import('vue').h
   const hasMcpResourceBlocks: typeof import('./src/utils/InlineCitationUtils').hasMcpResourceBlocks
   const highlightCode: typeof import('./src/components/ai-elements/code-block/utils').highlightCode
+  const importCompatibleSource: typeof import('./src/utils/SkillCompatibility').importCompatibleSource
   const inject: typeof import('vue').inject
   const inputGroupAddonVariants: typeof import('./src/components/ui/input-group/index').inputGroupAddonVariants
   const inputGroupButtonVariants: typeof import('./src/components/ui/input-group/index').inputGroupButtonVariants
@@ -421,6 +424,7 @@ declare global {
   const triggerRef: typeof import('vue').triggerRef
   const unref: typeof import('vue').unref
   const updateStoreTool: typeof import('./src/utils/StoreToolInstaller').updateStoreTool
+  const upsertMcpServersInStore: typeof import('./src/utils/McpImportUtils').upsertMcpServersInStore
   const useAttrs: typeof import('vue').useAttrs
   const useAuthStore: typeof import('./src/stores/auth').useAuthStore
   const useChatStore: typeof import('./src/stores/chat').useChatStore
@@ -442,6 +446,7 @@ declare global {
   const useRoute: typeof import('vue-router').useRoute
   const useRouter: typeof import('vue-router').useRouter
   const useSettingsStore: typeof import('./src/stores/settings').useSettingsStore
+  const useSkillsStore: typeof import('./src/stores/skills').useSkillsStore
   const useSlots: typeof import('vue').useSlots
   const useTemplateRef: typeof import('vue').useTemplateRef
   const useUiStore: typeof import('./src/stores/ui').useUiStore
@@ -488,6 +493,9 @@ declare global {
   export type { LocalAiRequestBody, ResolvedCustomProviderSelection, ResolvedCustomProviderRequest, ResolvedLocalAiRequest } from './src/utils/LocalAiProvider'
   import('./src/utils/LocalAiProvider')
   // @ts-ignore
+  export type { McpImportSummary } from './src/utils/McpImportUtils'
+  import('./src/utils/McpImportUtils')
+  // @ts-ignore
   export type { McpServerImportConfig } from './src/utils/McpServerImport'
   import('./src/utils/McpServerImport')
   // @ts-ignore
@@ -499,6 +507,9 @@ declare global {
   // @ts-ignore
   export type { EnsureBundledNpmResult } from './src/utils/NpmResources'
   import('./src/utils/NpmResources')
+  // @ts-ignore
+  export type { SkillSourceKind, ISkillSourceInfo, ISkillPackageMeta, ISkillFileSummary, IImportedSkill, ICompatibilityImportResult } from './src/utils/SkillCompatibility'
+  import('./src/utils/SkillCompatibility')
   // @ts-ignore
   export type { StoreToolAccessStatus, StoreToolAccessInfo } from './src/utils/StoreToolAccess'
   import('./src/utils/StoreToolAccess')

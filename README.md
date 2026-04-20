@@ -14,7 +14,7 @@
 
 ### 简介
 
-Glosc Copilot 是一款跨平台的 AI 智能助手，目前有聊天模式、会议模式、工作区模式，支持通过用户自定义 AI 服务商接入模型，适配 MCP 工具以及 Glosc Store 的高级功能。
+Glosc Copilot 是一款跨平台的 AI 智能助手，目前有聊天模式、会议模式、工作区模式，支持通过用户自定义 AI 服务商接入模型，适配 MCP 工具、Agent Skills / ClawHub 兼容技能包，以及 Glosc Store 的高级功能。
 
 ### AI 接入方式
 
@@ -48,6 +48,13 @@ Glosc Copilot 是一款跨平台的 AI 智能助手，目前有聊天模式、�
 - 会议模式：模拟多人会议场景，AI 角色根据设定的人设进行发言和互动。
 - 工作区模式：创建专属工作区，集中管理任务和项目。
 - MCP 工具集成：支持多种工具调用，增强 AI 的功能和实用性。
+- Skills 兼容导入：支持导入 Agent Skills 标准目录 / `SKILL.md` / zip，以及 ClawHub/OpenClaw 页面 URL，并自动提取可用的 Skill 指令与 bundled MCP 配置。
 - 本地服务商预设：内置 Ollama、LM Studio、OpenAI 官方等快捷配置入口。
 - 跨平台支持：适用于 Windows、macOS 和 Linux 操作系统。
 
+### Skills / ClawHub 兼容说明
+
+- 可通过顶部菜单“选项 → Skills”导入本地目录、本地压缩包、`SKILL.md` 文件，或 ClawHub / OpenClaw 页面 URL。
+- 导入后的 Skill 可全局启用/停用，启用后会自动拼接到聊天与工作区会话的系统提示词中。
+- 若包内包含可识别的 MCP 配置（如 `mcpServers` / `servers` / 兼容 JSON/YAML 文件），会同步导入到工具管理。
+- 当前兼容层以 **Skill 指令复用 + bundled MCP 发现** 为主；**不等同于完整支持 OpenClaw gateway plugin 生命周期**。

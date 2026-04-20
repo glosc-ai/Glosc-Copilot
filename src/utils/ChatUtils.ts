@@ -31,13 +31,24 @@ class LocalChatTransport<
         const requestBody = (options.body ?? {}) as Record<string, any>;
         const tools = (requestBody.tools || {}) as ToolSet;
         const validationTools = tools as any;
+        const hiddenSystemPrompt = String(requestBody.systemPrompt || "").trim();
         const validatedMessages = await validateUIMessages({
             messages: options.messages,
             tools: validationTools,
         });
 
+        const messagesForModel = hiddenSystemPrompt
+            ? ([
+                  {
+                      role: "system",
+                      parts: [{ type: "text", text: hiddenSystemPrompt }],
+                  },
+                  ...validatedMessages,
+              ] as typeof validatedMessages)
+            : validatedMessages;
+
         const modelMessages = await convertToModelMessages(
-            validatedMessages.map((message) => {
+            messagesForModel.map((message) => {
                 const { id: _id, ...rest } = message as UI_MESSAGE & {
                     id?: string;
                 };

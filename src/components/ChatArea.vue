@@ -22,6 +22,7 @@ import { TokenizerLoader } from "@lenml/tokenizers";
 
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat";
+import { useSkillsStore } from "@/stores/skills";
 import { storeToRefs } from "pinia";
 import { useMcpStore } from "@/stores/mcp";
 import { useRouter } from "vue-router";
@@ -58,6 +59,7 @@ const {
 } = storeToRefs(chatStore);
 const settingsStore = useSettingsStore();
 const mcpStore = useMcpStore();
+const skillsStore = useSkillsStore();
 const { servers } = storeToRefs(mcpStore);
 const router = useRouter();
 
@@ -78,6 +80,12 @@ const enabledMcpServerIds = computed(() =>
 
 // WebSearch 开关（透传给后端）
 const webSearchEnabled = computed(() => chatStore.webSearchEnabled);
+const compatibleSkillsPrompt = computed(() =>
+    skillsStore.getEnabledSkillsPrompt({
+        title: "【兼容 Skills】",
+    }),
+);
+
 async function toggleWebSearch() {
     await chatStore.setWebSearchEnabled(!webSearchEnabled.value);
 }
@@ -221,7 +229,7 @@ const openModelSelector = ref(false);
 const checkpoints = ref<CheckpointType[]>([]);
 
 onMounted(async () => {
-    await mcpStore.init();
+    await Promise.all([mcpStore.init(), skillsStore.init()]);
     mcpStore.checkConnections();
     if (!chatStore.recentModelUsageLoaded) {
         await chatStore.loadRecentModelUsage();
@@ -387,6 +395,9 @@ async function sendChatMessage(
                     // 后端若仅在 mcpEnabled=true 时启用 tools，这里扩展为“任意工具可用”。
                     mcpEnabled: toolsEnabled,
                     tools,
+                    ...(compatibleSkillsPrompt.value
+                        ? { systemPrompt: compatibleSkillsPrompt.value }
+                        : {}),
                     ...(webSearchEnabled.value ? { webSearch: true } : {}),
                 },
             },
@@ -731,6 +742,9 @@ async function handleSubmit(message: PromptInputMessage) {
                     ...modelRequestBody,
                     mcpEnabled: hasEnabledServers.value,
                     tools,
+                    ...(compatibleSkillsPrompt.value
+                        ? { systemPrompt: compatibleSkillsPrompt.value }
+                        : {}),
                     ...(webSearchEnabled.value ? { webSearch: true } : {}),
                 },
             },
@@ -841,6 +855,9 @@ async function handleRegenerate() {
             ...modelRequestBody,
             mcpEnabled: toolsEnabled,
             tools,
+            ...(compatibleSkillsPrompt.value
+                ? { systemPrompt: compatibleSkillsPrompt.value }
+                : {}),
             ...(webSearchEnabled.value ? { webSearch: true } : {}),
         },
     });
