@@ -54,11 +54,18 @@ import { useSkillsStore } from "@/stores/skills";
 import { storeToRefs } from "pinia";
 
 import { ChatUtils } from "@/utils/ChatUtils";
+import { openInExplorer } from "@/utils/ExplorerUtils";
 import { McpUtils } from "@/utils/McpUtils";
 import { resolveCustomProviderRequest } from "@/utils/LocalAiProvider";
+import {
+    buildCompatibleSkillsPrompt,
+    discoverWorkspaceInstalledSkills,
+    type IImportedSkill,
+} from "@/utils/SkillCompatibility";
 // import { createBuiltinTools } from "@/utils/BuiltinTools";
 
-import { readDir, readTextFile } from "@tauri-apps/plugin-fs";
+import { join } from "@tauri-apps/api/path";
+import { exists, mkdir, readDir, readTextFile } from "@tauri-apps/plugin-fs";
 
 import type { ChatStatus, SourceUrlUIPart, UIMessage } from "ai";
 
@@ -68,6 +75,7 @@ import {
     Pencil,
     Plus,
     RefreshCcwIcon,
+    FolderOpen,
     Settings2,
     Trash2,
 } from "lucide-vue-next";
@@ -99,6 +107,21 @@ const compatibleSkillsPrompt = computed(() =>
     skillsStore.getEnabledSkillsPrompt({
         title: "【已启用兼容 Skills】",
     }),
+);
+const workspaceInstalledSkills = ref<IImportedSkill[]>([]);
+const workspaceInstalledSkillsWarnings = ref<string[]>([]);
+const workspaceInstalledSkillsLockPath = ref<string | null>(null);
+const workspaceInstalledSkillsPrompt = computed(() =>
+    buildCompatibleSkillsPrompt(workspaceInstalledSkills.value, {
+        title: "【工作区已安装 Skills（ClawHub/OpenClaw 兼容）】",
+        maxSkills: 12,
+    }),
+);
+const mergedCompatibleSkillsPrompt = computed(() =>
+    [compatibleSkillsPrompt.value, workspaceInstalledSkillsPrompt.value]
+        .filter(Boolean)
+        .join("\n\n")
+        .trim(),
 );
 
 const selectedConversationModelId = computed(() => {
@@ -514,9 +537,47 @@ async function ensureActiveSession() {
     }
 }
 
+async function refreshWorkspaceInstalledSkills(root: string | null) {
+    const cleanRoot = String(root || "").trim();
+    if (!cleanRoot) {
+        workspaceInstalledSkills.value = [];
+        workspaceInstalledSkillsWarnings.value = [];
+        workspaceInstalledSkillsLockPath.value = null;
+        return;
+    }
+
+    const result = await discoverWorkspaceInstalledSkills(cleanRoot);
+    workspaceInstalledSkills.value = result.skills;
+    workspaceInstalledSkillsWarnings.value = result.warnings;
+    workspaceInstalledSkillsLockPath.value = result.lockPath;
+}
+
+async function openWorkspaceSkillsDirectory() {
+    if (!props.workspaceRoot) {
+        ElMessage.warning("请先选择工作区");
+        return;
+    }
+
+    try {
+        const skillsDir = await join(props.workspaceRoot, "skills");
+        if (!(await exists(skillsDir))) {
+            // 兼容 ClawHub/OpenClaw 的默认安装路径不存在时，先补齐目录再打开。
+            await mkdir(skillsDir, { recursive: true });
+        }
+        await openInExplorer(skillsDir, { isDir: true });
+    } catch (error) {
+        ElMessage.error(
+            error instanceof Error
+                ? error.message
+                : String(error || "打开 skills 目录失败"),
+        );
+    }
+}
+
 onMounted(async () => {
     await Promise.all([mcpStore.init(), skillsStore.init()]);
     void mcpStore.checkConnections();
+    await refreshWorkspaceInstalledSkills(props.workspaceRoot);
     await chatStore.setWorkspaceRoot(props.workspaceRoot);
     await ensureActiveSession();
 });
@@ -524,6 +585,7 @@ onMounted(async () => {
 watch(
     () => props.workspaceRoot,
     async (next) => {
+        await refreshWorkspaceInstalledSkills(next);
         await chatStore.setWorkspaceRoot(next);
         await ensureActiveSession();
     },
@@ -578,16 +640,16 @@ function buildBaseWorkspaceSystemPrompt(params: {
         lines.push(
             "- 任何可能越界（工作区外文件、危险命令、不可逆操作）必须先征得用户确认。\n",
         );
+
+        if (params.compatibleSkillsPrompt?.trim()) {
+            lines.push(params.compatibleSkillsPrompt.trim());
+            lines.push("");
+        }
     }
 
     if (params.customInstructions?.trim()) {
         lines.push("【用户自定义指令】");
         lines.push(params.customInstructions.trim());
-        lines.push("");
-    }
-
-    if (params.compatibleSkillsPrompt?.trim()) {
-        lines.push(params.compatibleSkillsPrompt.trim());
         lines.push("");
     }
 
@@ -608,7 +670,7 @@ function applyConversationToChat(conversationId: string) {
         customInstructions: conv.customInstructions,
         agentSkillsEnabled: conv.agentSkillsEnabled,
         fileContextText: undefined,
-        compatibleSkillsPrompt: compatibleSkillsPrompt.value,
+        compatibleSkillsPrompt: mergedCompatibleSkillsPrompt.value,
     });
 
     const systemMessage: any = {
@@ -755,7 +817,7 @@ async function ensureSystemPromptUpToDate() {
         customInstructions: conv.customInstructions,
         agentSkillsEnabled: conv.agentSkillsEnabled,
         fileContextText: fileContextText || undefined,
-        compatibleSkillsPrompt: compatibleSkillsPrompt.value,
+        compatibleSkillsPrompt: mergedCompatibleSkillsPrompt.value,
     });
 
     const systemId = `ws-system-${conv.id}`;
@@ -909,7 +971,7 @@ async function switchSession(id: string) {
 
 const sessionTitleDraft = ref<string>("");
 watch(
-    compatibleSkillsPrompt,
+    mergedCompatibleSkillsPrompt,
     async () => {
         if (!selectedConversation.value) return;
         await ensureSystemPromptUpToDate();
@@ -1371,22 +1433,50 @@ async function toggleServer(serverId: string, checked: boolean) {
                                     <div class="space-y-3">
                                         <div class="flex items-center justify-between">
                                             <Label class="text-base">兼容 Skills</Label>
-                                            <Button
-                                                variant="link"
-                                                size="sm"
-                                                class="h-auto p-0"
-                                                @click="uiStore.openSkillsManager"
-                                            >
-                                                管理 Skills
-                                            </Button>
+                                            <div class="flex items-center gap-3">
+                                                <Button
+                                                    variant="link"
+                                                    size="sm"
+                                                    class="h-auto p-0"
+                                                    :disabled="!props.workspaceRoot"
+                                                    @click="openWorkspaceSkillsDirectory"
+                                                >
+                                                    <FolderOpen class="w-4 h-4 mr-1" />
+                                                    打开 skills 目录
+                                                </Button>
+                                                <Button
+                                                    variant="link"
+                                                    size="sm"
+                                                    class="h-auto p-0"
+                                                    @click="uiStore.openSkillsManager"
+                                                >
+                                                    管理 Skills
+                                                </Button>
+                                            </div>
                                         </div>
 
                                         <div
                                             class="text-sm text-muted-foreground bg-muted/50 p-4 rounded-md"
                                         >
                                             已全局启用 {{ skillsStore.enabledSkillCount }}
-                                            个兼容 Skill。导入的 Agent Skills / ClawHub
-                                            技能会自动拼接到当前工作区的 system prompt。
+                                            个兼容 Skill；当前工作区自动发现
+                                            {{ workspaceInstalledSkills.length }}
+                                            个通过 `clawhub install` / `openclaw skills install`
+                                            安装的 Skill，并会在会话中自动加载。
+                                            <span v-if="workspaceInstalledSkillsLockPath">
+                                                已识别 lock 文件：{{
+                                                    workspaceInstalledSkillsLockPath
+                                                }}
+                                            </span>
+                                            <span
+                                                v-if="
+                                                    workspaceInstalledSkillsWarnings.length > 0
+                                                "
+                                            >
+                                                兼容提醒：{{
+                                                    workspaceInstalledSkillsWarnings.join("；")
+                                                }}
+                                            </span>
                                         </div>
                                     </div>
 

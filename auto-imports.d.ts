@@ -328,6 +328,7 @@ declare global {
   const defineAsyncComponent: typeof import('vue').defineAsyncComponent
   const defineComponent: typeof import('vue').defineComponent
   const defineStore: typeof import('pinia').defineStore
+  const discoverWorkspaceInstalledSkills: typeof import('./src/utils/SkillCompatibility').discoverWorkspaceInstalledSkills
   const effectScope: typeof import('vue').effectScope
   const ensureBundledNpmExpanded: typeof import('./src/utils/NpmResources').ensureBundledNpmExpanded
   const ensureMonacoWorkers: typeof import('./src/utils/MonacoSetup').ensureMonacoWorkers
@@ -388,6 +389,7 @@ declare global {
   const onUnmounted: typeof import('vue').onUnmounted
   const onUpdated: typeof import('vue').onUpdated
   const onWatcherCleanup: typeof import('vue').onWatcherCleanup
+  const openInExplorer: typeof import('./src/utils/ExplorerUtils').openInExplorer
   const parseAnsiToSegments: typeof import('./src/components/ai-elements/terminal/ansi').parseAnsiToSegments
   const parseCustomModelId: typeof import('./src/utils/CustomModelId').parseCustomModelId
   const parseMcpServerConfigs: typeof import('./src/utils/McpServerImport').parseMcpServerConfigs
@@ -508,7 +510,7 @@ declare global {
   export type { EnsureBundledNpmResult } from './src/utils/NpmResources'
   import('./src/utils/NpmResources')
   // @ts-ignore
-  export type { SkillSourceKind, ISkillSourceInfo, ISkillPackageMeta, ISkillFileSummary, IImportedSkill, ICompatibilityImportResult } from './src/utils/SkillCompatibility'
+  export type { SkillSourceKind, ISkillSourceInfo, ISkillPackageMeta, ISkillFileSummary, IImportedSkill, ICompatibilityImportResult, IWorkspaceInstalledSkillsResult } from './src/utils/SkillCompatibility'
   import('./src/utils/SkillCompatibility')
   // @ts-ignore
   export type { StoreToolAccessStatus, StoreToolAccessInfo } from './src/utils/StoreToolAccess'

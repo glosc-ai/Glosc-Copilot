@@ -5,6 +5,7 @@ import WorkspaceAiSession from "@/components/workspace/WorkspaceAiSession.vue";
 import MonacoEditorPane from "@/components/workspace/MonacoEditorPane.vue";
 import WorkspaceConsolePanel from "@/components/workspace/WorkspaceConsolePanel.vue";
 import { FileTree } from "@/components/ai-elements/file-tree";
+import { openInExplorer } from "@/utils/ExplorerUtils";
 
 import { useColorMode, useDebounceFn, useIntervalFn } from "@vueuse/core";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -538,57 +539,14 @@ function maybeClearOpenFileIfRemoved(removedPath: string) {
 }
 
 async function revealInExplorer(path: string, isDir: boolean) {
-    // Vite 浏览器预览下无法调用系统资源管理器
-    if (!(window as any).__TAURI_INTERNALS__) {
-        ElMessage.warning("浏览器预览模式不支持打开资源管理器");
-        return;
-    }
-
-    // 使用 plugin-shell 的 Command（需要在 capabilities 里 allow-spawn 对应程序）
     try {
-        const { Command } = await import("@tauri-apps/plugin-shell");
-
-        const ua = navigator.userAgent || "";
-        const platform = /Windows/i.test(ua)
-            ? "windows"
-            : /Mac OS|Macintosh/i.test(ua)
-              ? "macos"
-              : /Linux/i.test(ua)
-                ? "linux"
-                : "";
-
-        if (platform === "windows") {
-            if (isDir) {
-                await Command.create("explorer.exe", [path]).spawn();
-            } else {
-                await Command.create("explorer.exe", [
-                    `/select,${path}`,
-                ]).spawn();
-            }
-            return;
-        }
-
-        // macOS: open -R
-        if (platform === "macos") {
-            if (isDir) {
-                await Command.create("open", [path]).spawn();
-            } else {
-                await Command.create("open", ["-R", path]).spawn();
-            }
-            return;
-        }
-
-        // linux / others: xdg-open folder
-        const folder = isDir ? path : dirname(path);
-        if (folder) {
-            await Command.create("xdg-open", [folder]).spawn();
-            return;
-        }
-    } catch (e) {
-        // 这里不再降级到 plugin-opener：opener 会拒绝本地路径（会报 Not allowed to open url）
-        console.log(e);
+        await openInExplorer(path, { isDir });
+    } catch (error) {
+        console.log(error);
         ElMessage.error(
-            "打开资源管理器失败：请检查 Tauri capabilities 是否允许 shell spawn（explorer.exe/open/xdg-open）",
+            error instanceof Error
+                ? error.message
+                : String(error || "打开资源管理器失败"),
         );
     }
 }

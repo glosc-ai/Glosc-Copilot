@@ -1,7 +1,7 @@
 import YAML from "yaml";
 
 import { join } from "@tauri-apps/api/path";
-import { readDir, readFile, stat } from "@tauri-apps/plugin-fs";
+import { exists, readDir, readFile, stat } from "@tauri-apps/plugin-fs";
 
 import {
     parseMcpServerConfigs,
@@ -72,6 +72,18 @@ export interface ICompatibilityImportResult {
     warnings: string[];
     source: ISkillSourceInfo;
     detectedKinds: string[];
+}
+
+export interface IWorkspaceInstalledSkillsResult {
+    skills: IImportedSkill[];
+    warnings: string[];
+    skillsDir: string | null;
+    lockPath: string | null;
+    lockEntries: Array<{
+        slug: string;
+        version?: string;
+        name?: string;
+    }>;
 }
 
 interface IBundleFile {
@@ -236,6 +248,10 @@ function uniqueStrings(values: string[]) {
     );
 }
 
+function normalizeLockSlug(input: string) {
+    return slugifySkillName(input);
+}
+
 function detectClawHubRepo(html: string) {
     const sourceRepo = html.match(/sourceRepo:"([^"]+)"/)?.[1] || "";
     const sourceTag = html.match(/sourceTag:"([^"]+)"/)?.[1] || "";
@@ -243,6 +259,44 @@ function detectClawHubRepo(html: string) {
     if (!sourceRepo || !sourceTag) return null;
 
     return { sourceRepo, sourceTag };
+}
+
+function decodeHtmlEntities(input: string) {
+    return String(input || "")
+        .replace(/&amp;/g, "&")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">");
+}
+
+function decodeJsStringLiteral(input: string) {
+    try {
+        return JSON.parse(`"${String(input || "")}"`);
+    } catch {
+        return String(input || "");
+    }
+}
+
+function detectClawHubDownloadUrl(html: string, baseUrl: string) {
+    const matched = html.match(/href="([^"]*\/api\/v1\/download\?slug=[^"]+)"/i);
+    const raw = matched?.[1] || "";
+    if (!raw) return null;
+
+    try {
+        return new URL(decodeHtmlEntities(raw), baseUrl).toString();
+    } catch {
+        return decodeHtmlEntities(raw);
+    }
+}
+
+function detectClawHubInlineReadme(html: string) {
+    const matched = html.match(/readme:"((?:\\.|[^"\\])*)"/);
+    if (!matched?.[1]) return null;
+
+    const markdown = decodeJsStringLiteral(matched[1]).trim();
+    if (!markdown) return null;
+    return markdown;
 }
 
 function toGitHubArchiveUrl(repo: string, tag: string) {
@@ -338,19 +392,40 @@ async function readRemoteBundle(url: string) {
     if (/html/i.test(contentType) && /clawhub\.ai/i.test(canonicalUrl)) {
         const html = await response.text();
         const repoInfo = detectClawHubRepo(html);
-        if (!repoInfo) {
-            throw new Error("未能从 ClawHub 页面解析到源仓库信息");
+        if (repoInfo) {
+            const archiveUrl = toGitHubArchiveUrl(
+                repoInfo.sourceRepo,
+                repoInfo.sourceTag,
+            );
+            return {
+                files: await readRemoteBundleArchive(archiveUrl),
+                canonicalUrl: archiveUrl,
+                clawHubRepo: repoInfo,
+            };
         }
 
-        const archiveUrl = toGitHubArchiveUrl(
-            repoInfo.sourceRepo,
-            repoInfo.sourceTag,
+        const downloadUrl = detectClawHubDownloadUrl(html, canonicalUrl);
+        if (downloadUrl) {
+            return {
+                files: await readRemoteBundleArchive(downloadUrl),
+                canonicalUrl: downloadUrl,
+            };
+        }
+
+        const inlineReadme = detectClawHubInlineReadme(html);
+        if (inlineReadme) {
+            return {
+                files: buildSingleFileBundle({
+                    path: "SKILL.md",
+                    content: new TextEncoder().encode(inlineReadme),
+                }),
+                canonicalUrl,
+            };
+        }
+
+        throw new Error(
+            "未能从 ClawHub 页面解析到源仓库、下载链接或内嵌 Skill 内容",
         );
-        return {
-            files: await readRemoteBundleArchive(archiveUrl),
-            canonicalUrl: archiveUrl,
-            clawHubRepo: repoInfo,
-        };
     }
 
     if (contentTypeIsText(contentType)) {
@@ -535,6 +610,90 @@ function mergePackageMeta(
             ...extra.bundledSkillNames,
         ]),
     };
+}
+
+function extractClawhubLockEntries(raw: unknown, fallbackKey?: string) {
+    const out: Array<{
+        slug: string;
+        version?: string;
+        name?: string;
+    }> = [];
+
+    const append = (entry: { slug: string; version?: string; name?: string }) => {
+        const slug = normalizeLockSlug(entry.slug);
+        if (!slug) return;
+        const existing = out.find((item) => item.slug === slug);
+        if (existing) {
+            if (!existing.version && entry.version) existing.version = entry.version;
+            if (!existing.name && entry.name) existing.name = entry.name;
+            return;
+        }
+        out.push({
+            slug,
+            version: entry.version,
+            name: entry.name,
+        });
+    };
+
+    const walk = (value: unknown, keyHint?: string, depth = 0) => {
+        if (depth > 5 || value == null) return;
+
+        if (Array.isArray(value)) {
+            for (const item of value) walk(item, undefined, depth + 1);
+            return;
+        }
+
+        if (typeof value !== "object") return;
+
+        const record = value as Record<string, unknown>;
+        const slugCandidate =
+            String(record.slug || record.skillSlug || record.name || keyHint || "").trim();
+        const versionCandidate = String(
+            record.version || record.installedVersion || "",
+        ).trim();
+        const nameCandidate = String(
+            record.displayName || record.title || record.name || "",
+        ).trim();
+
+        if (slugCandidate && (versionCandidate || nameCandidate || record.slug)) {
+            append({
+                slug: slugCandidate,
+                version: versionCandidate || undefined,
+                name: nameCandidate || undefined,
+            });
+        }
+
+        for (const [key, nested] of Object.entries(record)) {
+            walk(nested, key, depth + 1);
+        }
+    };
+
+    walk(raw, fallbackKey);
+    return out;
+}
+
+async function readClawhubLock(params: { workspaceRoot: string }) {
+    const lockPath = await join(params.workspaceRoot, ".clawhub", "lock.json");
+    if (!(await exists(lockPath))) {
+        return {
+            lockPath: null,
+            entries: [] as Array<{ slug: string; version?: string; name?: string }>,
+        };
+    }
+
+    try {
+        const bytes = await readFile(lockPath);
+        const parsed = parseMaybeJson(decodeBytes(bytes));
+        return {
+            lockPath,
+            entries: extractClawhubLockEntries(parsed),
+        };
+    } catch {
+        return {
+            lockPath,
+            entries: [] as Array<{ slug: string; version?: string; name?: string }>,
+        };
+    }
 }
 
 function classifySkillFile(relPath: string): ISkillFileSummary["kind"] {
@@ -801,4 +960,111 @@ export async function importCompatibleSource(params: {
             mcpCount: mcpConfigs.length,
         }),
     } satisfies ICompatibilityImportResult;
+}
+
+export async function discoverWorkspaceInstalledSkills(workspaceRoot: string) {
+    const cleanRoot = String(workspaceRoot || "").trim();
+    if (!cleanRoot) {
+        return {
+            skills: [],
+            warnings: [],
+            skillsDir: null,
+            lockPath: null,
+            lockEntries: [],
+        } satisfies IWorkspaceInstalledSkillsResult;
+    }
+
+    const skillsDir = await join(cleanRoot, "skills");
+    const hasSkillsDir = await exists(skillsDir);
+    const lock = await readClawhubLock({ workspaceRoot: cleanRoot });
+
+    if (!hasSkillsDir) {
+        return {
+            skills: [],
+            warnings: lock.lockPath
+                ? ["检测到 .clawhub/lock.json，但当前工作区不存在 skills/ 目录。"]
+                : [],
+            skillsDir: null,
+            lockPath: lock.lockPath,
+            lockEntries: lock.entries,
+        } satisfies IWorkspaceInstalledSkillsResult;
+    }
+
+    const candidates: string[] = [];
+    const entries = await readDir(skillsDir);
+    let rootSkillDetected = false;
+
+    for (const entry of entries) {
+        if (entry.isDirectory) {
+            candidates.push(await join(skillsDir, entry.name));
+            continue;
+        }
+        if (/^skill\.md$/i.test(entry.name)) {
+            rootSkillDetected = true;
+        }
+    }
+
+    if (rootSkillDetected) {
+        candidates.unshift(skillsDir);
+    }
+
+    const skills: IImportedSkill[] = [];
+    const warnings: string[] = [];
+
+    for (const candidate of candidates) {
+        try {
+            const imported = await importCompatibleSource({
+                kind: "directory",
+                value: candidate,
+            });
+
+            for (const skill of imported.skills) {
+                const sourceSlug = normalizeLockSlug(
+                    basenameLike(candidate) || skill.slug,
+                );
+                const lockEntry =
+                    lock.entries.find((entry) => entry.slug === sourceSlug) ||
+                    lock.entries.find((entry) => entry.slug === skill.slug);
+
+                skills.push({
+                    ...skill,
+                    metadata: {
+                        ...skill.metadata,
+                        "clawhub.workspaceRoot": cleanRoot,
+                        ...(lockEntry?.version
+                            ? { "clawhub.version": lockEntry.version }
+                            : {}),
+                    },
+                    ecosystemTags: uniqueStrings([
+                        ...skill.ecosystemTags,
+                        "workspace-skill",
+                        "clawhub-installed",
+                    ]),
+                    warnings: uniqueStrings(skill.warnings),
+                });
+            }
+
+            if (imported.warnings.length > 0) {
+                warnings.push(...imported.warnings.map((item) => `${basenameLike(candidate)}：${item}`));
+            }
+        } catch (error) {
+            warnings.push(
+                `${basenameLike(candidate) || candidate}：${
+                    error instanceof Error ? error.message : String(error)
+                }`,
+            );
+        }
+    }
+
+    const dedupedSkills = Array.from(
+        new Map(skills.map((skill) => [skill.dedupeKey, skill])).values(),
+    );
+
+    return {
+        skills: dedupedSkills,
+        warnings: uniqueStrings(warnings),
+        skillsDir,
+        lockPath: lock.lockPath,
+        lockEntries: lock.entries,
+    } satisfies IWorkspaceInstalledSkillsResult;
 }

@@ -56,5 +56,6 @@ Glosc Copilot 是一款跨平台的 AI 智能助手，目前有聊天模式、�
 
 - 可通过顶部菜单“选项 → Skills”导入本地目录、本地压缩包、`SKILL.md` 文件，或 ClawHub / OpenClaw 页面 URL。
 - 导入后的 Skill 可全局启用/停用，启用后会自动拼接到聊天与工作区会话的系统提示词中。
+- 在工作区模式下，会自动发现当前工作区 `skills/` 目录中的 Skills（兼容 `clawhub install <slug>` 与 `openclaw skills install <slug>` 的安装结果），并在会话中自动加载。
 - 若包内包含可识别的 MCP 配置（如 `mcpServers` / `servers` / 兼容 JSON/YAML 文件），会同步导入到工具管理。
 - 当前兼容层以 **Skill 指令复用 + bundled MCP 发现** 为主；**不等同于完整支持 OpenClaw gateway plugin 生命周期**。
