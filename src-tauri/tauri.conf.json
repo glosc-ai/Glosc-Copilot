@@ -1,56 +1,58 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Glosc Copilot",
-  "version": "0.8.1",
-  "identifier": "com.gloscai.copilot",
-  "build": {
-    "beforeDevCommand": "yarn -s sync:version && yarn dev",
-    "devUrl": "http://localhost:1421",
-    "beforeBuildCommand": "yarn -s sync:version && yarn build",
-    "frontendDist": "../dist"
-  },
-  "app": {
-    "windows": [
-      {
-        "title": "Glosc Copilot",
-        "width": 1280,
-        "height": 720,
-        "decorations": false,
-        "dragDropEnabled": false
-      }
-    ],
-    "withGlobalTauri": true,
-    "security": {
-      "csp": null
+    "$schema": "https://schema.tauri.app/config/2",
+    "productName": "Glosc Copilot",
+    "version": "0.8.1",
+    "identifier": "com.gloscai.copilot",
+    "build": {
+        "beforeDevCommand": "yarn -s sync:version && yarn dev",
+        "devUrl": "http://localhost:1421",
+        "beforeBuildCommand": "yarn -s sync:version && yarn build",
+        "frontendDist": "../dist"
+    },
+    "app": {
+        "windows": [
+            {
+                "title": "Glosc Copilot",
+                "width": 1280,
+                "height": 720,
+                "decorations": false,
+                "dragDropEnabled": false
+            }
+        ],
+        "withGlobalTauri": true,
+        "security": {
+            "csp": null
+        }
+    },
+    "bundle": {
+        "active": true,
+        "targets": "all",
+        "category": "Utility",
+        "macOS": {
+            "minimumSystemVersion": "12.0",
+            "entitlements": "entitlements.plist",
+            "signingIdentity": "DA1EEC08DE48B2B4B2F4C08B0C608E11AB983375"
+        },
+        "createUpdaterArtifacts": true,
+        "icon": [
+            "icons/32x32.png",
+            "icons/128x128.png",
+            "icons/128x128@2x.png",
+            "icons/icon.icns",
+            "icons/icon.ico"
+        ],
+        "externalBin": ["binaries/node", "binaries/uv"],
+        "resources": ["resources/npm.zip"]
+    },
+    "plugins": {
+        "updater": {
+            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZERDg3MDQ5ODYxQkNEMzIKUldReXpSdUdTWERZYmNPMHh4RmdQcHh6SUZ1c0grQ0tVZmY3N25lK3hxZ3llTVdiSlpsbmYwL2EK",
+            "endpoints": [
+                "https://github.com/glosc-ai/Glosc-Copilot/releases/latest/download/latest.json"
+            ],
+            "windows": {
+                "installMode": "passive"
+            }
+        }
     }
-  },
-  "bundle": {
-    "active": true,
-    "createUpdaterArtifacts": true,
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "externalBin": [
-      "binaries/node",
-      "binaries/uv"
-    ],
-    "resources": [
-      "resources/npm.zip"
-    ]
-  },
-  "plugins": {
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZERDg3MDQ5ODYxQkNEMzIKUldReXpSdUdTWERZYmNPMHh4RmdQcHh6SUZ1c0grQ0tVZmY3N25lK3hxZ3llTVdiSlpsbmYwL2EK",
-      "endpoints": [
-        "https://github.com/glosc-ai/Glosc-Copilot/releases/latest/download/latest.json"
-      ],
-      "windows": {
-        "installMode": "passive"
-      }
-    }
-  }
 }

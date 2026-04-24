@@ -29,5 +29,5 @@ dist-ssr
 
 /src-tauri/resources/
 /src-tauri/binaries/
-.tauri
+tauri
 *.provisionprofile
