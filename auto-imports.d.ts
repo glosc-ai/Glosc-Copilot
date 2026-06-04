@@ -315,6 +315,19 @@ declare global {
   const buttonVariants: typeof import('./src/components/ui/button/index').buttonVariants
   const cardContextKey: typeof import('./src/components/ui/card/context').cardContextKey
   const computed: typeof import('vue').computed
+  const computerCaptureScreen: typeof import('./src/utils/ComputerControlUtils').computerCaptureScreen
+  const computerExecCommand: typeof import('./src/utils/ComputerControlUtils').computerExecCommand
+  const computerGetActiveWindow: typeof import('./src/utils/ComputerControlUtils').computerGetActiveWindow
+  const computerGetScreenSize: typeof import('./src/utils/ComputerControlUtils').computerGetScreenSize
+  const computerKeyCombination: typeof import('./src/utils/ComputerControlUtils').computerKeyCombination
+  const computerKeyPress: typeof import('./src/utils/ComputerControlUtils').computerKeyPress
+  const computerMouseClick: typeof import('./src/utils/ComputerControlUtils').computerMouseClick
+  const computerMouseDoubleClick: typeof import('./src/utils/ComputerControlUtils').computerMouseDoubleClick
+  const computerMouseRightClick: typeof import('./src/utils/ComputerControlUtils').computerMouseRightClick
+  const computerMouseScroll: typeof import('./src/utils/ComputerControlUtils').computerMouseScroll
+  const computerMoveMouse: typeof import('./src/utils/ComputerControlUtils').computerMoveMouse
+  const computerTools: typeof import('./src/utils/ComputerToolRegistry').computerTools
+  const computerTypeText: typeof import('./src/utils/ComputerControlUtils').computerTypeText
   const createApp: typeof import('vue').createApp
   const createBuiltinTools: typeof import('./src/utils/BuiltinTools').createBuiltinTools
   const createImageModelFromProvider: typeof import('./src/utils/LocalAiProvider').createImageModelFromProvider
@@ -432,6 +445,7 @@ declare global {
   const useChatStore: typeof import('./src/stores/chat').useChatStore
   const useCommand: typeof import('./src/components/ui/command/index').useCommand
   const useCommandGroup: typeof import('./src/components/ui/command/index').useCommandGroup
+  const useComputerControlStore: typeof import('./src/stores/computerControl').useComputerControlStore
   const useConfirmationContext: typeof import('./src/components/ai-elements/confirmation/context').useConfirmationContext
   const useContextValue: typeof import('./src/components/ai-elements/context/context').useContextValue
   const useCssModule: typeof import('vue').useCssModule
@@ -468,6 +482,9 @@ declare global {
   export type { AuthUserPublic } from './src/stores/auth'
   import('./src/stores/auth')
   // @ts-ignore
+  export type { ComputerActionLog, ComputerSafetyConfig } from './src/stores/computerControl'
+  import('./src/stores/computerControl')
+  // @ts-ignore
   export type { BuiltinToolKind } from './src/stores/settings'
   import('./src/stores/settings')
   // @ts-ignore
@@ -476,6 +493,12 @@ declare global {
   // @ts-ignore
   export type { ChatUtils } from './src/utils/ChatUtils'
   import('./src/utils/ChatUtils')
+  // @ts-ignore
+  export type { ScreenInfo, WindowInfo, ShellResult } from './src/utils/ComputerControlUtils'
+  import('./src/utils/ComputerControlUtils')
+  // @ts-ignore
+  export type { ComputerToolName } from './src/utils/ComputerToolRegistry'
+  import('./src/utils/ComputerToolRegistry')
   // @ts-ignore
   export type { Cryption } from './src/utils/Cryption'
   import('./src/utils/Cryption')

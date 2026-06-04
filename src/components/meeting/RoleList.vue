@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useMeetingStore } from "@/stores/meeting";
 import { storeToRefs } from "pinia";
+import { formatModelName } from "@/utils/ModelApi";
 
 const props = defineProps<{
     meetingId: string;
@@ -65,7 +66,7 @@ async function jumpToRole(roleId: string) {
                             {{ role.name }}
                         </h4>
                         <p class="text-xs text-muted-foreground truncate">
-                            {{ role.modelId }}
+                            {{ formatModelName(role.modelId) }}
                         </p>
                     </div>
                 </div>

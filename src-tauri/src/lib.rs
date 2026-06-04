@@ -2,6 +2,8 @@
 use serde::Serialize;
 use tauri::{Emitter, Manager};
 
+mod computer_control;
+
 #[derive(Clone, Copy)]
 struct DebugState {
     enabled: bool,
@@ -171,7 +173,19 @@ pub fn run() {
             greet,
             is_debug_enabled,
             open_devtools,
-            get_cli_args
+            get_cli_args,
+            computer_control::mouse::computer_move_mouse,
+            computer_control::mouse::computer_mouse_click,
+            computer_control::mouse::computer_mouse_double_click,
+            computer_control::mouse::computer_mouse_right_click,
+            computer_control::mouse::computer_mouse_scroll,
+            computer_control::keyboard::computer_type_text,
+            computer_control::keyboard::computer_key_press,
+            computer_control::keyboard::computer_key_combination,
+            computer_control::screen::computer_capture_screen,
+            computer_control::screen::computer_get_screen_size,
+            computer_control::screen::computer_get_active_window,
+            computer_control::shell::computer_exec_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

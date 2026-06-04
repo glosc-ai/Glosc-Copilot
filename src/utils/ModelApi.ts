@@ -16,7 +16,13 @@ export async function fetchAvailableModels(): Promise<ModelInfo[]> {
 export function formatModelName(modelId: string): string {
     // 移除提供商前缀，使显示更简洁
     const parts = modelId.split("/");
-    return parts.length > 1 ? parts[parts.length - 1] : modelId;
+    const lastPart = parts.length > 1 ? parts[parts.length - 1] : modelId;
+    // 解码 URI 编码的字符（如 %2F → /），解决自定义模型名中 / 被转译的问题
+    try {
+        return decodeURIComponent(lastPart);
+    } catch {
+        return lastPart;
+    }
 }
 
 /**

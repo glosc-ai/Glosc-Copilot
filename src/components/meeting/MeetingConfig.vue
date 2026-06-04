@@ -5,6 +5,7 @@ import { useMeetingStore } from "@/stores/meeting";
 import { useChatStore } from "@/stores/chat";
 import { useMcpStore } from "@/stores/mcp";
 import { storeToRefs } from "pinia";
+import { formatModelName } from "@/utils/ModelApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -383,7 +384,7 @@ const selectedModel = computed(() => {
                                             {{ role.name }}
                                         </h3>
                                         <p class="text-xs text-muted-foreground mt-1">
-                                            模型: {{ role.modelId }}
+                                            模型: {{ formatModelName(role.modelId) }}
                                         </p>
                                         <p class="text-sm mt-2 line-clamp-2 text-muted-foreground">
                                             {{
