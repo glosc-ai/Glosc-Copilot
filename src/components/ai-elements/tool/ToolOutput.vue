@@ -32,7 +32,7 @@ const isObjectOutput = computed(
     () => typeof props.output === "object" && props.output !== null,
 );
 
-function previewString (text: string, emptyText = "空文本结果") {
+function previewString(text: string, emptyText = "空文本结果") {
     const trimmedText = text.trim();
     if (!trimmedText) {
         return emptyText;
@@ -43,7 +43,7 @@ function previewString (text: string, emptyText = "空文本结果") {
         : trimmedText;
 }
 
-function previewObject (output: object) {
+function previewObject(output: object) {
     if (Array.isArray(output)) {
         return `数组结果，共 ${output.length} 项`;
     }
@@ -121,7 +121,7 @@ const formattedOutput = computed(() => {
                     'rounded-md border text-xs [&_table]:w-full',
                     props.errorText
                         ? 'bg-destructive/10 text-destructive'
-                        : 'bg-muted/50 text-foreground'
+                        : 'bg-muted/50 text-foreground',
                 )
             "
         >
@@ -132,7 +132,8 @@ const formattedOutput = computed(() => {
                     </div>
                     <pre
                         class="mt-1 max-h-20 overflow-hidden whitespace-pre-wrap wrap-break-word font-mono text-xs leading-5"
-                    >{{ previewText }}</pre>
+                        >{{ previewText }}</pre
+                    >
                 </div>
                 <Button
                     variant="outline"
@@ -152,7 +153,9 @@ const formattedOutput = computed(() => {
                 class="h-[80vh] w-[92vw] max-w-4xl grid-rows-[auto_minmax(0,1fr)] gap-0 p-0"
             >
                 <DialogHeader class="border-b px-5 py-4 pr-12">
-                    <DialogTitle>{{ props.errorText ? "工具错误" : "工具结果" }}</DialogTitle>
+                    <DialogTitle>{{
+                        props.errorText ? "工具错误" : "工具结果"
+                    }}</DialogTitle>
                     <DialogDescription>
                         {{ resultTypeText }}
                     </DialogDescription>
@@ -160,7 +163,8 @@ const formattedOutput = computed(() => {
                 <div class="min-h-0 overflow-auto bg-muted/30">
                     <pre
                         class="m-0 whitespace-pre-wrap wrap-break-word p-4 font-mono text-xs leading-5 text-foreground"
-                    >{{ formattedOutput }}</pre>
+                        >{{ formattedOutput }}</pre
+                    >
                 </div>
             </DialogContent>
         </Dialog>
