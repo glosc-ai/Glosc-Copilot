@@ -1,9 +1,12 @@
 import { defineStore } from "pinia";
 import { storeUtils } from "@/utils/StoreUtils";
 import { McpUtils } from "@/utils/McpUtils";
+import { ensureBundledMcpToolsInstalled } from "@/utils/BundledMcpTools";
 
 // Cache duration for MCP tools (in milliseconds)
 const CACHE_DURATION_MS = 5000;
+let mcpInitPromise: Promise<void> | null = null;
+let bundledMcpInstallPromise: Promise<void> | null = null;
 
 export const useMcpStore = defineStore("mcp", {
     state: () => ({
@@ -24,18 +27,59 @@ export const useMcpStore = defineStore("mcp", {
         setServerCapability(id: string, capability: any) {
             this.serverCapabilities[id] = capability;
         },
+        async ensureBundledMcpTools() {
+            if (bundledMcpInstallPromise) {
+                await bundledMcpInstallPromise;
+                return;
+            }
+
+            bundledMcpInstallPromise = (async () => {
+                try {
+                    await ensureBundledMcpToolsInstalled({ mcpStore: this });
+                    await storeUtils.delete("bundled_mcp_install_error");
+                } catch (e) {
+                    const message = e instanceof Error ? e.message : String(e);
+                    await storeUtils.set(
+                        "bundled_mcp_install_error",
+                        message,
+                        false,
+                    );
+                    console.warn("bundled mcp tools install failed", e);
+                }
+            })().finally(() => {
+                bundledMcpInstallPromise = null;
+            });
+
+            await bundledMcpInstallPromise;
+        },
         async init() {
-            if (this.initialized) return;
-            const storedServers =
-                await storeUtils.get<McpServer[]>("mcp_servers");
-            if (storedServers) {
-                this.servers = storedServers;
+            if (this.initialized) {
+                await this.ensureBundledMcpTools();
+                return;
             }
-            const storedEnabled = await storeUtils.get<boolean>("mcp_enabled");
-            if (storedEnabled !== null) {
-                this.mcpEnabled = storedEnabled;
+            if (mcpInitPromise) {
+                await mcpInitPromise;
+                return;
             }
-            this.initialized = true;
+
+            mcpInitPromise = (async () => {
+                const storedServers =
+                    await storeUtils.get<McpServer[]>("mcp_servers");
+                if (storedServers) {
+                    this.servers = storedServers;
+                }
+                const storedEnabled =
+                    await storeUtils.get<boolean>("mcp_enabled");
+                if (storedEnabled !== null) {
+                    this.mcpEnabled = storedEnabled;
+                }
+                this.initialized = true;
+                await this.ensureBundledMcpTools();
+            })().finally(() => {
+                mcpInitPromise = null;
+            });
+
+            await mcpInitPromise;
         },
         async checkConnections() {
             const promises = this.servers.map(async (server) => {
@@ -70,7 +114,7 @@ export const useMcpStore = defineStore("mcp", {
         async addServer(
             server:
                 | Omit<Extract<McpServer, { type: "stdio" }>, "id">
-                | Omit<Extract<McpServer, { type: "http" }>, "id">
+                | Omit<Extract<McpServer, { type: "http" }>, "id">,
         ) {
             const newServer = {
                 ...server,
@@ -92,7 +136,7 @@ export const useMcpStore = defineStore("mcp", {
                 } catch (e) {
                     console.error(
                         `Failed to start server ${newServer.name}`,
-                        e
+                        e,
                     );
                     this.setServerCapability(newServer.id, {
                         success: false,
@@ -127,7 +171,7 @@ export const useMcpStore = defineStore("mcp", {
                         } catch (e) {
                             console.error(
                                 `Failed to start server ${newServer.name}`,
-                                e
+                                e,
                             );
                             this.setServerCapability(id, {
                                 success: false,

@@ -34,6 +34,9 @@ function applyDarkClass(isDark: boolean) {
 let systemThemeMql: MediaQueryList | null = null;
 let systemThemeListenerBound = false;
 
+// 初始化并发守卫：避免 main.ts 与各组件同时触发 init() 导致重复读取 store
+let settingsInitPromise: Promise<void> | null = null;
+
 export const useSettingsStore = defineStore("settings", {
     state: () => ({
         initialized: false,
@@ -63,7 +66,18 @@ export const useSettingsStore = defineStore("settings", {
     actions: {
         async init() {
             if (this.initialized) return;
+            // 复用进行中的初始化 Promise，确保并发调用只执行一次
+            if (settingsInitPromise) return settingsInitPromise;
 
+            settingsInitPromise = this.runInit();
+            try {
+                await settingsInitPromise;
+            } finally {
+                settingsInitPromise = null;
+            }
+        },
+
+        async runInit() {
             const [themeMode, language, hiddenModelIds, customModelProviders] =
                 await Promise.all([
                     storeUtils.get<ThemeMode>(STORE_KEYS.themeMode),

@@ -1,6 +1,6 @@
 import YAML from "yaml";
 
-import { join } from "@tauri-apps/api/path";
+import { homeDir, join } from "@tauri-apps/api/path";
 import { exists, readDir, readFile, stat } from "@tauri-apps/plugin-fs";
 
 import {
@@ -64,6 +64,7 @@ export interface IImportedSkill {
     warnings: string[];
     files: ISkillFileSummary[];
     bundledMcpCount: number;
+    userNote?: string;
 }
 
 export interface ICompatibilityImportResult {
@@ -84,6 +85,18 @@ export interface IWorkspaceInstalledSkillsResult {
         version?: string;
         name?: string;
     }>;
+}
+
+export interface IDiscoveredSkillDirectory {
+    path: string;
+    label: string;
+    agent: "Claude" | "Codex" | "OpenClaw" | "OpenCode" | "Custom";
+}
+
+export interface ISkillDirectoryDiscoveryResult {
+    skills: IImportedSkill[];
+    warnings: string[];
+    scannedCandidates: string[];
 }
 
 interface IBundleFile {
@@ -133,16 +146,24 @@ function toRelPath(root: string, fullPath: string) {
     if (!normalizedRoot) return normalizeRelPath(normalizedPath);
     if (normalizedPath === normalizedRoot) return "";
     if (normalizedPath.startsWith(normalizedRoot + "/")) {
-        return normalizeRelPath(normalizedPath.slice(normalizedRoot.length + 1));
+        return normalizeRelPath(
+            normalizedPath.slice(normalizedRoot.length + 1),
+        );
     }
     return normalizeRelPath(normalizedPath);
 }
 
 function shouldReadFileContent(path: string, size: number) {
     if (size > MAX_TEXT_FILE_SIZE) return false;
-    return [".md", ".markdown", ".json", ".jsonc", ".yaml", ".yml", ".txt"].includes(
-        extnameLike(path),
-    );
+    return [
+        ".md",
+        ".markdown",
+        ".json",
+        ".jsonc",
+        ".yaml",
+        ".yml",
+        ".txt",
+    ].includes(extnameLike(path));
 }
 
 function decodeBytes(bytes?: Uint8Array) {
@@ -200,7 +221,8 @@ function toStringRecord(value: unknown) {
     const out: Record<string, string> = {};
     for (const [key, rawValue] of Object.entries(value)) {
         if (rawValue == null) continue;
-        out[String(key)] = typeof rawValue === "string" ? rawValue : String(rawValue);
+        out[String(key)] =
+            typeof rawValue === "string" ? rawValue : String(rawValue);
     }
     return out;
 }
@@ -222,7 +244,8 @@ function parseSkillMarkdown(markdown: string) {
     const body = matched[2] || "";
 
     return {
-        frontmatter: ((YAML.parse(yamlRaw) || {}) as Record<string, unknown>) || {},
+        frontmatter:
+            ((YAML.parse(yamlRaw) || {}) as Record<string, unknown>) || {},
         body: body.trim(),
     };
 }
@@ -241,15 +264,19 @@ function slugifySkillName(input: string) {
 function uniqueStrings(values: string[]) {
     return Array.from(
         new Set(
-            values
-                .map((value) => String(value || "").trim())
-                .filter(Boolean),
+            values.map((value) => String(value || "").trim()).filter(Boolean),
         ),
     );
 }
 
 function normalizeLockSlug(input: string) {
     return slugifySkillName(input);
+}
+
+function pathStartsWith(path: string, parent: string) {
+    const cleanPath = normalizeSlashes(path).replace(/\/+$/, "");
+    const cleanParent = normalizeSlashes(parent).replace(/\/+$/, "");
+    return cleanPath === cleanParent || cleanPath.startsWith(`${cleanParent}/`);
 }
 
 function detectClawHubRepo(html: string) {
@@ -279,7 +306,9 @@ function decodeJsStringLiteral(input: string) {
 }
 
 function detectClawHubDownloadUrl(html: string, baseUrl: string) {
-    const matched = html.match(/href="([^"]*\/api\/v1\/download\?slug=[^"]+)"/i);
+    const matched = html.match(
+        /href="([^"]*\/api\/v1\/download\?slug=[^"]+)"/i,
+    );
     const raw = matched?.[1] || "";
     if (!raw) return null;
 
@@ -572,7 +601,9 @@ function parseOpenClawPluginMeta(file: IBundleFile): ISkillPackageMeta | null {
         kind: "openclaw-plugin",
         packageName: String(record.name || "").trim() || undefined,
         displayName: String(record.displayName || "").trim() || undefined,
-        summary: String(record.summary || record.description || "").trim() || undefined,
+        summary:
+            String(record.summary || record.description || "").trim() ||
+            undefined,
         runtimeId: String(record.runtimeId || "").trim() || undefined,
         capabilityTags: uniqueStrings(capabilityTags),
         toolNames: uniqueStrings(toolNames),
@@ -619,12 +650,17 @@ function extractClawhubLockEntries(raw: unknown, fallbackKey?: string) {
         name?: string;
     }> = [];
 
-    const append = (entry: { slug: string; version?: string; name?: string }) => {
+    const append = (entry: {
+        slug: string;
+        version?: string;
+        name?: string;
+    }) => {
         const slug = normalizeLockSlug(entry.slug);
         if (!slug) return;
         const existing = out.find((item) => item.slug === slug);
         if (existing) {
-            if (!existing.version && entry.version) existing.version = entry.version;
+            if (!existing.version && entry.version)
+                existing.version = entry.version;
             if (!existing.name && entry.name) existing.name = entry.name;
             return;
         }
@@ -646,8 +682,9 @@ function extractClawhubLockEntries(raw: unknown, fallbackKey?: string) {
         if (typeof value !== "object") return;
 
         const record = value as Record<string, unknown>;
-        const slugCandidate =
-            String(record.slug || record.skillSlug || record.name || keyHint || "").trim();
+        const slugCandidate = String(
+            record.slug || record.skillSlug || record.name || keyHint || "",
+        ).trim();
         const versionCandidate = String(
             record.version || record.installedVersion || "",
         ).trim();
@@ -655,7 +692,10 @@ function extractClawhubLockEntries(raw: unknown, fallbackKey?: string) {
             record.displayName || record.title || record.name || "",
         ).trim();
 
-        if (slugCandidate && (versionCandidate || nameCandidate || record.slug)) {
+        if (
+            slugCandidate &&
+            (versionCandidate || nameCandidate || record.slug)
+        ) {
             append({
                 slug: slugCandidate,
                 version: versionCandidate || undefined,
@@ -677,7 +717,11 @@ async function readClawhubLock(params: { workspaceRoot: string }) {
     if (!(await exists(lockPath))) {
         return {
             lockPath: null,
-            entries: [] as Array<{ slug: string; version?: string; name?: string }>,
+            entries: [] as Array<{
+                slug: string;
+                version?: string;
+                name?: string;
+            }>,
         };
     }
 
@@ -691,7 +735,11 @@ async function readClawhubLock(params: { workspaceRoot: string }) {
     } catch {
         return {
             lockPath,
-            entries: [] as Array<{ slug: string; version?: string; name?: string }>,
+            entries: [] as Array<{
+                slug: string;
+                version?: string;
+                name?: string;
+            }>,
         };
     }
 }
@@ -710,11 +758,16 @@ function collectSkillFiles(rootDir: string, files: IBundleFile[]) {
         .filter((file) => {
             const normalized = normalizeRelPath(file.path);
             if (!prefix) return normalized !== "SKILL.md";
-            return normalized.startsWith(prefix) && normalized !== `${prefix}SKILL.md`;
+            return (
+                normalized.startsWith(prefix) &&
+                normalized !== `${prefix}SKILL.md`
+            );
         })
         .map((file) => {
             const normalized = normalizeRelPath(file.path);
-            const relativePath = prefix ? normalized.slice(prefix.length) : normalized;
+            const relativePath = prefix
+                ? normalized.slice(prefix.length)
+                : normalized;
             return {
                 path: relativePath,
                 size: file.size,
@@ -763,6 +816,19 @@ export function buildCompatibleSkillsPrompt(
         "",
     ];
 
+    // 技能索引：列出全部已启用技能的名称与简短描述，token 开销很小，
+    // 确保模型始终知道完整可用技能列表（即使详细指令因上下文限制未全部展开）。
+    lines.push(`#### 已启用技能清单（共 ${enabledSkills.length} 个）`);
+    for (const skill of enabledSkills) {
+        const desc = String(skill.description || "")
+            .replace(/\s+/g, " ")
+            .trim();
+        const shortDesc = desc.length > 120 ? `${desc.slice(0, 120)}…` : desc;
+        lines.push(`- ${skill.name}${shortDesc ? `：${shortDesc}` : ""}`);
+    }
+    lines.push("");
+    lines.push("#### 技能详细指令");
+
     let used = lines.join("\n").length;
     let included = 0;
 
@@ -772,7 +838,9 @@ export function buildCompatibleSkillsPrompt(
         const blockLines = [
             `### ${skill.name}`,
             `- 描述：${skill.description}`,
-            ...(skill.compatibility ? [`- 兼容性：${skill.compatibility}`] : []),
+            ...(skill.compatibility
+                ? [`- 兼容性：${skill.compatibility}`]
+                : []),
             ...(skill.allowedTools.length > 0
                 ? [`- allowed-tools：${skill.allowedTools.join(", ")}`]
                 : []),
@@ -791,7 +859,9 @@ export function buildCompatibleSkillsPrompt(
 
     const omitted = enabledSkills.length - included;
     if (omitted > 0) {
-        lines.push(`- 其余 ${omitted} 个已启用技能因上下文限制未展开，请在需要时手动禁用无关技能。`);
+        lines.push(
+            `- 其余 ${omitted} 个已启用技能的详细指令因上下文限制未在上方展开（完整名称见“已启用技能清单”）；如需使用，请在需要时手动禁用无关技能以便加载其详情。`,
+        );
     }
 
     return lines.join("\n").trim();
@@ -839,7 +909,9 @@ export async function importCompatibleSource(params: {
 
         if (remote.clawHubRepo) {
             packageMeta = {
-                kind: /\/plugins\//i.test(original) ? "clawhub-plugin" : "clawhub-skill",
+                kind: /\/plugins\//i.test(original)
+                    ? "clawhub-plugin"
+                    : "clawhub-skill",
                 sourceRepo: remote.clawHubRepo.sourceRepo,
                 sourceTag: remote.clawHubRepo.sourceTag,
                 capabilityTags: [],
@@ -882,7 +954,8 @@ export async function importCompatibleSource(params: {
             folderName ||
             `imported-skill-${index + 1}`;
         const frontmatter = parsed.frontmatter;
-        const name = String(frontmatter.name || fallbackName).trim() || fallbackName;
+        const name =
+            String(frontmatter.name || fallbackName).trim() || fallbackName;
         const description =
             String(
                 frontmatter.description ||
@@ -893,10 +966,14 @@ export async function importCompatibleSource(params: {
         const skillWarnings: string[] = [];
 
         if (!frontmatter.name) {
-            skillWarnings.push("缺少标准 name frontmatter，已使用兼容回退名称。");
+            skillWarnings.push(
+                "缺少标准 name frontmatter，已使用兼容回退名称。",
+            );
         }
         if (!frontmatter.description) {
-            skillWarnings.push("缺少标准 description frontmatter，已使用兼容回退描述。");
+            skillWarnings.push(
+                "缺少标准 description frontmatter，已使用兼容回退描述。",
+            );
         }
 
         const ecosystemTags = uniqueStrings([
@@ -941,7 +1018,9 @@ export async function importCompatibleSource(params: {
     }
 
     if (skillFiles.length === 0 && packageMeta?.kind?.includes("plugin")) {
-        warnings.push("已识别 OpenClaw/ClawHub 插件元数据，但包内未发现可导入的 SKILL.md。");
+        warnings.push(
+            "已识别 OpenClaw/ClawHub 插件元数据，但包内未发现可导入的 SKILL.md。",
+        );
     }
 
     if (skills.length === 0 && mcpConfigs.length === 0) {
@@ -960,6 +1039,156 @@ export async function importCompatibleSource(params: {
             mcpCount: mcpConfigs.length,
         }),
     } satisfies ICompatibilityImportResult;
+}
+
+export async function discoverSkillsInDirectory(directoryPath: string) {
+    const cleanRoot = String(directoryPath || "").trim();
+    if (!cleanRoot || !(await exists(cleanRoot))) {
+        return {
+            skills: [],
+            warnings: ["目录不存在或无法访问"],
+            scannedCandidates: [],
+        } satisfies ISkillDirectoryDiscoveryResult;
+    }
+
+    const info = await stat(cleanRoot);
+    if (!info.isDirectory) {
+        return {
+            skills: [],
+            warnings: ["路径不是目录"],
+            scannedCandidates: [],
+        } satisfies ISkillDirectoryDiscoveryResult;
+    }
+
+    const candidates: string[] = [];
+    const entries = await readDir(cleanRoot);
+    let rootSkillDetected = false;
+
+    for (const entry of entries) {
+        if (entry.isDirectory) {
+            candidates.push(await join(cleanRoot, entry.name));
+            continue;
+        }
+        if (/^skill\.md$/i.test(entry.name)) {
+            rootSkillDetected = true;
+        }
+    }
+
+    if (rootSkillDetected) {
+        candidates.unshift(cleanRoot);
+    }
+
+    const skills: IImportedSkill[] = [];
+    const warnings: string[] = [];
+
+    for (const candidate of candidates) {
+        try {
+            const imported = await importCompatibleSource({
+                kind: "directory",
+                value: candidate,
+            });
+
+            for (const skill of imported.skills) {
+                skills.push({
+                    ...skill,
+                    metadata: {
+                        ...skill.metadata,
+                        "skillDirectory.root": cleanRoot,
+                    },
+                    ecosystemTags: uniqueStrings([
+                        ...skill.ecosystemTags,
+                        "managed-directory-skill",
+                    ]),
+                    warnings: uniqueStrings(skill.warnings),
+                });
+            }
+
+            if (imported.warnings.length > 0) {
+                warnings.push(
+                    ...imported.warnings.map(
+                        (item) => `${basenameLike(candidate)}：${item}`,
+                    ),
+                );
+            }
+        } catch (error) {
+            warnings.push(
+                `${basenameLike(candidate) || candidate}：${
+                    error instanceof Error ? error.message : String(error)
+                }`,
+            );
+        }
+    }
+
+    return {
+        skills: Array.from(
+            new Map(skills.map((skill) => [skill.dedupeKey, skill])).values(),
+        ),
+        warnings: uniqueStrings(warnings),
+        scannedCandidates: candidates,
+    } satisfies ISkillDirectoryDiscoveryResult;
+}
+
+export async function discoverDefaultAgentSkillDirectories() {
+    const home = await homeDir();
+    const candidates: Array<{
+        parts: string[];
+        label: string;
+        agent: IDiscoveredSkillDirectory["agent"];
+    }> = [
+        { parts: [".claude", "skills"], label: "Claude", agent: "Claude" },
+        { parts: [".codex", "skills"], label: "Codex", agent: "Codex" },
+        {
+            parts: [".openclaw", "skills"],
+            label: "OpenClaw",
+            agent: "OpenClaw",
+        },
+        {
+            parts: [".config", "openclaw", "skills"],
+            label: "OpenClaw config",
+            agent: "OpenClaw",
+        },
+        {
+            parts: [".config", "opencode", "skills"],
+            label: "OpenCode",
+            agent: "OpenCode",
+        },
+        {
+            parts: ["Library", "Application Support", "opencode", "skills"],
+            label: "OpenCode",
+            agent: "OpenCode",
+        },
+    ];
+
+    const discovered: IDiscoveredSkillDirectory[] = [];
+    for (const candidate of candidates) {
+        const path = await join(home, ...candidate.parts);
+        if (!(await exists(path))) continue;
+        const info = await stat(path);
+        if (!info.isDirectory) continue;
+        discovered.push({
+            path,
+            label: `${candidate.label} skills`,
+            agent: candidate.agent,
+        });
+    }
+
+    return Array.from(
+        new Map(
+            discovered.map((item) => [normalizeSlashes(item.path), item]),
+        ).values(),
+    );
+}
+
+export function isSkillFromDirectory(
+    skill: IImportedSkill,
+    directoryPath: string,
+) {
+    const root = String(skill.metadata["skillDirectory.root"] || "").trim();
+    return (
+        pathStartsWith(skill.source.canonical, directoryPath) ||
+        pathStartsWith(skill.source.original, directoryPath) ||
+        Boolean(root && pathStartsWith(root, directoryPath))
+    );
 }
 
 export async function discoverWorkspaceInstalledSkills(workspaceRoot: string) {
@@ -982,7 +1211,9 @@ export async function discoverWorkspaceInstalledSkills(workspaceRoot: string) {
         return {
             skills: [],
             warnings: lock.lockPath
-                ? ["检测到 .clawhub/lock.json，但当前工作区不存在 skills/ 目录。"]
+                ? [
+                      "检测到 .clawhub/lock.json，但当前工作区不存在 skills/ 目录。",
+                  ]
                 : [],
             skillsDir: null,
             lockPath: lock.lockPath,
@@ -1045,7 +1276,11 @@ export async function discoverWorkspaceInstalledSkills(workspaceRoot: string) {
             }
 
             if (imported.warnings.length > 0) {
-                warnings.push(...imported.warnings.map((item) => `${basenameLike(candidate)}：${item}`));
+                warnings.push(
+                    ...imported.warnings.map(
+                        (item) => `${basenameLike(candidate)}：${item}`,
+                    ),
+                );
             }
         } catch (error) {
             warnings.push(

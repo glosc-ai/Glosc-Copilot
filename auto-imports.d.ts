@@ -91,7 +91,6 @@ declare global {
   const ConversationSchema: typeof import('./src/utils/interface').ConversationSchema
   const ConversationScrollButton: typeof import('./src/components/ai-elements/conversation/index').ConversationScrollButton
   const Cryption: typeof import('./src/utils/Cryption').Cryption
-  const CustomModelProviderKindSchema: typeof import('./src/utils/interface').CustomModelProviderKindSchema
   const CustomModelProviderSchema: typeof import('./src/utils/interface').CustomModelProviderSchema
   const DEFAULT_AVATARS: typeof import('./src/utils/meetingInterface').DEFAULT_AVATARS
   const DEFAULT_COLORS: typeof import('./src/utils/meetingInterface').DEFAULT_COLORS
@@ -329,7 +328,6 @@ declare global {
   const computerTools: typeof import('./src/utils/ComputerToolRegistry').computerTools
   const computerTypeText: typeof import('./src/utils/ComputerControlUtils').computerTypeText
   const createApp: typeof import('vue').createApp
-  const createBuiltinTools: typeof import('./src/utils/BuiltinTools').createBuiltinTools
   const createImageModelFromProvider: typeof import('./src/utils/LocalAiProvider').createImageModelFromProvider
   const createLanguageModelFromProvider: typeof import('./src/utils/LocalAiProvider').createLanguageModelFromProvider
   const createLanguageModelFromRequestBody: typeof import('./src/utils/LocalAiProvider').createLanguageModelFromRequestBody
@@ -341,8 +339,11 @@ declare global {
   const defineAsyncComponent: typeof import('vue').defineAsyncComponent
   const defineComponent: typeof import('vue').defineComponent
   const defineStore: typeof import('pinia').defineStore
+  const discoverDefaultAgentSkillDirectories: typeof import('./src/utils/SkillCompatibility').discoverDefaultAgentSkillDirectories
+  const discoverSkillsInDirectory: typeof import('./src/utils/SkillCompatibility').discoverSkillsInDirectory
   const discoverWorkspaceInstalledSkills: typeof import('./src/utils/SkillCompatibility').discoverWorkspaceInstalledSkills
   const effectScope: typeof import('vue').effectScope
+  const ensureBundledMcpToolsInstalled: typeof import('./src/utils/BundledMcpTools').ensureBundledMcpToolsInstalled
   const ensureBundledNpmExpanded: typeof import('./src/utils/NpmResources').ensureBundledNpmExpanded
   const ensureMonacoWorkers: typeof import('./src/utils/MonacoSetup').ensureMonacoWorkers
   const extractMcpResourceBlocks: typeof import('./src/utils/InlineCitationUtils').extractMcpResourceBlocks
@@ -375,6 +376,7 @@ declare global {
   const isReadonly: typeof import('vue').isReadonly
   const isRef: typeof import('vue').isRef
   const isShallow: typeof import('vue').isShallow
+  const isSkillFromDirectory: typeof import('./src/utils/SkillCompatibility').isSkillFromDirectory
   const isStoreInstalledServer: typeof import('./src/utils/StoreToolAccess').isStoreInstalledServer
   const isStoreToolBlocked: typeof import('./src/utils/StoreToolAccess').isStoreToolBlocked
   const mapActions: typeof import('pinia').mapActions
@@ -488,6 +490,9 @@ declare global {
   export type { BuiltinToolKind } from './src/stores/settings'
   import('./src/stores/settings')
   // @ts-ignore
+  export type { ISkillDirectoryConfig } from './src/stores/skills'
+  import('./src/stores/skills')
+  // @ts-ignore
   export type { WorkspaceChatApiMode, WorkspaceFileContextMode, WorkspaceBuiltinToolKind, WorkspaceConversation } from './src/stores/workspaceChat'
   import('./src/stores/workspaceChat')
   // @ts-ignore
@@ -533,7 +538,7 @@ declare global {
   export type { EnsureBundledNpmResult } from './src/utils/NpmResources'
   import('./src/utils/NpmResources')
   // @ts-ignore
-  export type { SkillSourceKind, ISkillSourceInfo, ISkillPackageMeta, ISkillFileSummary, IImportedSkill, ICompatibilityImportResult, IWorkspaceInstalledSkillsResult } from './src/utils/SkillCompatibility'
+  export type { SkillSourceKind, ISkillSourceInfo, ISkillPackageMeta, ISkillFileSummary, IImportedSkill, ICompatibilityImportResult, IWorkspaceInstalledSkillsResult, IDiscoveredSkillDirectory, ISkillDirectoryDiscoveryResult } from './src/utils/SkillCompatibility'
   import('./src/utils/SkillCompatibility')
   // @ts-ignore
   export type { StoreToolAccessStatus, StoreToolAccessInfo } from './src/utils/StoreToolAccess'

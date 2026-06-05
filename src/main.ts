@@ -32,7 +32,9 @@ try {
 }
 app.mount("#app");
 
-async function importMcpServersFromConfigs(configs: ReturnType<typeof parseMcpServerConfigs>) {
+async function importMcpServersFromConfigs(
+    configs: ReturnType<typeof parseMcpServerConfigs>,
+) {
     const mcpStore = useMcpStore(pinia);
     await mcpStore.init();
 
@@ -266,6 +268,17 @@ void (async () => {
         await ensureBundledNpmExpanded();
     } catch (e) {
         console.warn("startup npm expand failed", e);
+    }
+})();
+
+// 启动时显式补齐随应用打包的默认 MCP 工具。
+void (async () => {
+    try {
+        const mcpStore = useMcpStore(pinia);
+        await mcpStore.init();
+        await mcpStore.ensureBundledMcpTools();
+    } catch (e) {
+        console.warn("startup bundled mcp tools install failed", e);
     }
 })();
 

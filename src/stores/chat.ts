@@ -213,6 +213,13 @@ export const useChatStore = defineStore("chat", {
                 // 加载会话数据
                 await this.loadConversations();
 
+                // 启动时集中加载一次可用模型并恢复上次选择，
+                // 避免模型加载耦合在 ChatArea 挂载上：欢迎页不挂载 ChatArea，
+                // 否则会出现“每次启动都需要去设置里重新刷新模型”的问题。
+                if (this.availableModels.length === 0) {
+                    await this.loadAvailableModels();
+                }
+
                 // 不自动选中会话，保持 activeKey 为空以显示欢迎页面
                 // 如果需要，可以手动选择会话
 

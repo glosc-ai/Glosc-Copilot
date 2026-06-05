@@ -18,6 +18,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { GloscStoreApi } from "@/utils/GloscStoreApi";
 import { updateStoreTool } from "@/utils/StoreToolInstaller";
+import { ensureBundledMcpToolsInstalled } from "@/utils/BundledMcpTools";
 import {
     getStoreToolAccessInfoFromEnv,
     isStoreToolBlocked,
@@ -849,8 +850,20 @@ const updateStoreInstalledServer = async (server: McpServer) => {
 
 const ensureLoaded = async () => {
     await mcpStore.init();
+    await ensureBundledToolsVisible();
     await mcpStore.checkConnections();
     loadedOnce.value = true;
+};
+
+const ensureBundledToolsVisible = async () => {
+    try {
+        await ensureBundledMcpToolsInstalled({ mcpStore });
+    } catch (e: any) {
+        console.warn("ensure bundled mcp tools in manager failed", e);
+        if (mcpStore.servers.length === 0) {
+            ElMessage.warning(`默认工具安装失败：${e?.message || String(e)}`);
+        }
+    }
 };
 
 watch(
@@ -861,6 +874,7 @@ watch(
             await ensureLoaded();
         } else {
             // Open-time refresh so the state feels up-to-date.
+            await ensureBundledToolsVisible();
             await mcpStore.checkConnections();
         }
     },

@@ -1,114 +1,138 @@
 {
-  "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": [
-    "main"
-  ],
-  "permissions": [
-    "core:default",
-    "opener:default",
-    "dialog:allow-open",
-    "core:window:allow-minimize",
-    "core:window:allow-maximize",
-    "core:window:allow-toggle-maximize",
-    "core:window:allow-close",
-    "core:window:allow-start-dragging",
-    "fs:read-all",
-    "fs:write-all",
-    {
-      "identifier": "fs:scope",
-      "allow": [
+    "$schema": "../gen/schemas/desktop-schema.json",
+    "identifier": "default",
+    "description": "Capability for the main window",
+    "windows": ["main"],
+    "permissions": [
+        "core:default",
+        "opener:default",
+        "dialog:allow-open",
+        "core:window:allow-minimize",
+        "core:window:allow-maximize",
+        "core:window:allow-toggle-maximize",
+        "core:window:allow-close",
+        "core:window:allow-start-dragging",
+        "fs:default",
+        "fs:read-all",
+        "fs:write-all",
+        "fs:scope-appdata-recursive",
+        "fs:allow-appdata-read-recursive",
+        "fs:allow-appdata-write-recursive",
+        "fs:allow-appdata-meta-recursive",
+        "fs:scope-resource-recursive",
+        "fs:allow-resource-read-recursive",
+        "fs:allow-resource-meta-recursive",
         {
-          "path": "**"
+            "identifier": "fs:scope",
+            "allow": [
+                {
+                    "path": "$APPDATA"
+                },
+                {
+                    "path": "$APPDATA/**"
+                },
+                {
+                    "path": "$APPDATA/**/*"
+                },
+                {
+                    "path": "$RESOURCE"
+                },
+                {
+                    "path": "$RESOURCE/**"
+                },
+                {
+                    "path": "$RESOURCE/**/*"
+                },
+                {
+                    "path": "**"
+                },
+                {
+                    "path": "**/*"
+                }
+            ]
         },
+        "store:allow-get",
+        "store:allow-set",
+        "store:allow-delete",
+        "store:allow-save",
+        "store:allow-load",
+        "dialog:allow-confirm",
+        "dialog:allow-save",
+        "dialog:default",
+        "shell:allow-execute",
+        "shell:allow-open",
+        "cors-fetch:default",
+        "shell:allow-kill",
+        "shell:allow-stdin-write",
         {
-          "path": "**/*"
+            "identifier": "shell:allow-spawn",
+            "allow": [
+                {
+                    "name": "binaries/node",
+                    "sidecar": true,
+                    "args": true
+                },
+                {
+                    "name": "binaries/uv",
+                    "sidecar": true,
+                    "args": true
+                },
+                {
+                    "name": "pwsh",
+                    "cmd": "pwsh",
+                    "args": true
+                },
+                {
+                    "name": "powershell",
+                    "cmd": "powershell",
+                    "args": true
+                },
+                {
+                    "name": "cmd",
+                    "cmd": "cmd",
+                    "args": true
+                },
+                {
+                    "name": "npx",
+                    "cmd": "npx",
+                    "args": true
+                },
+                {
+                    "name": "node",
+                    "cmd": "node",
+                    "args": true
+                },
+                {
+                    "name": "uv",
+                    "cmd": "uv",
+                    "args": true
+                },
+                {
+                    "name": "uvx",
+                    "cmd": "uvx",
+                    "args": true
+                },
+                {
+                    "name": "git",
+                    "cmd": "git",
+                    "args": true
+                },
+                {
+                    "name": "explorer.exe",
+                    "cmd": "explorer.exe",
+                    "args": true
+                },
+                {
+                    "name": "open",
+                    "cmd": "open",
+                    "args": true
+                },
+                {
+                    "name": "xdg-open",
+                    "cmd": "xdg-open",
+                    "args": true
+                }
+            ]
         }
-      ]
-    },
-    "store:allow-get",
-    "store:allow-set",
-    "store:allow-delete",
-    "store:allow-save",
-    "store:allow-load",
-    "dialog:allow-confirm",
-    "dialog:allow-save",
-    "dialog:default",
-    "shell:allow-execute",
-    "shell:allow-open",
-    "cors-fetch:default",
-    "shell:allow-kill",
-    "shell:allow-stdin-write",
-    {
-      "identifier": "shell:allow-spawn",
-      "allow": [
-        {
-          "name": "binaries/node",
-          "sidecar": true,
-          "args": true
-        },
-        {
-          "name": "binaries/uv",
-          "sidecar": true,
-          "args": true
-        },
-        {
-          "name": "pwsh",
-          "cmd": "pwsh",
-          "args": true
-        },
-        {
-          "name": "powershell",
-          "cmd": "powershell",
-          "args": true
-        },
-        {
-          "name": "cmd",
-          "cmd": "cmd",
-          "args": true
-        },
-        {
-          "name": "npx",
-          "cmd": "npx",
-          "args": true
-        },
-        {
-          "name": "node",
-          "cmd": "node",
-          "args": true
-        },
-        {
-          "name": "uv",
-          "cmd": "uv",
-          "args": true
-        },
-        {
-          "name": "uvx",
-          "cmd": "uvx",
-          "args": true
-        },
-        {
-          "name": "git",
-          "cmd": "git",
-          "args": true
-        },
-        {
-          "name": "explorer.exe",
-          "cmd": "explorer.exe",
-          "args": true
-        },
-        {
-          "name": "open",
-          "cmd": "open",
-          "args": true
-        },
-        {
-          "name": "xdg-open",
-          "cmd": "xdg-open",
-          "args": true
-        }
-      ]
-    }
-  ]
+    ]
 }
