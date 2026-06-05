@@ -14,6 +14,7 @@ import {
     Plus,
     Settings,
     SlidersHorizontal,
+    Loader2,
 } from "lucide-vue-next";
 import { useChatStore } from "@/stores/chat";
 import { storeToRefs } from "pinia";
@@ -115,6 +116,10 @@ watch(sidebarWidth, (newWidth) => {
 
 const selectChat = (key: string) => {
     void chatStore.selectConversation(key);
+};
+
+const getConversationStatus = (key: string) => {
+    return chatStore.conversationDisplayStatus(key);
 };
 
 const createNewChat = async () => {
@@ -415,9 +420,7 @@ const onDropGroup = async (groupId: string | null, event: DragEvent) => {
                                     )
                                 "
                             >
-                                <div
-                                    class="flex items-center gap-2 overflow-hidden"
-                                >
+                                <div class="flex items-center gap-2 overflow-hidden min-w-0">
                                     <MessageSquare class="w-4 h-4 shrink-0" />
                                     <template v-if="editingKey === item.key">
                                         <Input
@@ -437,7 +440,17 @@ const onDropGroup = async (groupId: string | null, event: DragEvent) => {
                                         }}</span>
                                     </template>
                                 </div>
-                                <div class="flex items-center gap-1">
+                                <div class="flex items-center gap-1 shrink-0">
+                                    <span
+                                        v-if="getConversationStatus(item.key)"
+                                        class="inline-flex items-center gap-1 rounded-full bg-background/70 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground"
+                                    >
+                                        <Loader2
+                                            v-if="getConversationStatus(item.key) === '进行中'"
+                                            class="h-3 w-3 animate-spin"
+                                        />
+                                        {{ getConversationStatus(item.key) }}
+                                    </span>
                                     <Button
                                         variant="ghost"
                                         size="icon"

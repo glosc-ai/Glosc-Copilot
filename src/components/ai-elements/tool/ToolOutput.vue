@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import type { ToolUIPart } from "ai";
 import type { HTMLAttributes } from "vue";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { computed } from "vue";
-import { CodeBlock } from "../code-block";
+import { Maximize2 } from "lucide-vue-next";
+import { computed, ref } from "vue";
 
 const props = defineProps<{
     output: ToolUIPart["output"];
@@ -11,18 +19,88 @@ const props = defineProps<{
     class?: HTMLAttributes["class"];
 }>();
 
-const showOutput = computed(() => props.output || props.errorText);
+const maxPreviewLength = 240;
+const resultDialogOpen = ref(false);
+
+const showOutput = computed(
+    () =>
+        Boolean(props.errorText) ||
+        (props.output !== undefined && props.output !== null),
+);
 
 const isObjectOutput = computed(
-    () => typeof props.output === "object" && props.output !== null
+    () => typeof props.output === "object" && props.output !== null,
 );
-const isStringOutput = computed(() => typeof props.output === "string");
+
+function previewString (text: string, emptyText = "空文本结果") {
+    const trimmedText = text.trim();
+    if (!trimmedText) {
+        return emptyText;
+    }
+
+    return trimmedText.length > maxPreviewLength
+        ? `${trimmedText.slice(0, maxPreviewLength)}...`
+        : trimmedText;
+}
+
+function previewObject (output: object) {
+    if (Array.isArray(output)) {
+        return `数组结果，共 ${output.length} 项`;
+    }
+
+    const previewKeys: string[] = [];
+    for (const key in output) {
+        previewKeys.push(key);
+        if (previewKeys.length >= 6) break;
+    }
+
+    if (previewKeys.length === 0) {
+        return "对象结果";
+    }
+
+    const hasMore = previewKeys.length > 5;
+    const shownKeys = hasMore ? previewKeys.slice(0, 5) : previewKeys;
+    return `对象结果，包含 ${shownKeys.join("、")}${hasMore ? " 等字段" : ""}`;
+}
+
+const previewText = computed(() => {
+    if (props.errorText) {
+        return previewString(props.errorText, "空错误详情");
+    }
+
+    if (typeof props.output === "string") {
+        return previewString(props.output);
+    }
+
+    if (isObjectOutput.value) {
+        return previewObject(props.output as object);
+    }
+
+    return String(props.output);
+});
+
+const resultTypeText = computed(() => {
+    if (props.errorText) return "错误详情";
+    if (isObjectOutput.value) return "JSON 结果";
+    return "文本结果";
+});
 
 const formattedOutput = computed(() => {
-    if (isObjectOutput.value) {
-        return JSON.stringify(props.output, null, 2);
+    if (props.errorText) {
+        return props.errorText;
     }
-    return props.output as string;
+
+    if (isObjectOutput.value) {
+        try {
+            return JSON.stringify(props.output, null, 2);
+        } catch {
+            return String(props.output);
+        }
+    }
+
+    return props.output === undefined || props.output === null
+        ? ""
+        : String(props.output);
 });
 </script>
 
@@ -40,30 +118,51 @@ const formattedOutput = computed(() => {
         <div
             :class="
                 cn(
-                    'overflow-x-auto rounded-md text-xs [&_table]:w-full',
+                    'rounded-md border text-xs [&_table]:w-full',
                     props.errorText
                         ? 'bg-destructive/10 text-destructive'
                         : 'bg-muted/50 text-foreground'
                 )
             "
         >
-            <div v-if="errorText" class="p-3">
-                {{ props.errorText }}
-            </div>
-
-            <CodeBlock
-                v-else-if="isObjectOutput"
-                :code="formattedOutput"
-                language="json"
-            />
-            <CodeBlock
-                v-else-if="isStringOutput"
-                :code="formattedOutput"
-                language="json"
-            />
-            <div v-else class="p-3">
-                {{ props.output }}
+            <div class="flex items-start justify-between gap-3 p-3">
+                <div class="min-w-0 flex-1">
+                    <div class="text-[11px] text-muted-foreground">
+                        {{ resultTypeText }}
+                    </div>
+                    <pre
+                        class="mt-1 max-h-20 overflow-hidden whitespace-pre-wrap wrap-break-word font-mono text-xs leading-5"
+                    >{{ previewText }}</pre>
+                </div>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    class="h-7 shrink-0 px-2 text-xs"
+                    @click="resultDialogOpen = true"
+                >
+                    <Maximize2 class="size-3.5" />
+                    查看完整内容
+                </Button>
             </div>
         </div>
+
+        <Dialog v-model:open="resultDialogOpen">
+            <DialogContent
+                v-if="resultDialogOpen"
+                class="h-[80vh] w-[92vw] max-w-4xl grid-rows-[auto_minmax(0,1fr)] gap-0 p-0"
+            >
+                <DialogHeader class="border-b px-5 py-4 pr-12">
+                    <DialogTitle>{{ props.errorText ? "工具错误" : "工具结果" }}</DialogTitle>
+                    <DialogDescription>
+                        {{ resultTypeText }}
+                    </DialogDescription>
+                </DialogHeader>
+                <div class="min-h-0 overflow-auto bg-muted/30">
+                    <pre
+                        class="m-0 whitespace-pre-wrap wrap-break-word p-4 font-mono text-xs leading-5 text-foreground"
+                    >{{ formattedOutput }}</pre>
+                </div>
+            </DialogContent>
+        </Dialog>
     </div>
 </template>

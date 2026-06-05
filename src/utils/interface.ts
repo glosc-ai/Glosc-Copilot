@@ -101,6 +101,7 @@ export const ConversationItemSchema = z.object({
     label: z.string(),
     timestamp: z.number().optional(),
     groupId: z.string().nullable().optional(),
+    runStatus: z.enum(["completed_unread"]).optional(),
     // 用于列表展示/优化：不必加载完整 messages 即可判断是否为空
     messageCount: z.number().optional(),
 });

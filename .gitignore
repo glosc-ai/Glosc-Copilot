@@ -31,3 +31,4 @@ dist-ssr
 /src-tauri/binaries/
 tauri
 *.provisionprofile
+.playwright-cli

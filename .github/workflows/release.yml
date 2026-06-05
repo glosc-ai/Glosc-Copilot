@@ -114,10 +114,14 @@ jobs:
                   TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
                   VITE_API_HOST: ${{ secrets.VITE_API_HOST  }}
                   VITE_SITE_HOST: ${{ secrets.VITE_SITE_HOST  }}
-                  DEEPSEED_API_KEY: ${{ secrets.DEEPSEED_API_KEY }}
+                  VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+                  VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+                  VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+                  VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+                  VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+                  VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+                  VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
                   AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
-                  GOOGLE_VertexAI_API_KEY: ${{ secrets.GOOGLE_VertexAI_API_KEY }}
-                  GOOGLE_VertexAI_PROJECT_ID: ${{ secrets.GOOGLE_VertexAI_PROJECT_ID }}
                   APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
                   APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
               with:

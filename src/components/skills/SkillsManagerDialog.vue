@@ -7,6 +7,7 @@ import {
     Globe,
     Loader2,
     RefreshCw,
+    Sparkles,
     StickyNote,
     Trash2,
 } from "lucide-vue-next";
@@ -29,6 +30,7 @@ const urlDialogOpen = ref(false);
 const directoriesDialogOpen = ref(false);
 const urlInput = ref("");
 const previewSkill = ref<IImportedSkill | null>(null);
+const organizingSkills = ref(false);
 
 // 备注编辑弹窗状态
 const noteDialogOpen = ref(false);
@@ -276,6 +278,31 @@ async function setAllEnabled(enabled: boolean) {
     await skillsStore.setSkillEnabledAll(enabled);
 }
 
+async function organizeSkills() {
+    if (skillsStore.skills.length === 0) {
+        ElMessage.warning("暂无可整理的 Skills");
+        return;
+    }
+
+    organizingSkills.value = true;
+    try {
+        const result = await skillsStore.organizeSkillsWithAi();
+        if (result.updated > 0) {
+            ElMessage.success(`整理完成：已更新 ${result.updated} 个 Skills`);
+            return;
+        }
+        ElMessage.info("整理完成，暂无需要更新的 Skills");
+    } catch (error) {
+        ElMessage.error(
+            error instanceof Error
+                ? error.message
+                : String(error || "整理 Skills 失败"),
+        );
+    } finally {
+        organizingSkills.value = false;
+    }
+}
+
 async function discoverDefaultDirectories() {
     await skillsStore.discoverDefaultDirectories();
     await skillsStore.syncSkillDirectories();
@@ -378,6 +405,22 @@ function closePreview() {
                     {{ enabledDirectoryCount }} 个。
                 </div>
                 <div class="flex items-center gap-1.5">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-7"
+                        :disabled="
+                            organizingSkills || skillsStore.skills.length === 0
+                        "
+                        @click="organizeSkills"
+                    >
+                        <Loader2
+                            v-if="organizingSkills"
+                            class="w-4 h-4 mr-1 animate-spin"
+                        />
+                        <Sparkles v-else class="w-4 h-4 mr-1" />
+                        整理 Skills
+                    </Button>
                     <Button
                         variant="outline"
                         size="sm"
@@ -634,9 +677,7 @@ function closePreview() {
                                     <div class="text-xs text-muted-foreground">
                                         <span v-if="directory.lastSyncedAt">
                                             已同步
-                                            {{
-                                                directory.lastSkillCount || 0
-                                            }}
+                                            {{ directory.lastSkillCount || 0 }}
                                             个 Skill
                                         </span>
                                         <span v-if="directory.lastWarning">

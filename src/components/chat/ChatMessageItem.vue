@@ -226,6 +226,7 @@ const timestampTextForMessage = computed(() =>
                         part.type === 'dynamic-tool' ||
                         part.type.startsWith('tool-')
                     "
+                    :state="(part as any).state"
                 >
                     <ToolHeader
                         :state="(part as any).state"

@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Image } from "@/components/ai-elements/image";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Pencil, X, Loader2Icon } from "lucide-vue-next";
+import type { Ref, ShallowRef } from "vue";
 
 import { formatModelName, groupModelsByProvider } from "@/utils/ModelApi";
 
@@ -53,6 +54,7 @@ const uiStore = useUiStore();
 const {
     activeKey,
     conversations,
+    conversationsItems,
     selectedModel,
     availableModels,
     recentModelUsage,
@@ -245,17 +247,129 @@ onMounted(async () => {
     }
 });
 
-// 客户端可执行工具表（用于 onToolCall 执行并 addToolOutput 回填）
-const clientToolsRef = shallowRef<Record<string, any> | null>(null);
-const chat = ChatUtils.getChat({
-    toolsRef: clientToolsRef,
-    debugTools: false,
-    apiPath: props.apiPath,
-});
+type ConversationRuntime = {
+    chat: ReturnType<typeof ChatUtils.getChat>;
+    toolsRef: ShallowRef<Record<string, any> | null>;
+    sendLock: Ref<boolean>;
+    syncTimer: number | null;
+    hasGeneratedSummaryTitle: boolean;
+};
 
-const status = computed<ChatStatus>(() => chat.status);
-const messages = computed<UIMessage[]>(() => chat.messages);
-const error = computed(() => chat.error);
+const runtimes = shallowRef<Map<string, ConversationRuntime>>(new Map());
+const runtimeVersion = ref(0);
+
+function createConversationRuntime(conversationId: string) {
+    const toolsRef = shallowRef<Record<string, any> | null>(null);
+    const runtime: ConversationRuntime = {
+        toolsRef,
+        chat: ChatUtils.getChat({
+            toolsRef,
+            debugTools: false,
+            apiPath: props.apiPath,
+        }),
+        sendLock: ref(false),
+        syncTimer: null,
+        hasGeneratedSummaryTitle: false,
+    };
+
+    watch(
+        () => runtime.chat.status,
+        (next) => {
+            if (next !== "submitted" && next !== "streaming") {
+                runtime.sendLock.value = false;
+            }
+            chatStore.setConversationRunning(
+                conversationId,
+                next === "submitted" || next === "streaming",
+            );
+        },
+    );
+
+    watch(
+        () => runtime.chat.error,
+        (newError) => {
+            handleRuntimeError(conversationId, runtime, newError);
+        },
+    );
+
+    watch(
+        () => runtime.chat.messages.length,
+        () => {
+            for (const m of runtime.chat.messages) {
+                getOrSetMessageTimestamp(conversationId, m.id);
+            }
+            scheduleSyncChatToStoreFor(conversationId, runtime, 0);
+            if (activeKey.value === conversationId) scheduleRecalcUsage(0);
+        },
+    );
+
+    watch(
+        () => runtime.chat.status,
+        (next, prev) => {
+            const wasBusy = prev === "submitted" || prev === "streaming";
+            const isBusy = next === "submitted" || next === "streaming";
+            if (wasBusy && !isBusy) {
+                if (runtime.syncTimer != null) {
+                    window.clearTimeout(runtime.syncTimer);
+                    runtime.syncTimer = null;
+                }
+                syncRuntimeToStoreFor(conversationId, runtime);
+                void chatStore.saveImmediately();
+                chatStore.setConversationRunning(conversationId, false);
+                if (activeKey.value !== conversationId) {
+                    chatStore.setConversationCompletedUnread(conversationId);
+                }
+
+                if (next === "ready" && !runtime.hasGeneratedSummaryTitle) {
+                    const conversation = conversations.value[conversationId];
+                    if (
+                        conversation &&
+                        conversation.messages.some(
+                            (m) => m.role === "assistant",
+                        )
+                    ) {
+                        runtime.hasGeneratedSummaryTitle = true;
+                        void chatStore.generateSummaryTitle(conversationId);
+                    }
+                }
+
+                if (activeKey.value === conversationId) {
+                    if (usageTimer != null) {
+                        window.clearTimeout(usageTimer);
+                        usageTimer = null;
+                    }
+                    recalcUsage();
+                }
+            }
+        },
+    );
+
+    return runtime;
+}
+
+function getOrCreateRuntime(conversationId: string) {
+    let runtime = runtimes.value.get(conversationId);
+    if (runtime) return runtime;
+
+    runtime = createConversationRuntime(conversationId);
+    const next = new Map(runtimes.value);
+    next.set(conversationId, runtime);
+    runtimes.value = next;
+    runtimeVersion.value += 1;
+    return runtime;
+}
+
+const activeRuntime = computed(() => {
+    runtimeVersion.value;
+    return activeKey.value ? runtimes.value.get(activeKey.value) || null : null;
+});
+const status = computed<ChatStatus>(
+    () => activeRuntime.value?.chat.status || "ready",
+);
+const messages = computed<UIMessage[]>(
+    () => activeRuntime.value?.chat.messages || [],
+);
+const error = computed(() => activeRuntime.value?.chat.error || null);
 
 // 为每条消息记录“首次出现时间”（按会话隔离），避免延迟 sync 导致时间戳不准确
 const messageTimestamps = shallowRef<Map<string, number>>(new Map());
@@ -297,22 +411,11 @@ const getMessageTimestampText = (messageId: string) => {
     return formatTimestamp(ts);
 };
 
-// Prevent duplicate sends caused by rapid consecutive submits before `chat.status` updates.
-const sendLock = ref(false);
 const isChatBusy = computed(
     () =>
-        sendLock.value ||
+        Boolean(activeRuntime.value?.sendLock.value) ||
         status.value === "submitted" ||
         status.value === "streaming",
-);
-
-watch(
-    () => status.value,
-    (next) => {
-        if (next !== "submitted" && next !== "streaming") {
-            sendLock.value = false;
-        }
-    },
 );
 
 // ===== 用户消息编辑 / 重新发送 =====
@@ -372,9 +475,12 @@ async function sendChatMessage(
     messageId?: string,
     files?: any[],
 ) {
+    const conversationId = activeKey.value;
+    const runtime = conversationId ? getOrCreateRuntime(conversationId) : null;
+    if (!conversationId || !runtime) return;
     if (isChatBusy.value) return;
 
-    sendLock.value = true;
+    runtime.sendLock.value = true;
     const mcpTools = await mcpStore.getCachedTools();
     // const builtinTools = createBuiltinTools({
     //     enabled: settingsStore.builtinToolsEnabled,
@@ -386,16 +492,17 @@ async function sendChatMessage(
         ...(mcpTools || {}),
         // ...(builtinTools || {}),
     };
-    clientToolsRef.value = tools;
+    runtime.toolsRef.value = tools;
     const toolsEnabled = Object.keys(tools).length > 0;
     const modelRequestBody = getSelectedModelRequestBody(toolsEnabled);
     if (!modelRequestBody) {
-        sendLock.value = false;
+        runtime.sendLock.value = false;
         return;
     }
 
     try {
-        await chat.sendMessage(
+        chatStore.setConversationRunning(conversationId, true);
+        await runtime.chat.sendMessage(
             { text, messageId, files },
             {
                 body: {
@@ -411,14 +518,19 @@ async function sendChatMessage(
             },
         );
     } finally {
-        if (status.value !== "submitted" && status.value !== "streaming") {
-            sendLock.value = false;
+        if (
+            runtime.chat.status !== "submitted" &&
+            runtime.chat.status !== "streaming"
+        ) {
+            runtime.sendLock.value = false;
         }
     }
 }
 
 function truncateChatToMessage(messageId: string, updatedText?: string) {
-    const current = chat.messages;
+    const runtime = activeRuntime.value;
+    if (!runtime) return false;
+    const current = runtime.chat.messages;
     const index = current.findIndex((m) => m.id === messageId);
     if (index < 0) return false;
 
@@ -430,7 +542,7 @@ function truncateChatToMessage(messageId: string, updatedText?: string) {
             parts: replaceTextParts(target.parts as any, updatedText),
         } as any;
     }
-    chat.messages = prefix as any;
+    runtime.chat.messages = prefix as any;
     return true;
 }
 
@@ -474,7 +586,11 @@ async function confirmEditAndResendUserMessage() {
     await sendChatMessage(nextText, messageId, files);
 }
 
-watch(error, (newError) => {
+function handleRuntimeError(
+    conversationId: string,
+    runtime: ConversationRuntime,
+    newError: unknown,
+) {
     if (newError) {
         console.error("Chat error:", newError);
 
@@ -496,7 +612,7 @@ watch(error, (newError) => {
 
             // 把错误落到最后一条 assistant 消息里，避免用户只看到控制台报错。
             try {
-                const current = (chat.messages as any[]) || [];
+                const current = (runtime.chat.messages as any[]) || [];
                 for (let i = current.length - 1; i >= 0; i -= 1) {
                     const m: any = current[i];
                     if (m?.role !== "assistant") continue;
@@ -533,7 +649,7 @@ watch(error, (newError) => {
 
                     const nextMessages = current.slice();
                     nextMessages[i] = { ...m, parts };
-                    chat.messages = nextMessages as any;
+                    runtime.chat.messages = nextMessages as any;
                     break;
                 }
             } catch {
@@ -542,19 +658,26 @@ watch(error, (newError) => {
         }
 
         // 尽量停止当前流，避免 UI 卡在 streaming 状态
-        if (status.value === "submitted" || status.value === "streaming") {
-            void chat.stop();
+        if (
+            runtime.chat.status === "submitted" ||
+            runtime.chat.status === "streaming"
+        ) {
+            void runtime.chat.stop();
         }
+        chatStore.setConversationRunning(conversationId, false);
     }
-});
+}
 
-function syncChatToStoreFor(conversationId: string) {
+function syncRuntimeToStoreFor(
+    conversationId: string,
+    runtime: ConversationRuntime,
+) {
     const conversation = conversations.value[conversationId];
     if (!conversation) return;
 
     const oldMessagesMap = new Map(conversation.messages.map((m) => [m.id, m]));
 
-    const updatedMessages: StoredChatMessage[] = messages.value.map((m) => {
+    const updatedMessages: StoredChatMessage[] = runtime.chat.messages.map((m) => {
         const old = oldMessagesMap.get(m.id);
         const textContent =
             m.parts
@@ -597,11 +720,18 @@ function syncChatToStoreFor(conversationId: string) {
 
 function applyConversationToChat(conversationId: string) {
     const conversation = conversations.value[conversationId];
+    const runtime = getOrCreateRuntime(conversationId);
+    if (
+        runtime.chat.status === "submitted" ||
+        runtime.chat.status === "streaming"
+    ) {
+        return;
+    }
     // 回填历史消息的时间戳缓存（确保每条都能拿到独立时间）
     for (const m of conversation?.messages || []) {
         getOrSetMessageTimestamp(conversationId, m.id, m.timestamp);
     }
-    chat.messages = conversation
+    runtime.chat.messages = conversation
         ? conversation.messages.map((m) => ({
             id: m.id,
             role: m.role === "data" ? "assistant" : m.role,
@@ -619,18 +749,22 @@ watch(
     (newKey, oldKey) => {
         // 切换会话前，先把当前 UI 中的消息写回旧会话，避免覆盖/丢失
         if (oldKey && oldKey !== newKey) {
-            if (syncTimer != null) {
-                window.clearTimeout(syncTimer);
-                syncTimer = null;
-            }
-            // 流式时不强行同步，避免把半截内容写进 store
-            if (status.value !== "streaming") {
-                syncChatToStoreFor(oldKey);
+            const oldRuntime = runtimes.value.get(oldKey);
+            if (oldRuntime) {
+                if (oldRuntime.syncTimer != null) {
+                    window.clearTimeout(oldRuntime.syncTimer);
+                    oldRuntime.syncTimer = null;
+                }
+                if (
+                    oldRuntime.chat.status !== "submitted" &&
+                    oldRuntime.chat.status !== "streaming"
+                ) {
+                    syncRuntimeToStoreFor(oldKey, oldRuntime);
+                }
             }
         }
 
         if (!newKey) {
-            chat.messages = [];
             hasGeneratedSummaryTitle.value = false;
             return;
         }
@@ -638,6 +772,7 @@ watch(
         void (async () => {
             await chatStore.ensureConversationLoaded(newKey);
             applyConversationToChat(newKey);
+            chatStore.markConversationRead(newKey);
 
             // 切换会话时重置总结标题生成标志
             hasGeneratedSummaryTitle.value = false;
@@ -646,64 +781,47 @@ watch(
     { immediate: true },
 );
 
-let syncTimer: number | null = null;
-const syncChatToStore = () => {
-    if (!activeKey.value) return;
-    syncChatToStoreFor(activeKey.value);
-};
+watch(
+    () => conversationsItems.value.map((item) => item.key).join("|"),
+    () => {
+        const knownIds = new Set(conversationsItems.value.map((item) => item.key));
+        const next = new Map(runtimes.value);
+        let changed = false;
+        for (const [conversationId, runtime] of next) {
+            if (knownIds.has(conversationId)) continue;
+            if (runtime.syncTimer != null) {
+                window.clearTimeout(runtime.syncTimer);
+                runtime.syncTimer = null;
+            }
+            void runtime.chat.stop();
+            next.delete(conversationId);
+            changed = true;
+        }
+        if (changed) {
+            runtimes.value = next;
+            runtimeVersion.value += 1;
+        }
+    },
+);
 
-const scheduleSyncChatToStore = (delayMs = 200) => {
-    if (syncTimer != null) window.clearTimeout(syncTimer);
-    syncTimer = window.setTimeout(() => {
-        syncTimer = null;
+const scheduleSyncChatToStoreFor = (
+    conversationId: string,
+    runtime: ConversationRuntime,
+    delayMs = 200,
+) => {
+    if (runtime.syncTimer != null) window.clearTimeout(runtime.syncTimer);
+    runtime.syncTimer = window.setTimeout(() => {
+        runtime.syncTimer = null;
         // 流式期间避免逐 token 深度同步；在结束/非流式时再同步
-        if (status.value === "streaming") return;
-        syncChatToStore();
+        if (
+            runtime.chat.status === "submitted" ||
+            runtime.chat.status === "streaming"
+        ) {
+            return;
+        }
+        syncRuntimeToStoreFor(conversationId, runtime);
     }, delayMs);
 };
-
-watch(
-    () => messages.value.length,
-    () => {
-        // 为当前会话中新出现的消息记录时间戳
-        if (activeKey.value) {
-            for (const m of messages.value) {
-                getOrSetMessageTimestamp(activeKey.value, m.id);
-            }
-        }
-        // 新消息进入（用户/助手占位）时，非流式情况下可以同步一次
-        scheduleSyncChatToStore(0);
-    },
-);
-
-watch(
-    () => status.value,
-    (next, prev) => {
-        // 流式结束时做一次完整同步并保存
-        if (prev === "streaming" && next !== "streaming") {
-            if (syncTimer != null) {
-                window.clearTimeout(syncTimer);
-                syncTimer = null;
-            }
-            syncChatToStore();
-            chatStore.saveImmediately();
-
-            // AI回复完成后，如果是首次且未生成总结标题，则生成总结标题
-            if (next === "ready" && !hasGeneratedSummaryTitle.value) {
-                const conversation = conversations.value[activeKey.value];
-                if (
-                    conversation &&
-                    conversation.messages.some((m) => m.role === "assistant")
-                ) {
-                    console.log(next);
-
-                    hasGeneratedSummaryTitle.value = true;
-                    chatStore.generateSummaryTitle(activeKey.value);
-                }
-            }
-        }
-    },
-);
 
 const lastAssistantMessageId = computed(() => {
     for (let index = messages.value.length - 1; index >= 0; index -= 1) {
@@ -725,25 +843,29 @@ const messagesWithCheckpoints = computed(() => {
 async function handleSubmit(message: PromptInputMessage) {
     const hasText = Boolean(message.text?.trim());
     const hasAttachments = Boolean(message.files?.length);
+    const conversationId = activeKey.value;
+    const runtime = conversationId ? getOrCreateRuntime(conversationId) : null;
 
     if (!hasText && !hasAttachments) return;
+    if (!conversationId || !runtime) return;
     if (isChatBusy.value) return;
 
     try {
-        sendLock.value = true;
+        runtime.sendLock.value = true;
         // Use cached tools to avoid reloading on each message
         const tools = await mcpStore.getCachedTools();
         const toolsEnabled = Object.keys(tools || {}).length > 0;
         const modelRequestBody = getSelectedModelRequestBody(toolsEnabled);
         if (!modelRequestBody) {
-            sendLock.value = false;
+            runtime.sendLock.value = false;
             return;
         }
 
         // 供客户端 onToolCall 使用：真正执行工具并回填 output
-        clientToolsRef.value = tools;
+        runtime.toolsRef.value = tools;
 
-        const p = chat.sendMessage(
+        chatStore.setConversationRunning(conversationId, true);
+        const p = runtime.chat.sendMessage(
             {
                 text: hasText ? message.text : "已发送附件",
                 files: hasAttachments ? message.files : [],
@@ -763,11 +885,13 @@ async function handleSubmit(message: PromptInputMessage) {
 
         p.catch((error) => {
             console.error("Failed to send message", error);
-            sendLock.value = false;
+            runtime.sendLock.value = false;
+            chatStore.setConversationRunning(conversationId, false);
         });
     } catch (error) {
         console.error("Failed to send message", error);
-        sendLock.value = false;
+        runtime.sendLock.value = false;
+        chatStore.setConversationRunning(conversationId, false);
     }
 }
 
@@ -857,11 +981,14 @@ async function handleRegenerate() {
         ...(mcpTools || {}),
         // ...(builtinTools || {}),
     };
-    clientToolsRef.value = tools;
+    const runtime = activeRuntime.value;
+    if (!runtime || !activeKey.value) return;
+    runtime.toolsRef.value = tools;
     const toolsEnabled = Object.keys(tools).length > 0;
     const modelRequestBody = getSelectedModelRequestBody(toolsEnabled);
     if (!modelRequestBody) return;
-    chat.regenerate({
+    chatStore.setConversationRunning(activeKey.value, true);
+    runtime.chat.regenerate({
         body: {
             ...modelRequestBody,
             mcpEnabled: toolsEnabled,
@@ -875,7 +1002,10 @@ async function handleRegenerate() {
 }
 
 async function handleStop() {
-    await chat.stop();
+    const runtime = activeRuntime.value;
+    if (!runtime) return;
+    await runtime.chat.stop();
+    if (activeKey.value) chatStore.setConversationRunning(activeKey.value, false);
 }
 
 function getModelSearchTerm(item: ModelInfo) {
@@ -903,7 +1033,9 @@ function isStreamingPart(msgIndex: number, partIndex: number) {
 }
 function restoreToCheckpoint(messageIndex: number) {
     // Restore messages to checkpoint state (assuming setMessages API is the same)
-    chat.sendMessage(messages.value.slice(0, messageIndex + 1) as any);
+    const runtime = activeRuntime.value;
+    if (!runtime) return;
+    runtime.chat.sendMessage(messages.value.slice(0, messageIndex + 1) as any);
     // Remove checkpoints after this point
     checkpoints.value = checkpoints.value.filter(
         (cp) => cp.messageIndex <= messageIndex,
@@ -1183,7 +1315,9 @@ function isFileOpsTool(part: any): boolean {
 watch(
     () => status.value,
     (next, prev) => {
-        if (prev === "streaming" && next !== "streaming") {
+        const wasBusy = prev === "submitted" || prev === "streaming";
+        const isBusy = next === "submitted" || next === "streaming";
+        if (wasBusy && !isBusy) {
             if (usageTimer != null) {
                 window.clearTimeout(usageTimer);
                 usageTimer = null;
@@ -1300,7 +1434,7 @@ filePart, fileIndex
                                     <Tool v-else-if="
                                         part.type === 'dynamic-tool' ||
                                         part.type.startsWith('tool-')
-                                    " class="max-w-110">
+                                    " class="max-w-110" :state="(part as any).state">
                                         <ToolHeader :state="(part as any).state" :title="resolveToolName(part)"
                                             :type="part.type as any"></ToolHeader>
                                         <ToolContent>

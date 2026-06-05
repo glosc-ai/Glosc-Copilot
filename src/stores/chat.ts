@@ -85,6 +85,7 @@ export const useChatStore = defineStore("chat", {
         hasPendingChanges: false,
         indexDirty: false,
         pendingConversationIds: {} as Record<string, boolean>,
+        runningConversationIds: {} as Record<string, boolean>,
         saveTimer: null as any,
     }),
     getters: {
@@ -158,6 +159,20 @@ export const useChatStore = defineStore("chat", {
             return [...sections, ...dateSections].filter(
                 (section) => section.custom || section.items.length > 0,
             );
+        },
+        conversationDisplayStatus: (state) => {
+            return (conversationId: string) => {
+                if (state.runningConversationIds[conversationId]) {
+                    return "进行中";
+                }
+                const item = state.conversationsItems.find(
+                    (it) => it.key === conversationId,
+                );
+                if (item?.runStatus === "completed_unread") {
+                    return "已完成 未读";
+                }
+                return "";
+            };
         },
     },
     actions: {
@@ -489,6 +504,36 @@ export const useChatStore = defineStore("chat", {
             }
             await this.ensureConversationLoaded(id);
             this.activeKey = id;
+            this.markConversationRead(id);
+        },
+
+        setConversationRunning(conversationId: string, running: boolean) {
+            const next = { ...this.runningConversationIds };
+            if (running) next[conversationId] = true;
+            else delete next[conversationId];
+            this.runningConversationIds = next;
+        },
+
+        setConversationCompletedUnread(conversationId: string) {
+            const item = this.conversationsItems.find(
+                (it) => it.key === conversationId,
+            );
+            if (!item) return;
+            item.runStatus = "completed_unread";
+            this.indexDirty = true;
+            this.hasPendingChanges = true;
+            void this.persistPending();
+        },
+
+        markConversationRead(conversationId: string) {
+            const item = this.conversationsItems.find(
+                (it) => it.key === conversationId,
+            );
+            if (!item || item.runStatus !== "completed_unread") return;
+            delete item.runStatus;
+            this.indexDirty = true;
+            this.hasPendingChanges = true;
+            void this.persistPending();
         },
 
         /**
@@ -900,6 +945,7 @@ export const useChatStore = defineStore("chat", {
             try {
                 delete this.conversations[id];
                 delete this.loadedConversationIds[id];
+                delete this.runningConversationIds[id];
                 this.conversationsItems = this.conversationsItems.filter(
                     (item) => item.key !== id,
                 );
@@ -1141,6 +1187,7 @@ export const useChatStore = defineStore("chat", {
         findEmptyConversation(): string | null {
             // 使用索引元数据判断，避免扫描/加载全量会话
             for (const item of this.conversationsItems) {
+                if (this.runningConversationIds[item.key]) continue;
                 if (item.messageCount === 0) return item.key;
             }
             return null;

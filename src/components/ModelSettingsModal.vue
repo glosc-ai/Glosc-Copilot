@@ -4,6 +4,7 @@ import { formatModelName } from "@/utils/ModelApi";
 import { isApiKeyOptionalForBaseUrl } from "@/utils/LocalAiProvider";
 import { storeToRefs } from "pinia";
 import type { ModelAssignmentKey, ModelInfo } from "@/utils/interface";
+import { Check, ChevronsUpDown } from "lucide-vue-next";
 
 const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
@@ -110,14 +111,31 @@ const selectableModels = computed(() =>
         (m) => !settingsStore.isModelHidden(m.id),
     ),
 );
+const assignmentPickerOpen = ref<Record<ModelAssignmentKey, boolean>>({
+    chat: false,
+    tool: false,
+    conversationOrganizer: false,
+    skills: false,
+});
 
 function getAssignmentValue(key: ModelAssignmentKey) {
     return settingsStore.getAssignedModelId(key) || "__follow_chat__";
 }
 
+function getAssignmentLabel(key: ModelAssignmentKey) {
+    const value = getAssignmentValue(key);
+    if (value === "__follow_chat__") return "跟随聊天当前模型";
+    const model = (availableModels.value || []).find((m) => m.id === value);
+    return model ? formatModelName(model.id) : value;
+}
+
 async function setAssignmentValue(key: ModelAssignmentKey, modelId: string) {
     const clean = modelId === "__follow_chat__" ? "" : modelId;
     await settingsStore.setAssignedModelId(key, clean || null);
+    assignmentPickerOpen.value = {
+        ...assignmentPickerOpen.value,
+        [key]: false,
+    };
     if (key === "chat") {
         const model = (availableModels.value || []).find((m) => m.id === clean);
         if (model) chatStore.selectModel(model);
@@ -381,24 +399,85 @@ watch(
                                         {{ item.description }}
                                     </div>
                                 </div>
-                                <Select :model-value="getAssignmentValue(item.key)" @update:model-value="
-                                    (value: any) =>
-                                        setAssignmentValue(
-                                            item.key,
-                                            String(value || ''),
-                                        )
-                                ">
-                                    <SelectTrigger class="h-8 w-72">
-                                        <SelectValue placeholder="跟随聊天当前模型" />
-                                    </SelectTrigger>
-                                    <SelectContent class="max-h-80">
-                                        <SelectItem value="__follow_chat__">跟随聊天当前模型</SelectItem>
-                                        <SelectItem v-for="m in selectableModels" :key="`${item.key}:${m.id}`"
-                                            :value="m.id">
-                                            {{ formatModelName(m.id) }}
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                <Popover v-model:open="assignmentPickerOpen[item.key]">
+                                    <PopoverTrigger as-child>
+                                        <Button variant="outline" role="combobox"
+                                            :aria-expanded="assignmentPickerOpen[item.key]"
+                                            class="h-8 w-72 justify-between font-medium">
+                                            <span class="truncate">
+                                                {{ getAssignmentLabel(item.key) }}
+                                            </span>
+                                            <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent class="w-72 p-0" align="end">
+                                        <Command>
+                                            <CommandInput placeholder="搜索模型..." />
+                                            <CommandList class="max-h-80">
+                                                <CommandEmpty>
+                                                    未找到模型
+                                                </CommandEmpty>
+                                                <CommandGroup>
+                                                    <CommandItem value="跟随聊天当前模型 follow current chat model"
+                                                        class="py-2" @select="
+                                                            () =>
+                                                                setAssignmentValue(
+                                                                    item.key,
+                                                                    '__follow_chat__',
+                                                                )
+                                                        ">
+                                                        <Check class="h-4 w-4" :class="{
+                                                            'opacity-100':
+                                                                getAssignmentValue(
+                                                                    item.key,
+                                                                ) ===
+                                                                '__follow_chat__',
+                                                            'opacity-0':
+                                                                getAssignmentValue(
+                                                                    item.key,
+                                                                ) !==
+                                                                '__follow_chat__',
+                                                        }" />
+                                                        <span class="truncate">跟随聊天当前模型</span>
+                                                    </CommandItem>
+                                                    <CommandItem v-for="m in selectableModels"
+                                                        :key="`${item.key}:${m.id}`"
+                                                        :value="`${formatModelName(m.id)} ${m.id} ${m.owned_by || ''} ${m.type || ''}`"
+                                                        class="py-2" @select="
+                                                            () =>
+                                                                setAssignmentValue(
+                                                                    item.key,
+                                                                    m.id,
+                                                                )
+                                                        ">
+                                                        <Check class="h-4 w-4" :class="{
+                                                            'opacity-100':
+                                                                getAssignmentValue(
+                                                                    item.key,
+                                                                ) === m.id,
+                                                            'opacity-0':
+                                                                getAssignmentValue(
+                                                                    item.key,
+                                                                ) !== m.id,
+                                                        }" />
+                                                        <div class="min-w-0">
+                                                            <div class="truncate">
+                                                                {{
+                                                                    formatModelName(
+                                                                        m.id,
+                                                                    )
+                                                                }}
+                                                            </div>
+                                                            <div class="truncate text-xs text-muted-foreground">
+                                                                {{ m.owned_by }} · {{ m.type }} · {{ m.id }}
+                                                            </div>
+                                                        </div>
+                                                    </CommandItem>
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                         </div>
                     </div>
