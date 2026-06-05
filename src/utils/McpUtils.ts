@@ -141,6 +141,22 @@ export class McpUtils {
         return { success: true, ...caps };
     }
 
+    public static async callTool(
+        server: McpServer,
+        toolName: string,
+        input: Record<string, unknown> = {},
+    ) {
+        const client = await McpUtils.startServer(server);
+        const tools = await client.tools();
+        const tool = tools?.[toolName];
+
+        if (!tool || typeof tool.execute !== "function") {
+            throw new Error(`MCP 工具不可用：${toolName}`);
+        }
+
+        return await tool.execute(input, {});
+    }
+
     private static async listResources(mcpClient: any) {
         try {
             if (!mcpClient || typeof mcpClient.listResources !== "function") {

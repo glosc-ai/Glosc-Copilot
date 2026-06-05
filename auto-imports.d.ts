@@ -87,6 +87,7 @@ declare global {
   const Conversation: typeof import('./src/components/ai-elements/conversation/index').Conversation
   const ConversationContent: typeof import('./src/components/ai-elements/conversation/index').ConversationContent
   const ConversationEmptyState: typeof import('./src/components/ai-elements/conversation/index').ConversationEmptyState
+  const ConversationGroupSchema: typeof import('./src/utils/interface').ConversationGroupSchema
   const ConversationItemSchema: typeof import('./src/utils/interface').ConversationItemSchema
   const ConversationSchema: typeof import('./src/utils/interface').ConversationSchema
   const ConversationScrollButton: typeof import('./src/components/ai-elements/conversation/index').ConversationScrollButton
@@ -414,6 +415,8 @@ declare global {
   const provideCommandContext: typeof import('./src/components/ui/command/index').provideCommandContext
   const provideCommandGroupContext: typeof import('./src/components/ui/command/index').provideCommandGroupContext
   const reactive: typeof import('vue').reactive
+  const readSkillsDirectoryWithGloscMcp: typeof import('./src/utils/SkillMcpReader').readSkillsDirectoryWithGloscMcp
+  const readWorkspaceInstalledSkillsWithGloscMcp: typeof import('./src/utils/SkillMcpReader').readWorkspaceInstalledSkillsWithGloscMcp
   const readonly: typeof import('vue').readonly
   const ref: typeof import('vue').ref
   const removeMcpResourceCitation: typeof import('./src/utils/InlineCitationUtils').removeMcpResourceCitation
@@ -425,6 +428,7 @@ declare global {
   const resolveLocalAiRequest: typeof import('./src/utils/LocalAiProvider').resolveLocalAiRequest
   const setActivePinia: typeof import('pinia').setActivePinia
   const setMapStoreSuffix: typeof import('pinia').setMapStoreSuffix
+  const setupFirebaseAnalytics: typeof import('./src/utils/FirebaseAnalytics').setupFirebaseAnalytics
   const shallowReactive: typeof import('vue').shallowReactive
   const shallowReadonly: typeof import('vue').shallowReadonly
   const shallowRef: typeof import('vue').shallowRef
@@ -538,7 +542,7 @@ declare global {
   export type { EnsureBundledNpmResult } from './src/utils/NpmResources'
   import('./src/utils/NpmResources')
   // @ts-ignore
-  export type { SkillSourceKind, ISkillSourceInfo, ISkillPackageMeta, ISkillFileSummary, IImportedSkill, ICompatibilityImportResult, IWorkspaceInstalledSkillsResult, IDiscoveredSkillDirectory, ISkillDirectoryDiscoveryResult } from './src/utils/SkillCompatibility'
+  export type { SkillSourceKind, ISkillSourceInfo, ISkillPackageMeta, ISkillFileSummary, IImportedSkill, ICompatibilityImportResult, IWorkspaceInstalledSkillsResult, IDiscoveredSkillDirectory, ISkillDirectoryDiscoveryResult, ICompatibleSkillPromptDirectory } from './src/utils/SkillCompatibility'
   import('./src/utils/SkillCompatibility')
   // @ts-ignore
   export type { StoreToolAccessStatus, StoreToolAccessInfo } from './src/utils/StoreToolAccess'
@@ -550,7 +554,7 @@ declare global {
   export type { TauriStdioTransport } from './src/utils/TauriStdioTransport'
   import('./src/utils/TauriStdioTransport')
   // @ts-ignore
-  export type { ModelInfo, ModelsResponse, CustomModelProvider, StoredChatMessage, ConversationItem, CheckpointType, McpServer, ClientToolRegistry, CreateChatClientOptions } from './src/utils/interface'
+  export type { ModelInfo, ModelsResponse, CustomModelProvider, ModelAssignmentKey, ModelAssignments, StoredChatMessage, ConversationItem, ConversationGroup, CheckpointType, McpServer, ClientToolRegistry, CreateChatClientOptions } from './src/utils/interface'
   import('./src/utils/interface')
   // @ts-ignore
   export type { MeetingRole, MeetingStatus, SpeakerType, QueueNode, MeetingMessage, Meeting, MeetingItem } from './src/utils/meetingInterface'

@@ -126,8 +126,14 @@ const selectedModelRequest = computed(() =>
     ),
 );
 
-function getSelectedModelRequestBody() {
-    const resolved = selectedModelRequest.value;
+function getSelectedModelRequestBody(useToolModel = false) {
+    const assignedModelId = useToolModel
+        ? settingsStore.getAssignedModelId("tool")
+        : settingsStore.getAssignedModelId("chat");
+    const resolved = resolveCustomProviderRequest(
+        assignedModelId || selectedModel.value?.id,
+        settingsStore.getCustomModelProviderById,
+    );
     if (resolved) return resolved.requestBody;
 
     ElMessage.warning(
@@ -368,9 +374,6 @@ async function sendChatMessage(
 ) {
     if (isChatBusy.value) return;
 
-    const modelRequestBody = getSelectedModelRequestBody();
-    if (!modelRequestBody) return;
-
     sendLock.value = true;
     const mcpTools = await mcpStore.getCachedTools();
     // const builtinTools = createBuiltinTools({
@@ -385,6 +388,11 @@ async function sendChatMessage(
     };
     clientToolsRef.value = tools;
     const toolsEnabled = Object.keys(tools).length > 0;
+    const modelRequestBody = getSelectedModelRequestBody(toolsEnabled);
+    if (!modelRequestBody) {
+        sendLock.value = false;
+        return;
+    }
 
     try {
         await chat.sendMessage(
@@ -721,13 +729,16 @@ async function handleSubmit(message: PromptInputMessage) {
     if (!hasText && !hasAttachments) return;
     if (isChatBusy.value) return;
 
-    const modelRequestBody = getSelectedModelRequestBody();
-    if (!modelRequestBody) return;
-
     try {
         sendLock.value = true;
         // Use cached tools to avoid reloading on each message
         const tools = await mcpStore.getCachedTools();
+        const toolsEnabled = Object.keys(tools || {}).length > 0;
+        const modelRequestBody = getSelectedModelRequestBody(toolsEnabled);
+        if (!modelRequestBody) {
+            sendLock.value = false;
+            return;
+        }
 
         // 供客户端 onToolCall 使用：真正执行工具并回填 output
         clientToolsRef.value = tools;
@@ -740,7 +751,7 @@ async function handleSubmit(message: PromptInputMessage) {
             {
                 body: {
                     ...modelRequestBody,
-                    mcpEnabled: hasEnabledServers.value,
+                    mcpEnabled: toolsEnabled,
                     tools,
                     ...(compatibleSkillsPrompt.value
                         ? { systemPrompt: compatibleSkillsPrompt.value }
@@ -836,8 +847,6 @@ async function copyToClipboard(text: string) {
 }
 
 async function handleRegenerate() {
-    const modelRequestBody = getSelectedModelRequestBody();
-    if (!modelRequestBody) return;
     const mcpTools = await mcpStore.getCachedTools();
     // const builtinTools = createBuiltinTools({
     //     // enabled: settingsStore.builtinToolsEnabled,
@@ -850,6 +859,8 @@ async function handleRegenerate() {
     };
     clientToolsRef.value = tools;
     const toolsEnabled = Object.keys(tools).length > 0;
+    const modelRequestBody = getSelectedModelRequestBody(toolsEnabled);
+    if (!modelRequestBody) return;
     chat.regenerate({
         body: {
             ...modelRequestBody,

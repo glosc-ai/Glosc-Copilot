@@ -1,5 +1,10 @@
 import { defineStore } from "pinia";
-import type { CustomModelProvider, ModelInfo } from "@/utils/interface";
+import type {
+    CustomModelProvider,
+    ModelAssignmentKey,
+    ModelAssignments,
+    ModelInfo,
+} from "@/utils/interface";
 import { probeThirdPartyModels } from "@/utils/ThirdPartyModelApi";
 
 type ThemeMode = "system" | "dark" | "light";
@@ -10,6 +15,7 @@ const STORE_KEYS = {
     language: "settings_language",
     hiddenModelIds: "settings_hidden_model_ids",
     customModelProviders: "settings_custom_model_providers",
+    modelAssignments: "settings_model_assignments",
     // builtinToolsEnabled: "settings_builtin_tools_enabled",
     allowedDirectories: "settings_allowed_directories",
 } as const;
@@ -46,6 +52,7 @@ export const useSettingsStore = defineStore("settings", {
 
         // 用户自定义（第三方 Key）模型来源配置（本地加密存储）
         customModelProviders: [] as CustomModelProvider[],
+        modelAssignments: {} as ModelAssignments,
 
         // 允许工具访问的目录（安全边界）；文件/Git 工具会强制校验。
         allowedDirectories: [] as string[],
@@ -78,13 +85,21 @@ export const useSettingsStore = defineStore("settings", {
         },
 
         async runInit() {
-            const [themeMode, language, hiddenModelIds, customModelProviders] =
-                await Promise.all([
+            const [
+                themeMode,
+                language,
+                hiddenModelIds,
+                customModelProviders,
+                modelAssignments,
+            ] = await Promise.all([
                     storeUtils.get<ThemeMode>(STORE_KEYS.themeMode),
                     storeUtils.get<AppLanguage>(STORE_KEYS.language),
                     storeUtils.get<string[]>(STORE_KEYS.hiddenModelIds),
                     storeUtils.get<CustomModelProvider[]>(
                         STORE_KEYS.customModelProviders,
+                    ),
+                    storeUtils.get<ModelAssignments>(
+                        STORE_KEYS.modelAssignments,
                     ),
                 ]);
 
@@ -145,6 +160,20 @@ export const useSettingsStore = defineStore("settings", {
                         } as CustomModelProvider;
                     })
                     .filter((p) => Boolean(p.id));
+            }
+
+            if (modelAssignments && typeof modelAssignments === "object") {
+                const clean: ModelAssignments = {};
+                for (const key of [
+                    "chat",
+                    "tool",
+                    "conversationOrganizer",
+                    "skills",
+                ] as ModelAssignmentKey[]) {
+                    const value = String((modelAssignments as any)[key] || "");
+                    if (value.trim()) clean[key] = value.trim();
+                }
+                this.modelAssignments = clean;
             }
 
             this.initialized = true;
@@ -333,6 +362,23 @@ export const useSettingsStore = defineStore("settings", {
         async setLanguage(lang: AppLanguage) {
             this.language = lang;
             await storeUtils.set(STORE_KEYS.language, lang, true);
+        },
+
+        getAssignedModelId(key: ModelAssignmentKey): string | null {
+            const modelId = String(this.modelAssignments?.[key] || "").trim();
+            return modelId || null;
+        },
+
+        async setAssignedModelId(
+            key: ModelAssignmentKey,
+            modelId: string | null,
+        ) {
+            const next: ModelAssignments = { ...(this.modelAssignments || {}) };
+            const clean = String(modelId || "").trim();
+            if (clean) next[key] = clean;
+            else delete next[key];
+            this.modelAssignments = next;
+            await storeUtils.set(STORE_KEYS.modelAssignments, next, true);
         },
 
         isModelHidden(modelId: string): boolean {

@@ -15,11 +15,13 @@ import {
 import { GloscStoreApi } from "@/utils/GloscStoreApi";
 import { syncInstalledStoreToolsAccess } from "@/utils/StoreToolAccess";
 import { upsertMcpServersInStore } from "@/utils/McpImportUtils";
+import { setupFirebaseAnalytics } from "@/utils/FirebaseAnalytics";
 
 const app = createApp(App);
 const pinia = createPinia();
 app.use(pinia);
 app.use(router);
+setupFirebaseAnalytics(router);
 
 const isAppStoreBuild = import.meta.env.VITE_APP_STORE_BUILD === "true";
 

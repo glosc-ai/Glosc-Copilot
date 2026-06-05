@@ -29,7 +29,14 @@ export default defineConfig(async () => {
     return {
         plugins: [
             vue(),
-            VueRouter(),
+            VueRouter({
+                exclude: [
+                    "**/workspace.vue",
+                    "**/meeting/**",
+                    "src/pages/workspace.vue",
+                    "src/pages/meeting/**",
+                ],
+            }),
             AutoImport({
                 imports: ["vue", "vue-router", "pinia"],
                 dirs: [

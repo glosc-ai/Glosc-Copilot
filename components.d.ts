@@ -194,6 +194,7 @@ declare module 'vue' {
     ModelSelectorSeparator: typeof import('./src/components/ai-elements/model-selector/ModelSelectorSeparator.vue')['default']
     ModelSelectorShortcut: typeof import('./src/components/ai-elements/model-selector/ModelSelectorShortcut.vue')['default']
     ModelSelectorTrigger: typeof import('./src/components/ai-elements/model-selector/ModelSelectorTrigger.vue')['default']
+    ModelSettingsModal: typeof import('./src/components/ModelSettingsModal.vue')['default']
     MonacoEditorPane: typeof import('./src/components/workspace/MonacoEditorPane.vue')['default']
     Popover: typeof import('./src/components/ui/popover/Popover.vue')['default']
     PopoverAnchor: typeof import('./src/components/ui/popover/PopoverAnchor.vue')['default']

@@ -37,20 +37,6 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
-    '/meeting/': RouteRecordInfo<
-      '/meeting/',
-      '/meeting',
-      Record<never, never>,
-      Record<never, never>,
-      | never
-    >,
-    '/meeting/[id]': RouteRecordInfo<
-      '/meeting/[id]',
-      '/meeting/:id',
-      { id: ParamValue<true> },
-      { id: ParamValue<false> },
-      | never
-    >,
     '/plan': RouteRecordInfo<
       '/plan',
       '/plan',
@@ -68,13 +54,6 @@ declare module 'vue-router/auto-routes' {
     '/test': RouteRecordInfo<
       '/test',
       '/test',
-      Record<never, never>,
-      Record<never, never>,
-      | never
-    >,
-    '/workspace': RouteRecordInfo<
-      '/workspace',
-      '/workspace',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -104,18 +83,6 @@ declare module 'vue-router/auto-routes' {
       views:
         | never
     }
-    'src/pages/meeting/index.vue': {
-      routes:
-        | '/meeting/'
-      views:
-        | never
-    }
-    'src/pages/meeting/[id].vue': {
-      routes:
-        | '/meeting/[id]'
-      views:
-        | never
-    }
     'src/pages/plan.vue': {
       routes:
         | '/plan'
@@ -131,12 +98,6 @@ declare module 'vue-router/auto-routes' {
     'src/pages/test.vue': {
       routes:
         | '/test'
-      views:
-        | never
-    }
-    'src/pages/workspace.vue': {
-      routes:
-        | '/workspace'
       views:
         | never
     }

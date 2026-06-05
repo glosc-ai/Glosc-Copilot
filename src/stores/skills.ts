@@ -4,10 +4,11 @@ import { storeUtils } from "@/utils/StoreUtils";
 import {
     buildCompatibleSkillsPrompt,
     discoverDefaultAgentSkillDirectories,
-    discoverSkillsInDirectory,
     isSkillFromDirectory,
+    type ICompatibleSkillPromptDirectory,
     type IImportedSkill,
 } from "@/utils/SkillCompatibility";
+import { readSkillsDirectoryWithGloscMcp } from "@/utils/SkillMcpReader";
 
 const STORE_KEY = "compatible_skills_v1";
 const DIRECTORIES_STORE_KEY = "compatible_skill_directories_v1";
@@ -48,7 +49,10 @@ function cloneSkill(skill: IImportedSkill) {
 }
 
 function normalizeDirectoryPath(path: string) {
-    return String(path || "").replace(/\\/g, "/").replace(/\/+$/, "").trim();
+    return String(path || "")
+        .replace(/\\/g, "/")
+        .replace(/\/+$/, "")
+        .trim();
 }
 
 function cloneDirectory(directory: ISkillDirectoryConfig) {
@@ -56,7 +60,10 @@ function cloneDirectory(directory: ISkillDirectoryConfig) {
 }
 
 function canUseLocalFileSystem() {
-    return typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__);
+    return (
+        typeof window !== "undefined" &&
+        Boolean((window as any).__TAURI_INTERNALS__)
+    );
 }
 
 export const useSkillsStore = defineStore("skills", {
@@ -77,7 +84,10 @@ export const useSkillsStore = defineStore("skills", {
         enabledSkillsSignature(state) {
             return state.skills
                 .filter((skill) => skill.enabled)
-                .map((skill) => `${skill.id}:${skill.updatedAt}:${skill.enabled ? 1 : 0}`)
+                .map(
+                    (skill) =>
+                        `${skill.id}:${skill.updatedAt}:${skill.enabled ? 1 : 0}`,
+                )
                 .join("|");
         },
     },
@@ -209,7 +219,8 @@ export const useSkillsStore = defineStore("skills", {
                     label: params.label?.trim() || existing.label,
                     agent: params.agent || existing.agent,
                     autoDiscovered:
-                        existing.autoDiscovered || Boolean(params.autoDiscovered),
+                        existing.autoDiscovered ||
+                        Boolean(params.autoDiscovered),
                     enabled: true,
                     updatedAt: now,
                 };
@@ -231,17 +242,23 @@ export const useSkillsStore = defineStore("skills", {
             }
         },
         async removeSkillDirectory(id: string) {
-            const directory = this.skillDirectories.find((item) => item.id === id);
+            const directory = this.skillDirectories.find(
+                (item) => item.id === id,
+            );
             if (!directory) return;
 
-            this.skillDirectories = this.skillDirectories.filter((item) => item.id !== id);
+            this.skillDirectories = this.skillDirectories.filter(
+                (item) => item.id !== id,
+            );
             this.skills = this.skills.filter(
                 (skill) => !isSkillFromDirectory(skill, directory.path),
             );
             await this.save();
         },
         async toggleSkillDirectory(id: string, enabled: boolean) {
-            const index = this.skillDirectories.findIndex((item) => item.id === id);
+            const index = this.skillDirectories.findIndex(
+                (item) => item.id === id,
+            );
             if (index === -1) return;
 
             this.skillDirectories[index] = {
@@ -262,6 +279,8 @@ export const useSkillsStore = defineStore("skills", {
         async syncSkillDirectories() {
             if (!canUseLocalFileSystem() || this.directoriesSyncing) return;
 
+            const mcpStore = useMcpStore();
+
             this.directoriesSyncing = true;
             const warnings: string[] = [];
             const activeDirectories = this.skillDirectories.filter(
@@ -272,12 +291,18 @@ export const useSkillsStore = defineStore("skills", {
 
             try {
                 for (const directory of activeDirectories) {
-                    const result = await discoverSkillsInDirectory(directory.path);
+                    const result = await readSkillsDirectoryWithGloscMcp(
+                        mcpStore,
+                        directory.path,
+                    );
                     importedSkills.push(...result.skills);
-                    result.skills.forEach((skill) => seenDedupeKeys.add(skill.dedupeKey));
+                    result.skills.forEach((skill) =>
+                        seenDedupeKeys.add(skill.dedupeKey),
+                    );
                     warnings.push(
                         ...result.warnings.map(
-                            (warning) => `${directory.label || directory.path}：${warning}`,
+                            (warning) =>
+                                `${directory.label || directory.path}：${warning}`,
                         ),
                     );
 
@@ -300,8 +325,9 @@ export const useSkillsStore = defineStore("skills", {
                 }
 
                 this.skills = this.skills.filter((skill) => {
-                    const sourceDirectory = activeDirectories.find((directory) =>
-                        isSkillFromDirectory(skill, directory.path),
+                    const sourceDirectory = activeDirectories.find(
+                        (directory) =>
+                            isSkillFromDirectory(skill, directory.path),
                     );
                     if (!sourceDirectory) return true;
                     return seenDedupeKeys.has(skill.dedupeKey);
@@ -317,7 +343,22 @@ export const useSkillsStore = defineStore("skills", {
             maxSkills?: number;
             maxChars?: number;
         }) {
-            return buildCompatibleSkillsPrompt(this.enabledSkills, options);
+            const directories = this.skillDirectories.map(
+                (directory) =>
+                    ({
+                        label: directory.label,
+                        path: directory.path,
+                        agent: directory.agent,
+                        enabled: directory.enabled,
+                        lastSkillCount: directory.lastSkillCount,
+                        lastWarning: directory.lastWarning,
+                    }) satisfies ICompatibleSkillPromptDirectory,
+            );
+
+            return buildCompatibleSkillsPrompt(this.enabledSkills, {
+                ...options,
+                directories,
+            });
         },
     },
 });

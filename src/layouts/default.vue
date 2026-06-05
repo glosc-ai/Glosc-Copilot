@@ -11,6 +11,7 @@ onMounted(() => {
         <SkillsManagerDialog />
         <McpManagerDialog />
         <SettingsModal />
+        <ModelSettingsModal />
         <AboutDialog />
         <router-view v-slot="{ Component, route }">
             <component :is="Component" :key="route.fullPath" />

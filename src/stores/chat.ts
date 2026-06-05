@@ -1,11 +1,60 @@
 import { defineStore } from "pinia";
+import { generateText } from "ai";
 import { storeUtils } from "../utils/StoreUtils";
 import type { AttachmentFile } from "@/components/ai-elements/prompt-input";
 import type {
     Conversation,
+    ConversationGroup,
     ConversationItem,
     StoredChatMessage,
 } from "../utils/interface";
+import { useSettingsStore } from "@/stores/settings";
+import { createLanguageModelFromProvider } from "@/utils/LocalAiProvider";
+import { resolveCustomProviderSelection } from "@/utils/LocalAiProvider";
+
+type SidebarConversationGroup = {
+    key: string;
+    label: string;
+    groupId: string | null;
+    custom: boolean;
+    items: ConversationItem[];
+};
+
+function getDateGroupKey(timestamp?: number) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const date = new Date(timestamp || 0);
+    if (date >= today) return "今天";
+    if (date >= yesterday) return "昨天";
+    return date.toISOString().split("T")[0];
+}
+
+function sortDateGroupKeys(a: string, b: string) {
+    if (a === "今天") return -1;
+    if (b === "今天") return 1;
+    if (a === "昨天") return -1;
+    if (b === "昨天") return 1;
+    return b.localeCompare(a);
+}
+
+function extractJsonObject(input: string) {
+    const text = String(input || "").trim();
+    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const candidate = fenced?.[1]?.trim() || text;
+    try {
+        return JSON.parse(candidate);
+    } catch {
+        const start = candidate.indexOf("{");
+        const end = candidate.lastIndexOf("}");
+        if (start >= 0 && end > start) {
+            return JSON.parse(candidate.slice(start, end + 1));
+        }
+        throw new Error("AI 返回内容不是有效 JSON");
+    }
+}
 
 export const useChatStore = defineStore("chat", {
     state: () => ({
@@ -19,6 +68,7 @@ export const useChatStore = defineStore("chat", {
         // 是否已加载过会话内容（避免启动时把所有 messages 拉进来）
         loadedConversationIds: {} as Record<string, boolean>,
         conversationsItems: [] as ConversationItem[],
+        conversationGroups: [] as ConversationGroup[],
         activeKey: "",
         attachedFiles: [] as AttachmentFile[],
         // 模型相关
@@ -41,27 +91,10 @@ export const useChatStore = defineStore("chat", {
         // 按日期分组的会话列表
         groupedConversations: (state) => {
             const groups: Record<string, ConversationItem[]> = {};
-            const now = new Date();
-            const today = new Date(
-                now.getFullYear(),
-                now.getMonth(),
-                now.getDate(),
-            );
-            const yesterday = new Date(today);
-            yesterday.setDate(yesterday.getDate() - 1);
 
             state.conversationsItems.forEach((item) => {
                 // 启动时不加载完整会话内容，分组/排序只依赖索引元数据
-                const date = new Date(item.timestamp || 0);
-                let dateKey: string;
-
-                if (date >= today) {
-                    dateKey = "今天";
-                } else if (date >= yesterday) {
-                    dateKey = "昨天";
-                } else {
-                    dateKey = date.toISOString().split("T")[0]; // YYYY-MM-DD
-                }
+                const dateKey = getDateGroupKey(item.timestamp);
 
                 if (!groups[dateKey]) {
                     groups[dateKey] = [];
@@ -71,13 +104,7 @@ export const useChatStore = defineStore("chat", {
 
             // 按日期排序：今天、昨天，然后按日期降序
             const sortedGroups: Record<string, ConversationItem[]> = {};
-            const keys = Object.keys(groups).sort((a, b) => {
-                if (a === "今天") return -1;
-                if (b === "今天") return 1;
-                if (a === "昨天") return -1;
-                if (b === "昨天") return 1;
-                return b.localeCompare(a); // 日期降序
-            });
+            const keys = Object.keys(groups).sort(sortDateGroupKeys);
 
             keys.forEach((key) => {
                 sortedGroups[key] = groups[key].sort((a, b) => {
@@ -86,6 +113,51 @@ export const useChatStore = defineStore("chat", {
             });
 
             return sortedGroups;
+        },
+        sidebarConversationGroups: (state): SidebarConversationGroup[] => {
+            const customGroupIds = new Set(
+                state.conversationGroups.map((group) => group.id),
+            );
+            const sections: SidebarConversationGroup[] =
+                state.conversationGroups.map((group) => ({
+                    key: `custom:${group.id}`,
+                    label: group.name,
+                    groupId: group.id,
+                    custom: true,
+                    items: [],
+                }));
+            const sectionByGroupId = new Map(
+                sections.map((section) => [section.groupId, section]),
+            );
+            const dateGroups: Record<string, ConversationItem[]> = {};
+
+            state.conversationsItems.forEach((item) => {
+                const groupId = item.groupId || null;
+                if (groupId && customGroupIds.has(groupId)) {
+                    sectionByGroupId.get(groupId)?.items.push(item);
+                    return;
+                }
+
+                const dateKey = getDateGroupKey(item.timestamp);
+                if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
+                dateGroups[dateKey].push(item);
+            });
+
+            const dateSections = Object.keys(dateGroups)
+                .sort(sortDateGroupKeys)
+                .map((key) => ({
+                    key: `date:${key}`,
+                    label: key,
+                    groupId: null,
+                    custom: false,
+                    items: dateGroups[key].sort(
+                        (a, b) => (b.timestamp || 0) - (a.timestamp || 0),
+                    ),
+                }));
+
+            return [...sections, ...dateSections].filter(
+                (section) => section.custom || section.items.length > 0,
+            );
         },
     },
     actions: {
@@ -237,6 +309,7 @@ export const useChatStore = defineStore("chat", {
                     version: number;
                     items: ConversationItem[];
                     order?: string[];
+                    groups?: ConversationGroup[];
                 }>(this.chatIndexKey());
 
                 if (
@@ -252,6 +325,24 @@ export const useChatStore = defineStore("chat", {
                     this.conversationsItems = order
                         .map((id) => map.get(id))
                         .filter(Boolean) as ConversationItem[];
+                    this.conversationGroups = Array.isArray(index.groups)
+                        ? index.groups
+                              .map((group: any) => ({
+                                  id: String(group?.id || "").trim(),
+                                  name:
+                                      String(group?.name || "").trim() ||
+                                      "未命名分组",
+                                  createdAt:
+                                      typeof group?.createdAt === "number"
+                                          ? group.createdAt
+                                          : Date.now(),
+                                  updatedAt:
+                                      typeof group?.updatedAt === "number"
+                                          ? group.updatedAt
+                                          : Date.now(),
+                              }))
+                              .filter((group) => Boolean(group.id))
+                        : [];
 
                     // 启动不加载 conversations 内容，避免读取海量 messages
                     this.conversations = {};
@@ -311,6 +402,7 @@ export const useChatStore = defineStore("chat", {
                             version: 2,
                             items: this.conversationsItems,
                             order: this.conversationsItems.map((it) => it.key),
+                            groups: this.conversationGroups,
                         },
                     });
 
@@ -328,6 +420,7 @@ export const useChatStore = defineStore("chat", {
                 this.conversations = {};
                 this.loadedConversationIds = {};
                 this.conversationsItems = [];
+                this.conversationGroups = [];
                 await this.createNewConversation(false);
             } catch (error) {
                 console.error("加载会话失败:", error);
@@ -437,10 +530,84 @@ export const useChatStore = defineStore("chat", {
             return true;
         },
 
+        async createConversationGroup(name: string) {
+            const cleanName = String(name || "").trim();
+            if (!cleanName) return null;
+
+            const now = Date.now();
+            const group: ConversationGroup = {
+                id: `group_${now}_${Math.random().toString(36).slice(2, 9)}`,
+                name: cleanName.slice(0, 24),
+                createdAt: now,
+                updatedAt: now,
+            };
+            this.conversationGroups = [...this.conversationGroups, group];
+            this.indexDirty = true;
+            this.hasPendingChanges = true;
+            await this.persistPending(true);
+            return group.id;
+        },
+
+        async renameConversationGroup(groupId: string, name: string) {
+            const cleanName = String(name || "").trim();
+            if (!groupId || !cleanName) return;
+
+            const now = Date.now();
+            this.conversationGroups = this.conversationGroups.map((group) =>
+                group.id === groupId
+                    ? { ...group, name: cleanName.slice(0, 24), updatedAt: now }
+                    : group,
+            );
+            this.indexDirty = true;
+            this.hasPendingChanges = true;
+            await this.persistPending(true);
+        },
+
+        async deleteConversationGroup(groupId: string) {
+            if (!groupId) return;
+
+            this.conversationGroups = this.conversationGroups.filter(
+                (group) => group.id !== groupId,
+            );
+            this.conversationsItems = this.conversationsItems.map((item) =>
+                item.groupId === groupId ? { ...item, groupId: null } : item,
+            );
+            this.indexDirty = true;
+            this.hasPendingChanges = true;
+            await this.persistPending(true);
+        },
+
+        async setConversationGroup(
+            conversationId: string,
+            groupId: string | null,
+        ) {
+            const targetGroupId = groupId || null;
+            if (
+                targetGroupId &&
+                !this.conversationGroups.some((group) => group.id === groupId)
+            ) {
+                return;
+            }
+
+            const item = this.conversationsItems.find(
+                (it) => it.key === conversationId,
+            );
+            if (!item || (item.groupId || null) === targetGroupId) return;
+
+            item.groupId = targetGroupId;
+            this.indexDirty = true;
+            this.hasPendingChanges = true;
+            await this.persistPending(true);
+        },
+
         /**
          * 拖拽排序：把 sourceKey 移动到 targetKey 之前。
          */
-        async moveConversation(sourceKey: string, targetKey: string) {
+        async moveConversation(
+            sourceKey: string,
+            targetKey: string,
+            targetGroupId?: string | null,
+        ) {
             if (sourceKey === targetKey) return;
 
             const fromIndex = this.conversationsItems.findIndex(
@@ -450,9 +617,16 @@ export const useChatStore = defineStore("chat", {
                 (it) => it.key === targetKey,
             );
             if (fromIndex < 0 || toIndex < 0) return;
+            const inferredTargetGroupId =
+                this.conversationsItems[toIndex]?.groupId || null;
 
             const next = [...this.conversationsItems];
             const [moved] = next.splice(fromIndex, 1);
+            if (targetGroupId !== undefined) {
+                moved.groupId = targetGroupId || null;
+            } else {
+                moved.groupId = inferredTargetGroupId;
+            }
             const insertIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
             next.splice(insertIndex, 0, moved);
             this.conversationsItems = next;
@@ -460,6 +634,123 @@ export const useChatStore = defineStore("chat", {
             this.hasPendingChanges = true;
             this.indexDirty = true;
             await this.persistPending(true);
+        },
+
+        async autoOrganizeConversationGroups() {
+            if (this.conversationsItems.length === 0) return 0;
+
+            const settingsStore = useSettingsStore();
+            await settingsStore.init();
+
+            const selectedModelId =
+                settingsStore.getAssignedModelId("conversationOrganizer") ||
+                this.selectedModel?.id;
+            const resolved = resolveCustomProviderSelection(
+                selectedModelId,
+                settingsStore.getCustomModelProviderById,
+            );
+            if (!resolved) {
+                throw new Error(
+                    "请先在设置中选择一个已验证的本地或自定义服务商模型。",
+                );
+            }
+
+            const conversations = this.conversationsItems
+                .slice(0, 120)
+                .map((item) => ({
+                    id: item.key,
+                    title: item.label,
+                    updatedAt: item.timestamp
+                        ? new Date(item.timestamp).toISOString()
+                        : "",
+                    messageCount: item.messageCount || 0,
+                }));
+            const existingGroups = this.conversationGroups.map((group) => ({
+                id: group.id,
+                name: group.name,
+            }));
+            const prompt =
+                "你是对话历史整理助手。请根据对话标题把会话整理成少量清晰的中文分组。\n" +
+                "只输出 JSON，不要 Markdown，不要解释。\n" +
+                "JSON 格式：{\"groups\":[{\"name\":\"分组名\",\"conversationIds\":[\"会话id\"]}]}\n" +
+                "规则：\n" +
+                "- 分组名 2 到 8 个中文字符，最多 12 个分组。\n" +
+                "- 每个会话 id 最多出现一次；不要编造 id。\n" +
+                "- 优先复用已有分组名称；无法判断的会话可以不放入任何分组。\n\n" +
+                `已有分组：${JSON.stringify(existingGroups)}\n` +
+                `会话列表：${JSON.stringify(conversations)}`;
+
+            const { text } = await generateText({
+                model: createLanguageModelFromProvider(
+                    resolved.provider,
+                    resolved.rawModelId,
+                ),
+                prompt,
+                temperature: 0.2,
+            });
+
+            const parsed = extractJsonObject(text);
+            const rawGroups = Array.isArray(parsed?.groups)
+                ? parsed.groups
+                : [];
+            const knownIds = new Set(this.conversationsItems.map((it) => it.key));
+            const usedIds = new Set<string>();
+            const now = Date.now();
+            const groupsByName = new Map(
+                this.conversationGroups.map((group) => [group.name, group]),
+            );
+            const nextGroups = [...this.conversationGroups];
+            const assignmentByConversationId = new Map<string, string>();
+
+            for (const rawGroup of rawGroups.slice(0, 12)) {
+                const cleanName = String(rawGroup?.name || "")
+                    .replace(/[{}\[\]"'`]/g, "")
+                    .trim()
+                    .slice(0, 8);
+                if (!cleanName) continue;
+
+                let group = groupsByName.get(cleanName);
+                if (!group) {
+                    group = {
+                        id: `group_${now}_${Math.random()
+                            .toString(36)
+                            .slice(2, 9)}`,
+                        name: cleanName,
+                        createdAt: now,
+                        updatedAt: now,
+                    };
+                    groupsByName.set(cleanName, group);
+                    nextGroups.push(group);
+                }
+
+                const conversationIds = Array.isArray(
+                    rawGroup?.conversationIds,
+                )
+                    ? rawGroup.conversationIds
+                    : [];
+                for (const rawId of conversationIds) {
+                    const id = String(rawId || "").trim();
+                    if (!knownIds.has(id) || usedIds.has(id)) continue;
+                    usedIds.add(id);
+                    assignmentByConversationId.set(id, group.id);
+                }
+            }
+
+            if (assignmentByConversationId.size === 0) return 0;
+
+            this.conversationGroups = nextGroups;
+            this.conversationsItems = this.conversationsItems.map((item) =>
+                assignmentByConversationId.has(item.key)
+                    ? {
+                          ...item,
+                          groupId: assignmentByConversationId.get(item.key)!,
+                      }
+                    : item,
+            );
+            this.indexDirty = true;
+            this.hasPendingChanges = true;
+            await this.persistPending(true);
+            return assignmentByConversationId.size;
         },
 
         async saveConversations() {
@@ -498,6 +789,7 @@ export const useChatStore = defineStore("chat", {
                             version: 2,
                             items: this.conversationsItems,
                             order: this.conversationsItems.map((it) => it.key),
+                            groups: this.conversationGroups,
                         },
                     });
                 }
@@ -882,8 +1174,11 @@ export const useChatStore = defineStore("chat", {
                     const persistedModelId =
                         await this.loadPersistedSelectedModelId();
 
+                    const assignedChatModelId =
+                        settingsStore.getAssignedModelId("chat");
                     const currentModelId = this.selectedModel?.id;
-                    const desiredModelId = currentModelId || persistedModelId;
+                    const desiredModelId =
+                        assignedChatModelId || currentModelId || persistedModelId;
 
                     const resolvedModel = desiredModelId
                         ? this.availableModels.find(
@@ -916,6 +1211,10 @@ export const useChatStore = defineStore("chat", {
         selectModel(model: ModelInfo | null) {
             this.selectedModel = model;
             void this.persistSelectedModelId(model?.id || null);
+            void useSettingsStore().setAssignedModelId(
+                "chat",
+                model?.id || null,
+            );
             this.markModelUsed(model?.id);
         },
     },

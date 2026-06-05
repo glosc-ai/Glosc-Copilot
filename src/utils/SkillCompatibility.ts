@@ -99,6 +99,15 @@ export interface ISkillDirectoryDiscoveryResult {
     scannedCandidates: string[];
 }
 
+export interface ICompatibleSkillPromptDirectory {
+    label: string;
+    path: string;
+    agent: string;
+    enabled: boolean;
+    lastSkillCount?: number;
+    lastWarning?: string;
+}
+
 interface IBundleFile {
     path: string;
     size: number;
@@ -801,10 +810,14 @@ export function buildCompatibleSkillsPrompt(
         title?: string;
         maxSkills?: number;
         maxChars?: number;
+        directories?: ICompatibleSkillPromptDirectory[];
     },
 ) {
     const enabledSkills = skills.filter((skill) => skill.enabled);
-    if (enabledSkills.length === 0) return "";
+    const directories = (options?.directories || []).filter((directory) =>
+        String(directory.path || "").trim(),
+    );
+    if (enabledSkills.length === 0 && directories.length === 0) return "";
 
     const title = options?.title || "【兼容 Skills】";
     const maxSkills = Math.max(1, options?.maxSkills ?? 6);
@@ -816,18 +829,43 @@ export function buildCompatibleSkillsPrompt(
         "",
     ];
 
+    if (directories.length > 0) {
+        lines.push(`#### Skills 目录清单（共 ${directories.length} 个）`);
+        for (const directory of directories) {
+            const label = String(directory.label || "skills").trim();
+            const agent = String(directory.agent || "Custom").trim();
+            const status = directory.enabled ? "启用" : "停用";
+            const countText = Number.isFinite(directory.lastSkillCount)
+                ? `，已同步 ${directory.lastSkillCount} 个 Skill`
+                : "";
+            const warning = String(directory.lastWarning || "")
+                .replace(/\s+/g, " ")
+                .trim();
+            lines.push(
+                `- ${label}（${agent}，${status}${countText}）：${directory.path}`,
+            );
+            if (warning) {
+                lines.push(`  - 最近同步提示：${warning}`);
+            }
+        }
+        lines.push("");
+    }
+
     // 技能索引：列出全部已启用技能的名称与简短描述，token 开销很小，
     // 确保模型始终知道完整可用技能列表（即使详细指令因上下文限制未全部展开）。
-    lines.push(`#### 已启用技能清单（共 ${enabledSkills.length} 个）`);
-    for (const skill of enabledSkills) {
-        const desc = String(skill.description || "")
-            .replace(/\s+/g, " ")
-            .trim();
-        const shortDesc = desc.length > 120 ? `${desc.slice(0, 120)}…` : desc;
-        lines.push(`- ${skill.name}${shortDesc ? `：${shortDesc}` : ""}`);
+    if (enabledSkills.length > 0) {
+        lines.push(`#### 已启用技能清单（共 ${enabledSkills.length} 个）`);
+        for (const skill of enabledSkills) {
+            const desc = String(skill.description || "")
+                .replace(/\s+/g, " ")
+                .trim();
+            const shortDesc =
+                desc.length > 120 ? `${desc.slice(0, 120)}…` : desc;
+            lines.push(`- ${skill.name}${shortDesc ? `：${shortDesc}` : ""}`);
+        }
+        lines.push("");
+        lines.push("#### 技能详细指令");
     }
-    lines.push("");
-    lines.push("#### 技能详细指令");
 
     let used = lines.join("\n").length;
     let included = 0;

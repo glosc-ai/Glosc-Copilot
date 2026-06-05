@@ -5,6 +5,7 @@ export const useUiStore = defineStore("ui", {
         mcpManagerOpen: false,
         skillsManagerOpen: false,
         settingsOpen: false,
+        modelSettingsOpen: false,
         aboutOpen: false,
         aboutTab: "about" as "about" | "changelog" | "github",
     }),
@@ -26,6 +27,12 @@ export const useUiStore = defineStore("ui", {
         },
         closeSettings() {
             this.settingsOpen = false;
+        },
+        openModelSettings() {
+            this.modelSettingsOpen = true;
+        },
+        closeModelSettings() {
+            this.modelSettingsOpen = false;
         },
 
         openAbout(tab?: "about" | "changelog" | "github") {

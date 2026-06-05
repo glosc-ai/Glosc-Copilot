@@ -7,18 +7,26 @@ import {
     Pencil,
     ChevronDown,
     ChevronRight,
+    FolderPlus,
+    Sparkles,
+    Folder,
+    FolderOpen,
+    Plus,
+    Settings,
+    SlidersHorizontal,
 } from "lucide-vue-next";
 import { useChatStore } from "@/stores/chat";
 import { storeToRefs } from "pinia";
 import { cn } from "@/lib/utils";
 import { computed, nextTick, ref, watch, onMounted } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 const chatStore = useChatStore();
-const { conversationsItems, activeKey, groupedConversations } =
+const uiStore = useUiStore();
+const { conversationsItems, activeKey, sidebarConversationGroups } =
     storeToRefs(chatStore);
 
-// const router = useRouter();
+const router = useRouter();
 const route = useRoute();
 
 onMounted(() => {
@@ -34,6 +42,7 @@ onMounted(() => {
 // ];
 
 const isChatMode = computed(() => route.path === "/");
+const isOrganizing = ref(false);
 
 // const isModeActive = (path: string) => route.path === path;
 // const goToMode = (path: string) => {
@@ -51,15 +60,16 @@ const toggleGroup = (groupKey: string) => {
 
 // 初始化分组折叠状态（默认仅展开“今天”）
 watch(
-    groupedConversations,
+    sidebarConversationGroups,
     (newGroups) => {
         const newCollapsed: Record<string, boolean> = {};
-        Object.keys(newGroups).forEach((key) => {
-            if (!(key in collapsedGroups.value)) {
+        newGroups.forEach((group) => {
+            if (!(group.key in collapsedGroups.value)) {
                 // 默认折叠非当天的历史（今天展开，其它折叠）
-                newCollapsed[key] = key !== "今天";
+                newCollapsed[group.key] =
+                    !group.custom && group.label !== "今天";
             } else {
-                newCollapsed[key] = collapsedGroups.value[key];
+                newCollapsed[group.key] = collapsedGroups.value[group.key];
             }
         });
         collapsedGroups.value = newCollapsed;
@@ -107,9 +117,67 @@ const selectChat = (key: string) => {
     void chatStore.selectConversation(key);
 };
 
+const createNewChat = async () => {
+    await chatStore.createNewConversation(true);
+    if (route.path !== "/") {
+        await router.push("/");
+    }
+};
+
+const openSettings = () => {
+    uiStore.openSettings();
+};
+
+const openModelSettings = () => {
+    uiStore.openModelSettings();
+};
+
 const deleteChat = async (key: string, event: Event) => {
     event.stopPropagation();
     await chatStore.deleteConversation(key);
+};
+
+const createGroup = async () => {
+    const name = window.prompt("新分组名称");
+    if (!name?.trim()) return;
+    await chatStore.createConversationGroup(name);
+};
+
+const renameGroup = async (
+    groupId: string | null,
+    currentName: string,
+    event: Event,
+) => {
+    event.stopPropagation();
+    if (!groupId) return;
+    const name = window.prompt("分组名称", currentName);
+    if (!name?.trim()) return;
+    await chatStore.renameConversationGroup(groupId, name);
+};
+
+const deleteGroup = async (groupId: string | null, event: Event) => {
+    event.stopPropagation();
+    if (!groupId) return;
+    if (!window.confirm("删除该分组？会话会回到按日期分组。")) return;
+    await chatStore.deleteConversationGroup(groupId);
+};
+
+const organizeGroups = async () => {
+    if (isOrganizing.value) return;
+    isOrganizing.value = true;
+    try {
+        const count = await chatStore.autoOrganizeConversationGroups();
+        if (count > 0) {
+            ElMessage.success(`已整理 ${count} 个会话`);
+        } else {
+            ElMessage.info("没有可整理的会话");
+        }
+    } catch (error: any) {
+        console.error("AI 整理分组失败:", error);
+        ElMessage.error(error?.message || "AI 整理失败，请稍后重试");
+    } finally {
+        isOrganizing.value = false;
+    }
 };
 
 // ===== 手动重命名 =====
@@ -164,6 +232,16 @@ const onDrop = async (targetKey: string, event: DragEvent) => {
     await chatStore.moveConversation(sourceKey, targetKey);
 };
 
+const onDropGroup = async (groupId: string | null, event: DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const sourceKey =
+        event.dataTransfer?.getData("text/plain") || draggingKey.value;
+    draggingKey.value = null;
+    if (!sourceKey) return;
+    await chatStore.setConversationGroup(sourceKey, groupId);
+};
+
 // const goToMcp = () => {
 //     router.push("/mcp");
 // };
@@ -210,36 +288,113 @@ const onDrop = async (targetKey: string, event: DragEvent) => {
                 </router-link>
             </div> -->
 
+            <div class="flex items-center gap-1 px-2 py-2">
+                <Button
+                    variant="default"
+                    size="sm"
+                    class="h-8 flex-1 justify-start gap-2"
+                    @click="createNewChat"
+                >
+                    <Plus class="w-4 h-4" />
+                    新建会话
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-8 w-8"
+                    title="新建分组"
+                    @click="createGroup"
+                >
+                    <FolderPlus class="w-4 h-4" />
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-8 w-8"
+                    title="AI 整理分组"
+                    :disabled="isOrganizing"
+                    @click="organizeGroups"
+                >
+                    <Sparkles
+                        class="w-4 h-4"
+                        :class="{ 'animate-spin': isOrganizing }"
+                    />
+                </Button>
+            </div>
+
             <div class="flex-1 overflow-y-auto px-2">
                 <div class="space-y-2">
                     <div
-                        v-for="(items, groupKey) in groupedConversations"
-                        :key="groupKey"
+                        v-for="section in sidebarConversationGroups"
+                        :key="section.key"
                         class="space-y-1"
                     >
                         <!-- 分组标题 -->
                         <div
-                            class="flex items-center gap-2 px-2 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
-                            @click="toggleGroup(groupKey)"
+                            class="flex items-center gap-2 px-2 py-1 text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors group"
+                            @click="toggleGroup(section.key)"
+                            @dragover="onDragOver"
+                            @drop="
+                                (e: DragEvent) =>
+                                    onDropGroup(section.groupId, e)
+                            "
                         >
                             <ChevronDown
-                                v-if="!collapsedGroups[groupKey]"
+                                v-if="!collapsedGroups[section.key]"
                                 class="w-3 h-3"
                             />
                             <ChevronRight v-else class="w-3 h-3" />
-                            <span>{{ groupKey }}</span>
+                            <FolderOpen
+                                v-if="section.custom && !collapsedGroups[section.key]"
+                                class="w-3 h-3"
+                            />
+                            <Folder
+                                v-else-if="section.custom"
+                                class="w-3 h-3"
+                            />
+                            <span class="truncate">{{ section.label }}</span>
                             <span class="ml-auto text-xs opacity-50"
-                                >({{ items.length }})</span
+                                >({{ section.items.length }})</span
                             >
+                            <template v-if="section.custom">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    class="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="重命名分组"
+                                    @click="
+                                        (e: any) =>
+                                            renameGroup(
+                                                section.groupId,
+                                                section.label,
+                                                e,
+                                            )
+                                    "
+                                >
+                                    <Pencil class="w-3 h-3" />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    class="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="删除分组"
+                                    @click="
+                                        (e: any) =>
+                                            deleteGroup(section.groupId, e)
+                                    "
+                                >
+                                    <Trash2 class="w-3 h-3" />
+                                </Button>
+                            </template>
                         </div>
 
                         <!-- 分组内容 -->
                         <div
-                            v-show="!collapsedGroups[groupKey]"
+                            v-show="!collapsedGroups[section.key]"
                             class="space-y-1"
                         >
                             <div
-                                v-for="item in items"
+                                v-for="item in section.items"
                                 :key="item.key"
                                 @click="selectChat(item.key)"
                                 draggable="true"
@@ -247,7 +402,10 @@ const onDrop = async (targetKey: string, event: DragEvent) => {
                                     (e: DragEvent) => onDragStart(item.key, e)
                                 "
                                 @dragover="onDragOver"
-                                @drop="(e: DragEvent) => onDrop(item.key, e)"
+                                @drop="
+                                    (e: DragEvent) =>
+                                        onDrop(item.key, e)
+                                "
                                 :class="
                                     cn(
                                         'flex items-center justify-between p-2 rounded-md cursor-pointer text-sm transition-colors group',
@@ -311,6 +469,27 @@ const onDrop = async (targetKey: string, event: DragEvent) => {
         <template v-else>
             <div class="flex-1 p-4 text-sm text-muted-foreground">暂无内容</div>
         </template>
+
+        <div class="border-t p-2 space-y-1">
+            <Button
+                variant="ghost"
+                size="sm"
+                class="w-full justify-start gap-2"
+                @click="openModelSettings"
+            >
+                <SlidersHorizontal class="w-4 h-4" />
+                模型设置
+            </Button>
+            <Button
+                variant="ghost"
+                size="sm"
+                class="w-full justify-start gap-2"
+                @click="openSettings"
+            >
+                <Settings class="w-4 h-4" />
+                设置
+            </Button>
+        </div>
 
         <!-- 拖拽调整宽度手柄 -->
         <div

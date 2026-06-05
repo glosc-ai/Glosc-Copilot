@@ -62,6 +62,14 @@ export const CustomModelProviderSchema = z.object({
 
 export type CustomModelProvider = z.infer<typeof CustomModelProviderSchema>;
 
+export type ModelAssignmentKey =
+    | "chat"
+    | "tool"
+    | "conversationOrganizer"
+    | "skills";
+
+export type ModelAssignments = Partial<Record<ModelAssignmentKey, string>>;
+
 // StoredChatMessage schema
 export const StoredChatMessageSchema = z.object({
     id: z.string(),
@@ -92,11 +100,21 @@ export const ConversationItemSchema = z.object({
     key: z.string(),
     label: z.string(),
     timestamp: z.number().optional(),
+    groupId: z.string().nullable().optional(),
     // 用于列表展示/优化：不必加载完整 messages 即可判断是否为空
     messageCount: z.number().optional(),
 });
 
 export type ConversationItem = z.infer<typeof ConversationItemSchema>;
+
+export const ConversationGroupSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    createdAt: z.number(),
+    updatedAt: z.number(),
+});
+
+export type ConversationGroup = z.infer<typeof ConversationGroupSchema>;
 
 // CheckpointType schema
 export const CheckpointTypeSchema = z.object({
