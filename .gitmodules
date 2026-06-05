@@ -1,0 +1,3 @@
+[submodule "Plugins/Glosc-Mcp"]
+	path = Plugins/Glosc-Mcp
+	url = https://github.com/glosc-ai/Glosc-Mcp.git
