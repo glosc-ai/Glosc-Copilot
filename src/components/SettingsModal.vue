@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { computed, watch } from "vue";
+import { Textarea } from "@/components/ui/textarea";
 
 const uiStore = useUiStore();
 const settingsStore = useSettingsStore();
@@ -18,6 +19,17 @@ const languageProxy = computed({
     },
 });
 
+const assistantSystemPromptProxy = computed({
+    get: () => settingsStore.assistantSystemPrompt,
+    set: (value: string | number) => {
+        void settingsStore.setAssistantSystemPrompt(String(value ?? ""));
+    },
+});
+
+function resetAssistantSystemPrompt() {
+    void settingsStore.resetAssistantSystemPrompt();
+}
+
 watch(
     () => uiStore.settingsOpen,
     (open) => {
@@ -29,7 +41,7 @@ watch(
 
 <template>
     <Dialog v-model:open="uiStore.settingsOpen">
-        <DialogContent class="w-[92vw] max-w-md">
+        <DialogContent class="w-[92vw] max-w-2xl">
             <DialogHeader>
                 <DialogTitle>设置</DialogTitle>
             </DialogHeader>
@@ -62,6 +74,35 @@ watch(
                     <div class="text-xs text-muted-foreground">
                         当前仅支持简体中文
                     </div>
+                </div>
+
+                <div class="grid gap-2">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <div class="text-xs text-muted-foreground">
+                                AI 默认提示词
+                            </div>
+                            <div class="mt-1 text-xs text-muted-foreground">
+                                每次普通对话都会附加。支持变量
+                                <code v-text="'{{mcpList}}'" />
+                                和
+                                <code v-text="'{{toolList}}'" />
+                                ，发送时会替换为当前启用能力。
+                            </div>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            @click="resetAssistantSystemPrompt"
+                        >
+                            恢复默认
+                        </Button>
+                    </div>
+                    <Textarea
+                        v-model="assistantSystemPromptProxy"
+                        class="min-h-52 resize-y text-sm leading-relaxed"
+                        placeholder="输入普通对话默认提示词"
+                    />
                 </div>
             </div>
 

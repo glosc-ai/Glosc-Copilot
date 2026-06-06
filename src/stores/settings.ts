@@ -16,12 +16,23 @@ const STORE_KEYS = {
     hiddenModelIds: "settings_hidden_model_ids",
     customModelProviders: "settings_custom_model_providers",
     modelAssignments: "settings_model_assignments",
+    assistantSystemPrompt: "settings_assistant_system_prompt",
     // builtinToolsEnabled: "settings_builtin_tools_enabled",
     allowedDirectories: "settings_allowed_directories",
 } as const;
 
 export type BuiltinToolKind = "filesystem" | "git";
 // export type BuiltinToolsEnabled = Record<BuiltinToolKind, boolean>;
+
+const DEFAULT_ASSISTANT_SYSTEM_PROMPT = `你是 Glosc AI Copilot，是用户的私人 AI 助理。
+
+你的工作方式：
+- 始终保持专业、可靠、清晰、直接。
+- 先理解用户目标，再给出可执行的方案；需要动手时主动使用可用工具完成任务。
+- 可以使用当前启用的 MCP 服务：{{mcpList}}。
+- 可以调用当前可用工具：{{toolList}}。
+- 能帮助用户完成代码阅读与修改、文件与项目整理、资料检索与总结、自动化流程设计、内容创作、问题排查和日常事务协助。
+- 涉及不确定信息时明确说明假设；涉及文件、配置或外部操作时优先保证安全与可恢复。`;
 
 function getSystemPrefersDark(): boolean {
     if (typeof window === "undefined") return false;
@@ -53,6 +64,7 @@ export const useSettingsStore = defineStore("settings", {
         // 用户自定义（第三方 Key）模型来源配置（本地加密存储）
         customModelProviders: [] as CustomModelProvider[],
         modelAssignments: {} as ModelAssignments,
+        assistantSystemPrompt: DEFAULT_ASSISTANT_SYSTEM_PROMPT,
 
         // 允许工具访问的目录（安全边界）；文件/Git 工具会强制校验。
         allowedDirectories: [] as string[],
@@ -91,6 +103,7 @@ export const useSettingsStore = defineStore("settings", {
                 hiddenModelIds,
                 customModelProviders,
                 modelAssignments,
+                assistantSystemPrompt,
             ] = await Promise.all([
                     storeUtils.get<ThemeMode>(STORE_KEYS.themeMode),
                     storeUtils.get<AppLanguage>(STORE_KEYS.language),
@@ -101,6 +114,7 @@ export const useSettingsStore = defineStore("settings", {
                     storeUtils.get<ModelAssignments>(
                         STORE_KEYS.modelAssignments,
                     ),
+                    storeUtils.get<string>(STORE_KEYS.assistantSystemPrompt),
                 ]);
 
             if (
@@ -174,6 +188,12 @@ export const useSettingsStore = defineStore("settings", {
                     if (value.trim()) clean[key] = value.trim();
                 }
                 this.modelAssignments = clean;
+            }
+
+            if (typeof assistantSystemPrompt === "string") {
+                this.assistantSystemPrompt = assistantSystemPrompt.trim()
+                    ? assistantSystemPrompt
+                    : DEFAULT_ASSISTANT_SYSTEM_PROMPT;
             }
 
             this.initialized = true;
@@ -362,6 +382,25 @@ export const useSettingsStore = defineStore("settings", {
         async setLanguage(lang: AppLanguage) {
             this.language = lang;
             await storeUtils.set(STORE_KEYS.language, lang, true);
+        },
+
+        async setAssistantSystemPrompt(prompt: string) {
+            const next = String(prompt ?? "");
+            this.assistantSystemPrompt = next;
+            await storeUtils.set(
+                STORE_KEYS.assistantSystemPrompt,
+                next,
+                true,
+            );
+        },
+
+        async resetAssistantSystemPrompt() {
+            this.assistantSystemPrompt = DEFAULT_ASSISTANT_SYSTEM_PROMPT;
+            await storeUtils.set(
+                STORE_KEYS.assistantSystemPrompt,
+                DEFAULT_ASSISTANT_SYSTEM_PROMPT,
+                true,
+            );
         },
 
         getAssignedModelId(key: ModelAssignmentKey): string | null {

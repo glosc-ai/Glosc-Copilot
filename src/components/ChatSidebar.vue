@@ -59,18 +59,22 @@ const toggleGroup = (groupKey: string) => {
     collapsedGroups.value[groupKey] = !collapsedGroups.value[groupKey];
 };
 
-// 初始化分组折叠状态（默认仅展开“今天”）
+// 初始化分组折叠状态：默认只展开当前打开会话所在的组。
 watch(
-    sidebarConversationGroups,
-    (newGroups) => {
+    [sidebarConversationGroups, activeKey],
+    ([newGroups, currentActiveKey]) => {
         const newCollapsed: Record<string, boolean> = {};
         newGroups.forEach((group) => {
+            const containsActive =
+                Boolean(currentActiveKey) &&
+                group.items.some((item) => item.key === currentActiveKey);
+
             if (!(group.key in collapsedGroups.value)) {
-                // 默认折叠非当天的历史（今天展开，其它折叠）
-                newCollapsed[group.key] =
-                    !group.custom && group.label !== "今天";
+                newCollapsed[group.key] = !containsActive;
             } else {
-                newCollapsed[group.key] = collapsedGroups.value[group.key];
+                newCollapsed[group.key] = containsActive
+                    ? false
+                    : collapsedGroups.value[group.key];
             }
         });
         collapsedGroups.value = newCollapsed;

@@ -88,6 +88,30 @@ const compatibleSkillsPrompt = computed(() =>
     }),
 );
 
+function formatPromptList(items: string[], emptyText: string) {
+    const clean = Array.from(
+        new Set(items.map((item) => String(item || "").trim()).filter(Boolean)),
+    );
+    return clean.length > 0 ? clean.join("、") : emptyText;
+}
+
+function renderAssistantSystemPrompt(tools: Record<string, any>) {
+    const basePrompt = String(settingsStore.assistantSystemPrompt || "").trim();
+    const skillPrompt = String(compatibleSkillsPrompt.value || "").trim();
+    const enabledMcpNames = (mcpStore.servers || [])
+        .filter((server) => server.enabled)
+        .map((server) => server.name || server.id);
+    const toolNames = Object.keys(tools || {});
+
+    const renderedBase = basePrompt
+        .split("{{mcpList}}")
+        .join(formatPromptList(enabledMcpNames, "暂无启用的 MCP 服务"))
+        .split("{{toolList}}")
+        .join(formatPromptList(toolNames, "暂无可用工具"));
+
+    return [renderedBase, skillPrompt].filter(Boolean).join("\n\n");
+}
+
 async function toggleWebSearch() {
     await chatStore.setWebSearchEnabled(!webSearchEnabled.value);
 }
@@ -494,6 +518,7 @@ async function sendChatMessage(
     };
     runtime.toolsRef.value = tools;
     const toolsEnabled = Object.keys(tools).length > 0;
+    const systemPrompt = renderAssistantSystemPrompt(tools);
     const modelRequestBody = getSelectedModelRequestBody(toolsEnabled);
     if (!modelRequestBody) {
         runtime.sendLock.value = false;
@@ -510,9 +535,7 @@ async function sendChatMessage(
                     // 后端若仅在 mcpEnabled=true 时启用 tools，这里扩展为“任意工具可用”。
                     mcpEnabled: toolsEnabled,
                     tools,
-                    ...(compatibleSkillsPrompt.value
-                        ? { systemPrompt: compatibleSkillsPrompt.value }
-                        : {}),
+                    ...(systemPrompt ? { systemPrompt } : {}),
                     ...(webSearchEnabled.value ? { webSearch: true } : {}),
                 },
             },
@@ -853,8 +876,9 @@ async function handleSubmit(message: PromptInputMessage) {
     try {
         runtime.sendLock.value = true;
         // Use cached tools to avoid reloading on each message
-        const tools = await mcpStore.getCachedTools();
+        const tools = (await mcpStore.getCachedTools()) || {};
         const toolsEnabled = Object.keys(tools || {}).length > 0;
+        const systemPrompt = renderAssistantSystemPrompt(tools);
         const modelRequestBody = getSelectedModelRequestBody(toolsEnabled);
         if (!modelRequestBody) {
             runtime.sendLock.value = false;
@@ -875,9 +899,7 @@ async function handleSubmit(message: PromptInputMessage) {
                     ...modelRequestBody,
                     mcpEnabled: toolsEnabled,
                     tools,
-                    ...(compatibleSkillsPrompt.value
-                        ? { systemPrompt: compatibleSkillsPrompt.value }
-                        : {}),
+                    ...(systemPrompt ? { systemPrompt } : {}),
                     ...(webSearchEnabled.value ? { webSearch: true } : {}),
                 },
             },
@@ -985,6 +1007,7 @@ async function handleRegenerate() {
     if (!runtime || !activeKey.value) return;
     runtime.toolsRef.value = tools;
     const toolsEnabled = Object.keys(tools).length > 0;
+    const systemPrompt = renderAssistantSystemPrompt(tools);
     const modelRequestBody = getSelectedModelRequestBody(toolsEnabled);
     if (!modelRequestBody) return;
     chatStore.setConversationRunning(activeKey.value, true);
@@ -993,9 +1016,7 @@ async function handleRegenerate() {
             ...modelRequestBody,
             mcpEnabled: toolsEnabled,
             tools,
-            ...(compatibleSkillsPrompt.value
-                ? { systemPrompt: compatibleSkillsPrompt.value }
-                : {}),
+            ...(systemPrompt ? { systemPrompt } : {}),
             ...(webSearchEnabled.value ? { webSearch: true } : {}),
         },
     });

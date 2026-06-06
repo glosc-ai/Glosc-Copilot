@@ -76,8 +76,6 @@ declare module 'vue' {
     CommitMetadata: typeof import('./src/components/ai-elements/commit/CommitMetadata.vue')['default']
     CommitSeparator: typeof import('./src/components/ai-elements/commit/CommitSeparator.vue')['default']
     CommitTimestamp: typeof import('./src/components/ai-elements/commit/CommitTimestamp.vue')['default']
-    ComputerCommandLog: typeof import('./src/components/computer/ComputerCommandLog.vue')['default']
-    ComputerStatusBar: typeof import('./src/components/computer/ComputerStatusBar.vue')['default']
     Confirmation: typeof import('./src/components/ai-elements/confirmation/Confirmation.vue')['default']
     ConfirmationAccepted: typeof import('./src/components/ai-elements/confirmation/ConfirmationAccepted.vue')['default']
     ConfirmationAction: typeof import('./src/components/ai-elements/confirmation/ConfirmationAction.vue')['default']
