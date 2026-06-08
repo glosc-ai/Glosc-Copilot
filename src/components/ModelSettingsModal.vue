@@ -16,6 +16,7 @@ const { customModelProviders } = storeToRefs(settingsStore);
 
 type SettingsView = "main" | "models" | "custom-models";
 const view = ref<SettingsView>("main");
+const confirmDeleteProviderId = ref<string | null>(null);
 
 const modelFilterType = ref<string>("all");
 const modelFilterOwner = ref<string>("all");
@@ -289,22 +290,17 @@ async function refreshCustomProvider(id: string) {
 }
 
 async function removeCustomProvider(id: string) {
-    try {
-        await ElMessageBox.confirm(
-            "确定要删除该自定义模型配置吗？（本地加密保存的 Key 也会一并删除）",
-            "提示",
-            {
-                type: "warning",
-                confirmButtonText: "删除",
-                cancelButtonText: "取消",
-            },
-        );
-    } catch {
-        return;
-    }
+    confirmDeleteProviderId.value = id;
+}
+
+async function confirmDeleteProvider() {
+    const id = confirmDeleteProviderId.value;
+    if (!id) return;
+    confirmDeleteProviderId.value = null;
 
     await settingsStore.removeCustomModelProvider(id);
     await chatStore.loadAvailableModels();
+    ElMessage.success("已删除");
 }
 
 function resetModelFilters() {
@@ -881,11 +877,18 @@ watch(
                                     size="sm"
                                     variant="ghost"
                                     class="text-destructive"
-                                    @click="removeCustomProvider(p.id)"
+                                    @click="confirmDeleteProviderId === p.id ? confirmDeleteProvider() : removeCustomProvider(p.id)"
                                 >
-                                    删除
+                                    {{ confirmDeleteProviderId === p.id ? '确认删除' : '删除' }}
                                 </Button>
-                            </div>
+                                <Button
+                                    v-if="confirmDeleteProviderId === p.id"
+                                    size="sm"
+                                    variant="outline"
+                                    @click="confirmDeleteProviderId = null"
+                                >
+                                    取消
+                                </Button></div>
                         </div>
                     </div>
                 </div>
