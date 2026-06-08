@@ -1,64 +1,12 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from "vue";
 import { cn } from "@/lib/utils";
-import { MicIcon } from "lucide-vue-next";
-import { onMounted, onUnmounted, ref } from "vue";
+import { transcribeAudio } from "@/utils/AudioTranscriptionApi";
+import { Loader2Icon, MicIcon, SquareIcon } from "lucide-vue-next";
+import { ElMessage } from "element-plus";
+import { computed, onUnmounted, ref } from "vue";
 import { usePromptInput } from "./context";
 import PromptInputButton from "./PromptInputButton.vue";
-
-interface SpeechRecognition extends EventTarget {
-    continuous: boolean;
-    interimResults: boolean;
-    lang: string;
-    start: () => void;
-    stop: () => void;
-    onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
-    onend: ((this: SpeechRecognition, ev: Event) => any) | null;
-    onresult:
-        | ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any)
-        | null;
-    onerror:
-        | ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any)
-        | null;
-}
-
-interface SpeechRecognitionEvent extends Event {
-    results: SpeechRecognitionResultList;
-    resultIndex: number;
-}
-
-interface SpeechRecognitionResultList {
-    readonly length: number;
-    item: (index: number) => SpeechRecognitionResult;
-    [index: number]: SpeechRecognitionResult;
-}
-
-interface SpeechRecognitionResult {
-    readonly length: number;
-    item: (index: number) => SpeechRecognitionAlternative;
-    [index: number]: SpeechRecognitionAlternative;
-    isFinal: boolean;
-}
-
-interface SpeechRecognitionAlternative {
-    transcript: string;
-    confidence: number;
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-    error: string;
-}
-
-declare global {
-    interface Window {
-        SpeechRecognition: {
-            new (): SpeechRecognition;
-        };
-        webkitSpeechRecognition: {
-            new (): SpeechRecognition;
-        };
-    }
-}
 
 type PromptInputSpeechButtonProps = InstanceType<
     typeof PromptInputButton
@@ -71,77 +19,178 @@ interface Props extends /* @vue-ignore */ PromptInputSpeechButtonProps {
 const props = defineProps<Props>();
 
 const { displayTextInput, setDisplayTextInput } = usePromptInput();
+
 const isListening = ref(false);
-const recognition = ref<SpeechRecognition | null>(null);
+const isTranscribing = ref(false);
+const mediaRecorder = ref<MediaRecorder | null>(null);
+const mediaStream = ref<MediaStream | null>(null);
+const chunks: Blob[] = [];
 
-onMounted(() => {
-    const Win = window as any;
-    const SpeechRecognition =
-        Win.SpeechRecognition || Win.webkitSpeechRecognition;
+const isSupported = computed(
+    () =>
+        typeof navigator !== "undefined" &&
+        Boolean(navigator.mediaDevices?.getUserMedia) &&
+        typeof MediaRecorder !== "undefined",
+);
 
-    if (SpeechRecognition) {
-        const sr = new SpeechRecognition();
-        sr.continuous = true;
-        sr.interimResults = true;
-        sr.lang = "zh-CN";
-
-        sr.onstart = () => (isListening.value = true);
-        sr.onend = () => (isListening.value = false);
-
-        sr.onresult = (event: any) => {
-            let finalTranscript = "";
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const result = event.results[i];
-                if (result.isFinal) {
-                    finalTranscript += result[0]?.transcript ?? "";
-                }
-            }
-
-            if (finalTranscript) {
-                const newValue =
-                    displayTextInput.value +
-                    (displayTextInput.value ? " " : "") +
-                    finalTranscript;
-                setDisplayTextInput(newValue);
-            }
-        };
-
-        sr.onerror = (event: any) => {
-            console.error("Speech recognition error:", event.error);
-            isListening.value = false;
-        };
-
-        recognition.value = sr;
-    }
+const buttonTitle = computed(() => {
+    if (!isSupported.value) return "当前环境不支持录音";
+    if (isTranscribing.value) return "正在转写";
+    if (isListening.value) return "停止录音并转写";
+    return "语音输入";
 });
+
+const isDisabled = computed(
+    () =>
+        Boolean((props as any).disabled) ||
+        !isSupported.value ||
+        isTranscribing.value,
+);
 
 onUnmounted(() => {
-    recognition.value?.stop();
+    const recorder = mediaRecorder.value;
+    if (recorder?.state === "recording") {
+        recorder.onstop = null;
+        recorder.stop();
+    }
+    stopMediaStream();
 });
 
+function getBestAudioMimeType(): string | undefined {
+    const candidates = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/mpeg",
+        "audio/wav",
+    ];
+
+    return candidates.find((type) => MediaRecorder.isTypeSupported(type));
+}
+
+function stopMediaStream() {
+    mediaStream.value?.getTracks().forEach((track) => track.stop());
+    mediaStream.value = null;
+}
+
+function appendTranscript(text: string) {
+    const current = displayTextInput.value;
+    const cleanText = text.trim();
+    if (!cleanText) return;
+
+    const separator =
+        current && !/[\s，。！？；：,.!?;:]$/.test(current) ? " " : "";
+    setDisplayTextInput(`${current}${separator}${cleanText}`);
+}
+
+async function startRecording() {
+    if (!isSupported.value) {
+        ElMessage.warning("当前环境不支持录音。");
+        return;
+    }
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+        });
+        mediaStream.value = stream;
+        chunks.length = 0;
+
+        const mimeType = getBestAudioMimeType();
+        const recorder = new MediaRecorder(
+            stream,
+            mimeType ? { mimeType } : undefined,
+        );
+
+        recorder.ondataavailable = (event) => {
+            if (event.data.size > 0) chunks.push(event.data);
+        };
+
+        recorder.onstop = () => {
+            const audio = new Blob(chunks, {
+                type: recorder.mimeType || chunks[0]?.type || "audio/webm",
+            });
+            chunks.length = 0;
+            stopMediaStream();
+            void transcribeRecording(audio);
+        };
+
+        mediaRecorder.value = recorder;
+        recorder.start();
+        isListening.value = true;
+    } catch (error) {
+        stopMediaStream();
+        const message =
+            error instanceof Error ? error.message : "无法访问麦克风。";
+        ElMessage.error(`无法访问麦克风：${message}`);
+    }
+}
+
+async function stopRecording() {
+    const recorder = mediaRecorder.value;
+    if (!recorder) return;
+
+    if (recorder.state !== "inactive") {
+        recorder.stop();
+    }
+    mediaRecorder.value = null;
+    isListening.value = false;
+}
+
+async function transcribeRecording(audio: Blob) {
+    if (audio.size === 0) return;
+
+    isTranscribing.value = true;
+    const loadingMessage = ElMessage({
+        message: "正在转文字...",
+        duration: 0,
+        type: "info",
+    });
+
+    try {
+        const text = await transcribeAudio({
+            audio,
+        });
+        appendTranscript(text);
+    } catch (error) {
+        const message =
+            error instanceof Error ? error.message : "语音转文字失败。";
+        console.error("Audio transcription error:", error);
+        ElMessage.error(message);
+    } finally {
+        loadingMessage.close();
+        isTranscribing.value = false;
+    }
+}
+
 function toggleListening() {
-    if (!recognition.value) return;
+    if (isTranscribing.value) return;
     if (isListening.value) {
-        recognition.value.stop();
+        void stopRecording();
     } else {
-        recognition.value.start();
+        void startRecording();
     }
 }
 </script>
 
 <template>
     <PromptInputButton
-        :disabled="!recognition"
+        v-bind="props"
+        :disabled="isDisabled"
+        :title="buttonTitle"
+        :aria-label="buttonTitle"
         :class="
             cn(
                 'relative transition-all duration-200',
                 isListening && 'animate-pulse bg-accent text-accent-foreground',
+                isTranscribing && 'opacity-80',
                 props.class,
             )
         "
-        v-bind="props"
         @click="toggleListening"
     >
-        <MicIcon class="size-4" />
+        <Loader2Icon v-if="isTranscribing" class="size-4 animate-spin" />
+        <SquareIcon v-else-if="isListening" class="size-4" />
+        <MicIcon v-else class="size-4" />
     </PromptInputButton>
 </template>

@@ -4,5 +4,7 @@
 <dict>
   <key>ITSAppUsesNonExemptEncryption</key>
   <false/>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Glosc Copilot 需要访问麦克风，用于将你的语音输入转写成文字。</string>
 </dict>
 </plist>

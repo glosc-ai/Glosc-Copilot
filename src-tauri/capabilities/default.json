@@ -51,6 +51,116 @@
                 }
             ]
         },
+        {
+            "identifier": "fs:allow-exists",
+            "allow": [
+                {
+                    "path": "$HOME/.claude/skills"
+                },
+                {
+                    "path": "$HOME/.codex/skills"
+                },
+                {
+                    "path": "$HOME/.openclaw/skills"
+                },
+                {
+                    "path": "$CONFIG/openclaw/skills"
+                },
+                {
+                    "path": "$CONFIG/opencode/skills"
+                },
+                {
+                    "path": "$HOME/Library/Application Support/opencode/skills"
+                }
+            ]
+        },
+        {
+            "identifier": "fs:allow-stat",
+            "allow": [
+                {
+                    "path": "$HOME/.claude/skills"
+                },
+                {
+                    "path": "$HOME/.codex/skills"
+                },
+                {
+                    "path": "$HOME/.openclaw/skills"
+                },
+                {
+                    "path": "$CONFIG/openclaw/skills"
+                },
+                {
+                    "path": "$CONFIG/opencode/skills"
+                },
+                {
+                    "path": "$HOME/Library/Application Support/opencode/skills"
+                }
+            ]
+        },
+        {
+            "identifier": "fs:allow-read-dir",
+            "allow": [
+                {
+                    "path": "$HOME/.claude/skills"
+                },
+                {
+                    "path": "$HOME/.claude/skills/**"
+                },
+                {
+                    "path": "$HOME/.codex/skills"
+                },
+                {
+                    "path": "$HOME/.codex/skills/**"
+                },
+                {
+                    "path": "$HOME/.openclaw/skills"
+                },
+                {
+                    "path": "$HOME/.openclaw/skills/**"
+                },
+                {
+                    "path": "$CONFIG/openclaw/skills"
+                },
+                {
+                    "path": "$CONFIG/openclaw/skills/**"
+                },
+                {
+                    "path": "$CONFIG/opencode/skills"
+                },
+                {
+                    "path": "$CONFIG/opencode/skills/**"
+                },
+                {
+                    "path": "$HOME/Library/Application Support/opencode/skills"
+                },
+                {
+                    "path": "$HOME/Library/Application Support/opencode/skills/**"
+                }
+            ]
+        },
+        {
+            "identifier": "fs:allow-read-file",
+            "allow": [
+                {
+                    "path": "$HOME/.claude/skills/**"
+                },
+                {
+                    "path": "$HOME/.codex/skills/**"
+                },
+                {
+                    "path": "$HOME/.openclaw/skills/**"
+                },
+                {
+                    "path": "$CONFIG/openclaw/skills/**"
+                },
+                {
+                    "path": "$CONFIG/opencode/skills/**"
+                },
+                {
+                    "path": "$HOME/Library/Application Support/opencode/skills/**"
+                }
+            ]
+        },
         "store:allow-get",
         "store:allow-set",
         "store:allow-delete",

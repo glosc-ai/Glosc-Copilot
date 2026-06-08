@@ -442,6 +442,7 @@ declare global {
   const toRef: typeof import('vue').toRef
   const toRefs: typeof import('vue').toRefs
   const toValue: typeof import('vue').toValue
+  const transcribeAudio: typeof import('./src/utils/AudioTranscriptionApi').transcribeAudio
   const triggerRef: typeof import('vue').triggerRef
   const unref: typeof import('vue').unref
   const updateStoreTool: typeof import('./src/utils/StoreToolInstaller').updateStoreTool

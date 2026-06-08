@@ -9,7 +9,6 @@ import {
     computerKeyPress,
     computerKeyCombination,
     computerCaptureScreen,
-    computerGetScreenSize,
     computerExecCommand,
 } from "./ComputerControlUtils";
 
@@ -75,9 +74,12 @@ export const computerTools = {
         },
     },
     computer_key_press: {
-        description: "按下并释放指定的按键（如 Return、Escape、Space、a、b 等）",
+        description:
+            "按下并释放指定的按键（如 Return、Escape、Space、a、b 等）",
         parameters: z.object({
-            key_name: z.string().describe("按键名称，例如 Return、Escape、Tab、a、Control 等"),
+            key_name: z
+                .string()
+                .describe("按键名称，例如 Return、Escape、Tab、a、Control 等"),
         }),
         execute: async ({ key_name }: { key_name: string }) => {
             await computerKeyPress(key_name);
@@ -87,7 +89,9 @@ export const computerTools = {
     computer_key_combination: {
         description: "按下按键组合（例如 ['Control', 'c'] 表示 Ctrl+C）",
         parameters: z.object({
-            keys: z.array(z.string()).describe("按键名称数组，例如 ['Control', 'c'] 表示 Ctrl+C"),
+            keys: z
+                .array(z.string())
+                .describe("按键名称数组，例如 ['Control', 'c'] 表示 Ctrl+C"),
         }),
         execute: async ({ keys }: { keys: string[] }) => {
             await computerKeyCombination(keys);
@@ -95,7 +99,8 @@ export const computerTools = {
         },
     },
     computer_capture_screen: {
-        description: "截取当前屏幕并返回 base64 编码的 PNG 图片。可在后续步骤中用于分析屏幕内容。",
+        description:
+            "截取当前屏幕并返回 base64 编码的 PNG 图片。可在后续步骤中用于分析屏幕内容。",
         parameters: z.object({}),
         execute: async () => {
             const base64 = await computerCaptureScreen();
@@ -108,7 +113,8 @@ export const computerTools = {
         },
     },
     computer_exec_command: {
-        description: "在系统 Shell 中执行一条命令并返回输出结果。注意：此工具有安全风险，谨慎使用。",
+        description:
+            "在系统 Shell 中执行一条命令并返回输出结果。注意：此工具有安全风险，谨慎使用。",
         parameters: z.object({
             command: z.string().describe("要执行的 Shell 命令"),
         }),

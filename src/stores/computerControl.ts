@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { ScreenInfo, ShellResult } from "../utils/ComputerControlUtils";
+import type { ScreenInfo } from "../utils/ComputerControlUtils";
 import {
     computerCaptureScreen,
     computerGetScreenSize,

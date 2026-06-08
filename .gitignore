@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+.cache/
 
 # Environment variables
 .env
@@ -29,6 +30,7 @@ dist-ssr
 
 /src-tauri/resources/
 /src-tauri/binaries/
+/public/models/*.tar.gz
 tauri
 *.provisionprofile
 .playwright-cli

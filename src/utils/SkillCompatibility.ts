@@ -1200,14 +1200,21 @@ export async function discoverDefaultAgentSkillDirectories() {
     const discovered: IDiscoveredSkillDirectory[] = [];
     for (const candidate of candidates) {
         const path = await join(home, ...candidate.parts);
-        if (!(await exists(path))) continue;
-        const info = await stat(path);
-        if (!info.isDirectory) continue;
-        discovered.push({
-            path,
-            label: `${candidate.label} skills`,
-            agent: candidate.agent,
-        });
+        try {
+            if (!(await exists(path))) continue;
+            const info = await stat(path);
+            if (!info.isDirectory) continue;
+            discovered.push({
+                path,
+                label: `${candidate.label} skills`,
+                agent: candidate.agent,
+            });
+        } catch (error) {
+            console.warn(
+                `Skip default skills directory ${path}:`,
+                error,
+            );
+        }
     }
 
     return Array.from(
